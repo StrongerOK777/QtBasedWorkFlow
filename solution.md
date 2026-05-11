@@ -2005,3 +2005,50 @@ Qt GUI 节点编辑器
 ```
 
 不要把它做成一个所有逻辑都堆在 `MainWindow.cpp` 里的临时代码项目。
+
+---
+
+## 24. 题目要求完成度对照
+
+根据 `Problem.html` 中的要求，当前项目完成情况如下。
+
+### 24.1 已完成
+
+- 使用 C++17、Qt 6 Widgets、CMake 构建。
+- 实现节点式图像处理桌面原型，支持从节点列表添加节点、在画布移动节点、连接端口、修改参数、预览输出、一键执行。
+- 已实现 12 种节点，超过题目“至少 8 种节点”的要求：读入图片、导出图片、预览图片、裁切、缩放、灰度化、亮度/对比度、模糊、旋转/翻转、文字叠加、双图混合、图片拼接。
+- 节点通过 `ImageNode` 多态接口和 `NodeFactory` 注册创建，执行器不按节点类型写超长 `if-else` 或 `switch`。
+- GUI、节点逻辑、图像处理算法、workflow JSON、验证和执行逻辑分层实现。
+- 工作流模型保存节点、位置、参数和连线；支持 JSON 保存与加载。
+- 支持端口类型检查、普通输入端口单连接限制、输出端口分支连接、必需输入检查和 DAG 环检测。
+- 支持分支与汇合：输出端口可连接多个下游节点，`Blend` 和 `ImageMerge` 可接收多个输入。
+- 支持单独删除节点和单独删除连线；删除节点时相关连线会同步移除。
+- 支持命令行模式：`ImageNodeEditor --no-gui --workflow workflow.json`。
+- 发生文件缺失、参数错误、端口不兼容、JSON 错误、环形依赖或保存失败时返回清晰错误，不通过崩溃处理。
+- 提供示例输入图片和示例 workflow：`ImageNodeEditor/resources/samples/input.ppm`、`ImageNodeEditor/resources/workflows/sample.json`。
+- README 已包含 macOS 构建运行、命令行示例、Windows / Visual Studio 生成与提交建议。
+
+### 24.2 提交材料仍需用户准备
+
+- 可执行文件需要在目标提交平台环境中重新编译生成；macOS 产物不能直接作为 Windows `.exe` 提交。
+- 如果课程平台强制要求 Visual Studio `.sln/.vcxproj`，应在 Windows 上用 CMake 生成 VS 工程后再打包。
+- 演示视频需要用户录制，建议展示：添加节点、连接端口、修改参数、执行 workflow、预览/导出结果、错误提示、删除节点和删除连线。
+- 最终报告需要用户主笔撰写，本项目文档可作为分析文档和报告素材，但用户应能解释核心模块和关键代码。
+
+### 24.3 当前不做的事项
+
+- 不迁移到网上开源 Qt 项目模板，直到题目基础要求稳定满足并验证通过。
+- 不引入 OpenCV、网络 API 或其他外部依赖，避免增加跨平台构建风险。
+- 不手写未验证的 Visual Studio 工程文件；使用 CMake 在 Windows 环境生成更可靠。
+
+---
+
+## 25. AI 工具使用说明
+
+本项目允许并鼓励使用 AI 辅助，但最终设计需要可解释。当前项目中 AI 的使用方式可以在报告中说明为：
+
+- 用 AI 辅助梳理题目需求，形成 `solution.md`、`struct.md`、`agent.md` 中的模块划分、端口规则、节点清单和异常处理策略。
+- 用 AI 辅助生成 C++/Qt 项目骨架、节点基类、节点工厂、workflow 序列化、DAG 验证、执行器和基础 GUI 代码。
+- 用 AI 辅助定位编译错误和 Qt API 兼容问题，例如头文件包含、Qt 版本差异、命令行模式避免启动 GUI。
+- 用 AI 辅助根据题目复核缺口，并补齐连线删除、README 运行说明和提交说明。
+- 用户需要理解并能解释：`ImageNode` 多态接口、`NodeFactory` 注册机制、`WorkflowGraph` 数据模型、`WorkflowValidator` 验证规则、`ExecutionEngine` 拓扑执行流程、GUI 与核心逻辑分离的原因。

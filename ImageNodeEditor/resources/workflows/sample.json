@@ -1,0 +1,44 @@
+{
+    "formatVersion": 1,
+    "nodes": [
+        {
+            "id": "ImageInput_1",
+            "type": "ImageInput",
+            "x": -240,
+            "y": -60,
+            "params": {
+                "filePath": "../samples/input.ppm"
+            }
+        },
+        {
+            "id": "Grayscale_2",
+            "type": "Grayscale",
+            "x": 10,
+            "y": -60,
+            "params": {}
+        },
+        {
+            "id": "ImageOutput_3",
+            "type": "ImageOutput",
+            "x": 260,
+            "y": -60,
+            "params": {
+                "outputPath": "../samples/output.png"
+            }
+        }
+    ],
+    "edges": [
+        {
+            "fromNode": "ImageInput_1",
+            "fromPort": "output",
+            "toNode": "Grayscale_2",
+            "toPort": "image"
+        },
+        {
+            "fromNode": "Grayscale_2",
+            "fromPort": "output",
+            "toNode": "ImageOutput_3",
+            "toPort": "image"
+        }
+    ]
+}
