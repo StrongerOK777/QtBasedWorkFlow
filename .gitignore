@@ -1,0 +1,124 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+
+# Virtual environments（勿将解释器目录提交进仓库）
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+!.env.example
+
+# Conda 本地元数据（环境名本身由 environment.yml 等描述即可）
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 常见「生成物 / 大文件」目录（按需把大模型输出、整包数据放在这些路径下）
+outputs/
+output/
+runs/
+wandb/
+mlruns/
+.cache/
+*.tmp
+*.temp
+
+# Logs
+*.log
+logs/
+
+# Coverage / 测试工具
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# macOS
+*.icloud
+
+# LaTeX / latexmk 编译中间文件
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex
+*.synctex(busy)
+*.synctex.gz
+*.synctex.gz(busy)
+*.toc
+*.vrb
+*.xdv
+
+
+
+
+Difficulty.docx
+
+*.pdf
+!Papers/figures/*.pdf
+*.gz
+*.aux
+!Papers/数学建模-6.pdf
+!Papers/paper_intro.pdf
