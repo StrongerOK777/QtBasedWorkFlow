@@ -24,6 +24,7 @@ struct NodeExecutionSummary {
     QString displayName;
     NodeExecutionState state = NodeExecutionState::NotExecuted;
     QString message;
+    qint64 elapsedMs = -1;
 };
 
 struct ExecutionResult {
@@ -36,12 +37,16 @@ struct ExecutionResult {
 class ExecutionEngine {
 public:
     using NodeEventCallback = std::function<void(const NodeExecutionSummary&)>;
+    using ExternalInputMap = QMap<QString, NodeData>;
 
     Result<ExecutionResult> execute(const WorkflowGraph& graph);
     Result<ExecutionResult> execute(const WorkflowGraph& graph, const NodeEventCallback& onNodeEvent);
     Result<ExecutionResult> executeForNode(const WorkflowGraph& graph,
                                            const QString& targetNodeId,
                                            const NodeEventCallback& onNodeEvent = {});
+    Result<ExecutionResult> executeWithExternalInputs(const WorkflowGraph& graph,
+                                                      const ExternalInputMap& externalInputs,
+                                                      const NodeEventCallback& onNodeEvent = {});
     void clearCache();
     const ExecutionResult& lastResult() const { return lastResult_; }
 
@@ -53,6 +58,7 @@ private:
 
     Result<ExecutionResult> executeOrderedNodes(const WorkflowGraph& graph,
                                                 const QStringList& nodeOrder,
+                                                const ExternalInputMap& externalInputs,
                                                 const NodeEventCallback& onNodeEvent);
 
     QMap<QString, CacheEntry> cache_;

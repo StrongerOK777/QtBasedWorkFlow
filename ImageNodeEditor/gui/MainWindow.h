@@ -6,8 +6,9 @@
 
 #include <QMap>
 #include <QVariant>
+#include <QVector>
 
-class QFormLayout;
+class QAction;
 class QCloseEvent;
 class QDockWidget;
 class QGraphicsItem;
@@ -47,6 +48,8 @@ public:
     void restoreGraphFromUndo(const WorkflowGraph& graph, const QString& selectedNodeId);
     void commitNodeMove(const QString& nodeId, const QPointF& before, const QPointF& after);
     void updateMiniMap();
+    void enterMacroNode(const QString& nodeId);
+    void setNodeParameterForNode(const QString& nodeId, const QString& name, const QVariant& value);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -59,6 +62,10 @@ private:
     void appendLog(const QString& message, const QString& nodeId = {});
     void runWorkflow();
     void exportCanvasImage();
+    void encapsulateSelectionAsMacro();
+    void autoLayoutWorkflow();
+    void leaveMacroNode();
+    WorkflowGraph graphForPersistence() const;
     void newWorkflow();
     void openWorkflow();
     bool saveWorkflow();
@@ -88,6 +95,7 @@ private:
     void resetNodeRunStates();
     void applyNodeRunState(const QString& nodeId, NodeExecutionState state);
     void handleNodeExecutionEvent(const NodeExecutionSummary& summary);
+    void updateRunAnimation();
     void focusFailedNode(const QString& nodeId);
     void focusLogNode(QListWidgetItem* item);
     void highlightNodeBriefly(const QString& nodeId);
@@ -95,6 +103,12 @@ private:
     void runLivePreview();
 
     WorkflowGraph graph_;
+    struct GraphContext {
+        WorkflowGraph graph;
+        QString macroNodeId;
+        QString selectedNodeId;
+    };
+    QVector<GraphContext> graphStack_;
     ExecutionEngine engine_;
     ExecutionResult lastResult_;
     QString currentFile_;
@@ -107,12 +121,9 @@ private:
     QListWidget* palette_ = nullptr;
     QGraphicsScene* scene_ = nullptr;
     QGraphicsView* view_ = nullptr;
-    QWidget* propertyPanel_ = nullptr;
-    QFormLayout* propertyLayout_ = nullptr;
     QLabel* preview_ = nullptr;
     QListWidget* log_ = nullptr;
     GuiCompat::DockWidget* paletteDock_ = nullptr;
-    GuiCompat::DockWidget* propertyDock_ = nullptr;
     GuiCompat::DockWidget* bottomDock_ = nullptr;
     QToolButton* canvasZoomInButton_ = nullptr;
     QToolButton* canvasZoomOutButton_ = nullptr;
@@ -120,10 +131,15 @@ private:
     QToolBar* mainToolbar_ = nullptr;
     QToolBar* layoutToolbar_ = nullptr;
     QToolBar* viewToolbar_ = nullptr;
+    QToolBar* navigationToolbar_ = nullptr;
+    QAction* returnToParentAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
     QTimer* livePreviewTimer_ = nullptr;
+    QTimer* runAnimationTimer_ = nullptr;
     QUndoStack* undoStack_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
     QMap<QString, NodeExecutionState> nodeRunStates_;
+    QMap<QString, qint64> nodeElapsedMs_;
+    int runAnimationPhase_ = 0;
     QVector<QGraphicsItem*> edgeItems_;
 };

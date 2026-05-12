@@ -5,7 +5,9 @@
 #include "workflow/WorkflowValidator.h"
 
 #include <QCryptographicHash>
+#include <QElapsedTimer>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -54,6 +56,19 @@ QString nodeSignature(const QString& nodeId, const QSharedPointer<ImageNode>& no
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
 }
 
+QString nodeDataSignature(const NodeData& data)
+{
+    QStringList parts;
+    parts << QString("type=%1").arg(portTypeName(data.type));
+    if (data.value.canConvert<QImage>()) {
+        const QImage image = data.value.value<QImage>();
+        parts << QString("image=%1x%2:%3").arg(image.width()).arg(image.height()).arg(image.cacheKey());
+    } else {
+        parts << QString("value=%1").arg(data.value.toString());
+    }
+    return parts.join("|");
+}
+
 }
 
 Result<ExecutionResult> ExecutionEngine::execute(const WorkflowGraph& graph)
@@ -73,7 +88,7 @@ Result<ExecutionResult> ExecutionEngine::execute(const WorkflowGraph& graph, con
     if (order.isFail()) {
         return Result<ExecutionResult>::fail(order.error());
     }
-    return executeOrderedNodes(graph, order.value(), onNodeEvent);
+    return executeOrderedNodes(graph, order.value(), {}, onNodeEvent);
 }
 
 Result<ExecutionResult> ExecutionEngine::executeForNode(const WorkflowGraph& graph,
@@ -109,11 +124,25 @@ Result<ExecutionResult> ExecutionEngine::executeForNode(const WorkflowGraph& gra
             previewOrder.append(nodeId);
         }
     }
-    return executeOrderedNodes(graph, previewOrder, onNodeEvent);
+    return executeOrderedNodes(graph, previewOrder, {}, onNodeEvent);
+}
+
+Result<ExecutionResult> ExecutionEngine::executeWithExternalInputs(const WorkflowGraph& graph,
+                                                                   const ExternalInputMap& externalInputs,
+                                                                   const NodeEventCallback& onNodeEvent)
+{
+    WorkflowValidator validator;
+    lastResult_ = {};
+    auto order = validator.topologicalOrder(graph);
+    if (order.isFail()) {
+        return Result<ExecutionResult>::fail(order.error());
+    }
+    return executeOrderedNodes(graph, order.value(), externalInputs, onNodeEvent);
 }
 
 Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph& graph,
                                                              const QStringList& nodeOrder,
+                                                             const ExternalInputMap& externalInputs,
                                                              const NodeEventCallback& onNodeEvent)
 {
     ExecutionResult result;
@@ -130,7 +159,7 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
         QString displayName;
         QString signature;
         bool cacheable = false;
-        std::future<Result<QMap<QString, NodeData>>> future;
+        std::future<QPair<Result<QMap<QString, NodeData>>, qint64>> future;
     };
 
     QSet<QString> pending;
@@ -168,6 +197,18 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
 
             QMap<QString, NodeData> inputs;
             QStringList inputParts;
+            for (const auto& port : node->inputPorts()) {
+                const QString key = QString("%1.%2").arg(nodeId, port.name);
+                if (externalInputs.contains(key)) {
+                    const NodeData data = externalInputs.value(key);
+                    if (!portTypesCompatible(data.type, port.type)) {
+                        lastResult_ = result;
+                        return Result<ExecutionResult>::fail(QString("外部输入类型不兼容：%1").arg(key));
+                    }
+                    inputs.insert(port.name, data);
+                    inputParts.append(QString("%1=external:%2").arg(port.name, nodeDataSignature(data)));
+                }
+            }
             for (const auto& edge : graph.edges()) {
                 if (edge.toNode == nodeId) {
                     if (!result.nodeOutputs.contains(edge.fromNode) || !result.nodeOutputs[edge.fromNode].contains(edge.fromPort)) {
@@ -191,7 +232,7 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
                 result.nodeOutputs.insert(nodeId, cached.value().outputs);
                 result.log.append(QString("复用缓存 %1 (%2)").arg(nodeId, node->displayName()));
                 record(NodeExecutionSummary{nodeId, node->displayName(), NodeExecutionState::CacheHit,
-                                            QString("复用缓存 %1").arg(nodeId)});
+                                            QString("复用缓存 %1").arg(nodeId), 0});
                 completedThisRound.append(nodeId);
                 continue;
             }
@@ -202,17 +243,22 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
                                signature,
                                node->isCacheable(),
                                std::async(std::launch::async, [node, inputs]() mutable {
-                                   return node->execute(inputs);
+                                   QElapsedTimer timer;
+                                   timer.start();
+                                   auto output = node->execute(inputs);
+                                   return qMakePair(output, timer.elapsed());
                                })});
         }
 
         for (auto& job : jobs) {
-            auto outputs = job.future.get();
+            auto jobResult = job.future.get();
+            auto outputs = jobResult.first;
+            const qint64 elapsedMs = jobResult.second;
             if (outputs.isFail()) {
                 result.log.append(QString("节点失败 %1：%2").arg(job.nodeId, outputs.error()));
                 result.failedNodeId = job.nodeId;
                 record(NodeExecutionSummary{job.nodeId, job.displayName, NodeExecutionState::Failed,
-                                            QString("节点失败 %1：%2").arg(job.nodeId, outputs.error())});
+                                            QString("节点失败 %1：%2").arg(job.nodeId, outputs.error()), elapsedMs});
                 lastResult_ = result;
                 return Result<ExecutionResult>::fail(QString("节点 %1 (%2)：%3").arg(job.nodeId, job.displayName, outputs.error()));
             }
@@ -222,7 +268,7 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             }
             result.log.append(QString("节点完成 %1").arg(job.nodeId));
             record(NodeExecutionSummary{job.nodeId, job.displayName, NodeExecutionState::Succeeded,
-                                        QString("节点完成 %1").arg(job.nodeId)});
+                                        QString("节点完成 %1 (%2 ms)").arg(job.nodeId).arg(elapsedMs), elapsedMs});
             completedThisRound.append(job.nodeId);
         }
 

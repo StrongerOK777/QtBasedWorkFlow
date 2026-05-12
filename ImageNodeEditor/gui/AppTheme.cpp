@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <cmath>
 
+#if defined(IMAGENODEEDITOR_USE_ELA)
+#include "ElaTheme.h"
+#endif
+
 namespace {
 
 AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::System;
@@ -36,12 +40,12 @@ int px(double value, double uiScale)
 Metrics metrics(double uiScale)
 {
     Metrics m;
-    m.toolbarIcon = px(18, uiScale);
-    m.toolbarButton = px(28, uiScale);
-    m.canvasZoomButtonW = px(38, uiScale);
-    m.canvasZoomButtonH = px(32, uiScale);
-    m.canvasZoomOverlayW = px(56, uiScale);
-    m.canvasZoomOverlayH = px(84, uiScale);
+    m.toolbarIcon = px(26, uiScale);
+    m.toolbarButton = px(42, uiScale);
+    m.canvasZoomButtonW = px(46, uiScale);
+    m.canvasZoomButtonH = px(40, uiScale);
+    m.canvasZoomOverlayW = px(64, uiScale);
+    m.canvasZoomOverlayH = px(100, uiScale);
     m.paletteMinWidth = px(210, uiScale);
     m.propertyMinWidth = px(300, uiScale);
     m.previewMinHeight = px(230, uiScale);
@@ -56,15 +60,15 @@ NodeMetrics nodeMetrics(double uiScale)
 {
     const double s = clampedScale(uiScale);
     NodeMetrics m;
-    m.width = 210.0 * s;
-    m.headerHeight = 36.0 * s;
-    m.topPadding = 48.0 * s;
-    m.rowHeight = 24.0 * s;
-    m.bottomPadding = 18.0 * s;
-    m.portRadius = 6.0 * s;
-    m.cornerRadius = 14.0 * s;
-    m.titleSize = 11.0 * s;
-    m.labelSize = 10.0 * s;
+    m.width = 250.0 * s;
+    m.headerHeight = 42.0 * s;
+    m.topPadding = 56.0 * s;
+    m.rowHeight = 30.0 * s;
+    m.bottomPadding = 22.0 * s;
+    m.portRadius = 7.5 * s;
+    m.cornerRadius = 18.0 * s;
+    m.titleSize = 13.0 * s;
+    m.labelSize = 11.5 * s;
     return m;
 }
 
@@ -77,9 +81,9 @@ Colors colors()
     c.canvasTop = QColor("#111827");
     c.canvasBottom = QColor("#0b1220");
     c.canvasDot = QColor(148, 163, 184, 36);
-    c.nodeTop = QColor(35, 45, 63, 238);
-    c.nodeBottom = QColor(21, 29, 43, 232);
-    c.nodeBorder = QColor(99, 130, 170, 130);
+    c.nodeTop = QColor(28, 42, 62, 148);
+    c.nodeBottom = QColor(11, 18, 32, 132);
+    c.nodeBorder = QColor(138, 174, 220, 118);
     c.nodeSelected = QColor("#60a5fa");
     c.nodeShadow = QColor(0, 0, 0, 90);
     c.textPrimary = QColor("#e5edf7");
@@ -105,7 +109,7 @@ QString styleSheet(double uiScale)
     const int smallRadius = px(9, uiScale);
     const int padV = px(6, uiScale);
     const int padH = px(10, uiScale);
-    const int itemHeight = px(32, uiScale);
+    const int itemHeight = px(28, uiScale);
     const int titleHeight = px(34, uiScale);
     const int border = std::max(1, px(1, uiScale));
 
@@ -113,6 +117,18 @@ QString styleSheet(double uiScale)
         QMainWindow {
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #fbfdff, stop:0.55 #f2f7ff, stop:1 #e8f1ff);
+        }
+        QMainWindow::separator, QSplitter::handle {
+            background: rgba(126, 154, 192, 74);
+        }
+        QDialog, QFrame, QWidget#canvasContainer {
+            background: rgba(243, 247, 255, 232);
+            color: #1f2937;
+        }
+        QAbstractScrollArea, QGraphicsView, QGraphicsView > QWidget {
+            background: #edf4ff;
+            border: 0;
+            color: #1f2937;
         }
         QMenuBar {
             background: rgba(255, 255, 255, 212);
@@ -190,8 +206,12 @@ QString styleSheet(double uiScale)
         }
         QDockWidget {
             color: #233044;
+            background: rgba(243, 247, 255, 232);
             titlebar-close-icon: none;
             titlebar-normal-icon: none;
+        }
+        QDockWidget::separator {
+            background: rgba(126, 154, 192, 74);
         }
         QDockWidget::title {
             min-height: %10px;
@@ -207,6 +227,7 @@ QString styleSheet(double uiScale)
             background: rgba(255, 255, 255, 174);
             border: %1px solid rgba(255, 255, 255, 168);
             border-radius: %11px;
+            color: #1f2937;
         }
         QWidget#canvasZoomOverlay {
             background: rgba(255, 255, 255, 178);
@@ -220,7 +241,7 @@ QString styleSheet(double uiScale)
             border-radius: %11px;
             color: #526174;
         }
-        QTextEdit#logPanel {
+        QListWidget#logPanel, QTextEdit#logPanel {
             background: rgba(255, 255, 255, 188);
             border-radius: %11px;
         }
@@ -233,13 +254,13 @@ QString styleSheet(double uiScale)
             color: #1f2937;
         }
         QListWidget {
-            padding: %2px;
+            padding: %1px;
             outline: 0;
         }
         QListWidget::item {
             min-height: %6px;
             border-radius: %4px;
-            padding: %2px %5px;
+            padding: %1px %5px;
         }
         QListWidget::item:hover {
             background: rgba(10, 132, 255, 28);
@@ -264,7 +285,7 @@ QString styleSheet(double uiScale)
             color: #263446;
         }
         QScrollBar:vertical, QScrollBar:horizontal {
-            background: transparent;
+            background: rgba(126, 154, 192, 34);
             border: 0;
             margin: %1px;
         }
@@ -293,11 +314,12 @@ QString styleSheet(double uiScale)
         .arg(pxValue(5, uiScale))
         .arg(titleHeight)
         .arg(radius)
-        .arg(pxValue(28, uiScale));
+        .arg(pxValue(42, uiScale));
     if (isDarkTheme()) {
         sheet.replace("#fbfdff", "#111827");
         sheet.replace("#f2f7ff", "#101827");
         sheet.replace("#e8f1ff", "#0b1220");
+        sheet.replace("#edf4ff", "#0b1220");
         sheet.replace("#1f2937", "#e5edf7");
         sheet.replace("#263446", "#dbe7f5");
         sheet.replace("#233044", "#dbe7f5");
@@ -309,6 +331,7 @@ QString styleSheet(double uiScale)
         sheet.replace("rgba(255, 255, 255, 196)", "rgba(24, 34, 50, 232)");
         sheet.replace("rgba(255, 255, 255, 174)", "rgba(18, 27, 42, 224)");
         sheet.replace("rgba(255, 255, 255, 188)", "rgba(19, 28, 43, 224)");
+        sheet.replace("rgba(243, 247, 255, 232)", "rgba(17, 24, 39, 245)");
         sheet.replace("rgba(255, 255, 255, 214)", "rgba(25, 36, 54, 238)");
         sheet.replace("rgba(255, 255, 255, 220)", "rgba(25, 36, 54, 235)");
         sheet.replace("rgba(255, 255, 255, 180)", "rgba(76, 96, 128, 100)");
@@ -319,6 +342,8 @@ QString styleSheet(double uiScale)
         sheet.replace("rgba(218,235,255,232)", "rgba(36,54,78,238)");
         sheet.replace("rgba(232, 241, 255, 210)", "rgba(16, 24, 37, 224)");
         sheet.replace("rgba(190, 217, 249, 232)", "rgba(42, 61, 88, 235)");
+        sheet.replace("rgba(126, 154, 192, 34)", "rgba(43, 57, 78, 180)");
+        sheet.replace("rgba(126, 154, 192, 74)", "rgba(76, 96, 128, 118)");
     }
     return sheet;
 }
@@ -377,23 +402,44 @@ bool isDarkTheme()
 void apply(QApplication& app, double uiScale)
 {
     app.setFont(appFont(uiScale));
+#if defined(IMAGENODEEDITOR_USE_ELA)
+    eTheme->setThemeMode(isDarkTheme() ? ElaThemeType::Dark : ElaThemeType::Light);
+#endif
     app.setStyleSheet(styleSheet(uiScale));
 
     QPalette palette = app.palette();
     if (isDarkTheme()) {
         palette.setColor(QPalette::Window, QColor("#111827"));
+        palette.setColor(QPalette::WindowText, QColor("#e5edf7"));
+        palette.setColor(QPalette::Button, QColor("#192436"));
         palette.setColor(QPalette::Base, QColor("#172033"));
         palette.setColor(QPalette::AlternateBase, QColor("#101827"));
         palette.setColor(QPalette::Text, QColor("#e5edf7"));
         palette.setColor(QPalette::ButtonText, QColor("#e5edf7"));
+        palette.setColor(QPalette::BrightText, QColor("#ffffff"));
         palette.setColor(QPalette::Highlight, QColor("#60a5fa"));
+        palette.setColor(QPalette::HighlightedText, QColor("#08111f"));
+        palette.setColor(QPalette::ToolTipBase, QColor("#1f2a3d"));
+        palette.setColor(QPalette::ToolTipText, QColor("#e5edf7"));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+        palette.setColor(QPalette::PlaceholderText, QColor("#8fa1b8"));
+#endif
     } else {
         palette.setColor(QPalette::Window, QColor("#f3f7ff"));
+        palette.setColor(QPalette::WindowText, QColor("#1f2937"));
+        palette.setColor(QPalette::Button, QColor("#edf4ff"));
         palette.setColor(QPalette::Base, QColor("#ffffff"));
         palette.setColor(QPalette::AlternateBase, QColor("#edf4ff"));
         palette.setColor(QPalette::Text, QColor("#1f2937"));
         palette.setColor(QPalette::ButtonText, QColor("#1f2937"));
+        palette.setColor(QPalette::BrightText, QColor("#0b3d72"));
         palette.setColor(QPalette::Highlight, QColor("#0a84ff"));
+        palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
+        palette.setColor(QPalette::ToolTipBase, QColor("#ffffff"));
+        palette.setColor(QPalette::ToolTipText, QColor("#1f2937"));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+        palette.setColor(QPalette::PlaceholderText, QColor("#6b7b8f"));
+#endif
     }
     app.setPalette(palette);
 }

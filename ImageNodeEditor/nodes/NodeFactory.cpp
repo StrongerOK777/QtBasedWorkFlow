@@ -2,6 +2,7 @@
 
 #include "nodes/BasicNodes.h"
 #include "nodes/ImageNode.h"
+#include "nodes/MacroNode.h"
 
 #include <QMap>
 
@@ -50,4 +51,5 @@ void NodeFactory::registerBuiltins()
     }
     builtinsRegistered_ = true;
     registerBasicNodes(*this);
+    registerMacroNode(*this);
 }

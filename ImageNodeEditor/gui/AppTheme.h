@@ -22,12 +22,12 @@ enum class ThemePreference {
 };
 
 struct Metrics {
-    int toolbarIcon = 18;
-    int toolbarButton = 28;
-    int canvasZoomButtonW = 38;
-    int canvasZoomButtonH = 32;
-    int canvasZoomOverlayW = 56;
-    int canvasZoomOverlayH = 84;
+    int toolbarIcon = 26;
+    int toolbarButton = 42;
+    int canvasZoomButtonW = 46;
+    int canvasZoomButtonH = 40;
+    int canvasZoomOverlayW = 64;
+    int canvasZoomOverlayH = 100;
     int paletteMinWidth = 210;
     int propertyMinWidth = 300;
     int previewMinHeight = 230;
@@ -38,15 +38,15 @@ struct Metrics {
 };
 
 struct NodeMetrics {
-    double width = 210.0;
-    double headerHeight = 36.0;
-    double topPadding = 48.0;
-    double rowHeight = 24.0;
-    double bottomPadding = 18.0;
-    double portRadius = 6.0;
-    double cornerRadius = 14.0;
-    double titleSize = 11.0;
-    double labelSize = 10.0;
+    double width = 250.0;
+    double headerHeight = 42.0;
+    double topPadding = 56.0;
+    double rowHeight = 30.0;
+    double bottomPadding = 22.0;
+    double portRadius = 7.5;
+    double cornerRadius = 18.0;
+    double titleSize = 13.0;
+    double labelSize = 11.5;
 };
 
 struct Colors {

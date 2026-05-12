@@ -39,6 +39,8 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/nodes/NodeFactory.cpp
     ImageNodeEditor/nodes/BasicNodes.h
     ImageNodeEditor/nodes/BasicNodes.cpp
+    ImageNodeEditor/nodes/MacroNode.h
+    ImageNodeEditor/nodes/MacroNode.cpp
     ImageNodeEditor/processing/ImageProcessors.h
     ImageNodeEditor/processing/ImageProcessors.cpp
     ImageNodeEditor/util/PathUtils.h

@@ -563,3 +563,129 @@ ElaWidgetTools 仍会在编译时输出第三方 warning；当前不影响功能
 
 后续注意：
 导出内容只包含节点与连线拓扑，不包含画布上的小地图和缩放按钮等悬浮控件；当前背景由导出逻辑直接绘制渐变底色。
+
+---
+
+### 2026-05-13 / 宏节点与子图阶段
+
+类型：修改
+
+概述：
+实现宏节点 v1。用户可以将选中的节点封装为宏节点，外部输入/输出端口由跨选区连线自动推导，双击宏节点可进入内部子图编辑，返回上级图后子图内容会保存回宏节点。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/nodes/MacroNode.h`、`ImageNodeEditor/nodes/MacroNode.cpp`、`ImageNodeEditor/nodes/NodeFactory.cpp`、`ImageNodeEditor/workflow/ExecutionEngine.h`、`ImageNodeEditor/workflow/ExecutionEngine.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增 `MacroNode` 并注册到节点工厂，宏节点通过 `saveParams()` / `loadParams()` 序列化内部 `WorkflowGraph` 和端口映射。执行引擎新增 `executeWithExternalInputs()`，宏节点执行时把外部输入注入内部子图，再把映射的内部输出暴露为宏节点输出。GUI 新增“封装为宏节点”和“返回上级图”，当前画布可切换到宏节点子图上下文，保存 workflow 时会从当前嵌套上下文回写到根图。
+
+当前状态：
+已解决
+
+后续注意：
+宏节点端口当前由封装瞬间的跨选区连线生成，暂不提供手动端口编辑器；进入/退出子图时仍以当前整图快照机制保持数据一致。
+
+---
+
+### 2026-05-13 / 小地图设置阶段
+
+类型：修改
+
+概述：
+补齐小地图显示设置。现有小地图已支持全局视图、视口框以及点击/拖拽定位，现在设置窗口中可以显式开启或隐藏小地图。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+在设置对话框新增“显示小地图”复选项，使用 `QSettings` 持久化 `mainWindow/showMiniMap`，默认开启。重置布局时会恢复小地图显示并同步设置。
+
+当前状态：
+已解决
+
+后续注意：
+小地图仍复用现有 `MiniMapWidget` 实现，没有引入额外视图或模型层状态。
+
+---
+
+### 2026-05-13 / 自动布局阶段
+
+类型：修改
+
+概述：
+实现一键自动布局。布局菜单和工具栏新增“自动布局”，可将当前图按数据流从左到右规整排列，宏节点按普通节点处理，进入宏节点子图后只作用于当前子图。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+自动布局前先校验现有连线端点、端口、类型和单输入约束，再通过 `WorkflowValidator::topologicalOrder()` 检测环。校验通过后计算 DAG 层级，同层节点纵向排列，布局修改进入撤销栈；校验失败时弹窗说明原因且不修改当前布局。
+
+当前状态：
+已解决
+
+后续注意：
+当前布局算法是确定性的层级布局，不引入物理弹簧或长连线最小化优化。
+
+---
+
+### 2026-05-13 / 执行诊断反馈阶段
+
+类型：修改
+
+概述：
+实现节点执行耗时和运行中动画反馈。节点执行时状态条会流动，执行完成后节点标题区域显示最近一次耗时；缓存命中显示“缓存”，避免误报真实执行耗时。
+
+影响范围：
+`ImageNodeEditor/workflow/ExecutionEngine.h`、`ImageNodeEditor/workflow/ExecutionEngine.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+`NodeExecutionSummary` 增加 `elapsedMs`，执行引擎用 `QElapsedTimer` 统计真实节点执行耗时，缓存命中记录为 `0ms`。GUI 保存节点最近耗时并传给 `NodeItem` 绘制；运行中节点由 `QTimer` 驱动状态条动画，所有节点结束后自动停止刷新。
+
+当前状态：
+已解决
+
+后续注意：
+本阶段按计划只实现“耗时 + 动画”，悬浮连线数据预览未纳入本轮范围。
+
+---
+
+### 2026-05-13 / 跨平台菜单与深色模式修复阶段
+
+类型：修改
+
+概述：
+保留菜单栏与工具栏双入口，并修复深色模式下主窗口、Dock 区域、画布外露区域、滚动区域和设置窗口的浅色残留。
+
+影响范围：
+`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+菜单栏继续使用 Qt `QMenuBar`，并在代码中说明 macOS 会显示为系统菜单、Windows/Linux 会显示在窗口内，底层 `QAction` 跨平台复用。主题层扩展深色 `QPalette` 角色并同步 ElaWidgetTools 的主题模式；样式表补充 `QMainWindow::separator`、`QSplitter::handle`、`QDialog`、`QAbstractScrollArea`、`QGraphicsView`、Dock 内容区和日志列表等覆盖。主窗口刷新 UI 缩放时显式给画布 view 与 viewport 设置当前主题背景，避免 scene 外侧露出白底。
+
+当前状态：
+已解决
+
+后续注意：
+macOS 顶部系统菜单是 Qt 的平台原生行为，不作为缺陷处理；Windows/Linux 仍会在窗口内显示菜单。
+
+---
+
+### 2026-05-13 / 节点编辑器界面重排与真实背景采样节点阶段
+
+类型：修改
+
+概述：
+按新的界面计划调整工具栏分组、放大主要控制按钮、压缩并放大左侧节点列表，并把节点绘制改为所有主题下都基于画布背景采样的磨砂玻璃效果。右侧属性 Dock 默认移除，节点参数编辑迁移到选中节点内部展开区域。
+
+影响范围：
+`ImageNodeEditor/gui/AppTheme.h`、`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+工具栏保留菜单与快捷入口，返回上级图动作移到独立导航工具栏右侧。节点列表字体加大、行高收紧。`NodeItem::paint()` 采样同一套画布背景网格到离屏图像并做轻量模糊，再叠加主题自适应半透明玻璃层、边框和高光，避免旧的银色固定渐变。节点参数通过 `QGraphicsProxyWidget` 嵌入选中节点内部，参数修改仍复用现有撤销、运行状态重置和实时预览路径。
+
+当前状态：
+已解决
+
+后续注意：
+本阶段按要求只采样画布背景，不采样其他节点或连线，以避免递归绘制和性能风险。
