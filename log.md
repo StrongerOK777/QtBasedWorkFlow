@@ -206,3 +206,87 @@ GUI 增强保持在 `gui/` 层，不改变 `WorkflowGraph`、节点执行和 JSO
 
 后续注意：
 当前毛玻璃为跨平台模拟效果，不使用 macOS vibrancy 或 Windows Acrylic/Mica；`third_party/qt-mvvm` 继续保持隔离，未链接到主程序。
+
+---
+
+### 2026-05-12 / ElaWidgetTools 可选迁移阶段
+
+类型：修改
+
+概述：
+新增 `GuiCompat` 适配层和 CMake 可选集成入口。若 `third_party/ElaWidgetTools/ElaWidgetTools` 源码完整存在且 Qt 提供 `WidgetsPrivate`，主窗口将继承 `ElaWindow`，Dock、按钮、输入框、下拉框、复选框、数值输入等 UI 外壳控件会切换为 ElaWidgetTools 组件；否则继续使用当前 Qt Widgets 外壳。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/main.cpp`、`ImageNodeEditor/gui/ElaCompat.h`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+保持 `workflow/`、`nodes/`、`processing/`、JSON 格式和命令行模式不变；ElaWidgetTools 只作用于 GUI 层，避免把未验证第三方库变成无法回退的基础依赖。
+
+当前状态：
+已解决
+
+后续注意：
+ElaWidgetTools 当前需要 `Qt6::WidgetsPrivate`；CMake 会在缺失时自动回退。已对 vendored 源码补充 Qt 6 `QChar` 枚举转换兼容 helper，并在主项目 Ela 分支显式启用 AUTORCC。第三方头文件仍有若干 warning，不影响当前构建。
+
+---
+
+### 2026-05-12 / 图标化工具栏与设置入口阶段
+
+类型：修改
+
+概述：
+将顶部工具栏动作改为图标优先显示，并增加 2 秒延迟中文悬停提示；新增“设置”入口和设置对话框，用于集中修改界面大小、画布缩放、Dock 面板显示状态，并提供重置界面大小和重置布局操作。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+图标使用 `QPainter` 在运行时绘制，不新增图片资源和打包路径；菜单项保留中文文本并增加图标，工具栏使用 `Qt::ToolButtonIconOnly`；设置项继续写入或复用现有 `QSettings`、Dock 和缩放逻辑。
+
+当前状态：
+已解决
+
+后续注意：
+后续新增软件级配置应优先放入设置对话框，避免继续分散在多个菜单和工具栏中。
+
+---
+
+### 2026-05-12 / 工具栏与主题设置完善阶段
+
+类型：修改
+
+概述：
+将工具栏悬停提示延迟改为 1.5 秒并显示在鼠标指针附近；顶部工具栏固定在窗口顶部，缩小图标和按钮尺寸以接近 VS Code 风格；预览与日志默认迁移到右侧 Dock；设置窗口新增界面主题选项，支持浅色、深色和跟随系统。
+
+影响范围：
+`ImageNodeEditor/gui/AppTheme.h`、`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+主题状态集中在 `AppTheme`，通过 `QSettings` 保存；深色主题同步影响 stylesheet、画布、节点、连线和运行时绘制图标；默认 Dock 布局使用 `mainWindow/layoutVersion` 迁移旧布局。
+
+当前状态：
+已解决
+
+后续注意：
+ElaWidgetTools 仍会在编译时输出第三方 warning；当前不影响功能。
+
+---
+
+### 2026-05-12 / .gitignore 及编译残留清理阶段
+
+类型：修改
+
+概述：
+发现仓库中残留了大量 cmake、C++编译生成的零散文件及目录（如 `CMakeFiles/`, `CMakeCache.txt`, `.qt/`, 以及因在根目录交叉编译导致的 `ElaWidgetTools/` 中间目录）。为防止污染仓库，将这些内容补充添加到 `.gitignore`。
+
+影响范围：
+`.gitignore`
+
+处理方式：
+在 `.gitignore` 首部补充了 C++ 与 CMake 编译产生的各类可执行文件、库文件和构建目录忽略规则。特别是标记了 `.qt/` 和由于内源构建错误产生的 `/ElaWidgetTools/` 文件夹。
+
+当前状态：
+已解决
+
+后续注意：
+后续请规范使用 `cmake -B build` 将构建产物统一放在独立存放目录，以免污染项目源码目录；现有因操作失误产生在项目根目录的编译目录及文件可直接手动删除，它们目前已被 Git 合法忽略。

@@ -1,3 +1,29 @@
+# --- C++ & CMake ---
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_CPack_Packages/
+bin/
+lib/
+*.o
+*.obj
+*.d
+*.a
+*.dylib
+*.dll
+*.exe
+*.out
+*.app/
+build/
+out/
+.qt/
+/ElaWidgetTools/
+
 # --- Python ---
 __pycache__/
 *.py[cod]

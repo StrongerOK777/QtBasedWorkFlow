@@ -1,4 +1,5 @@
 #include "app/CommandLineRunner.h"
+#include "gui/ElaCompat.h"
 #include "gui/MainWindow.h"
 #include "nodes/NodeFactory.h"
 
@@ -56,6 +57,7 @@ int main(int argc, char* argv[])
     }
 
     QApplication app(argc, argv);
+    GuiCompat::initializeApplication();
     QCoreApplication::setApplicationName("ImageNodeEditor");
     QCoreApplication::setOrganizationName("ALPDHomework");
     QCoreApplication::setApplicationVersion("0.1.0");

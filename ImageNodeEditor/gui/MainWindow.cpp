@@ -13,9 +13,12 @@
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
-#include <QDockWidget>
+#include <QCursor>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGraphicsEllipseItem>
@@ -47,12 +50,15 @@
 #include <QScreen>
 #include <QScrollBar>
 #include <QSettings>
+#include <QSlider>
 #include <QSplitter>
 #include <QStackedLayout>
 #include <QSpinBox>
+#include <QTimer>
 #include <QTextEdit>
 #include <QToolBar>
 #include <QToolButton>
+#include <QToolTip>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <algorithm>
@@ -66,6 +72,179 @@ QPainterPath roundedRectPath(const QRectF& rect, qreal radius)
     QPainterPath path;
     path.addRoundedRect(rect, radius, radius);
     return path;
+}
+
+QIcon lineIcon(const QString& name)
+{
+    constexpr int size = 64;
+    QPixmap pix(size, size);
+    pix.fill(Qt::transparent);
+    QPainter painter(&pix);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QColor ink = AppTheme::isDarkTheme() ? QColor("#dbe7f5") : QColor("#23405f");
+    const QColor accent = AppTheme::isDarkTheme() ? QColor("#60a5fa") : QColor("#0a84ff");
+    const QColor warm("#ff9f0a");
+    QPen pen(ink, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    auto page = [&] {
+        painter.drawRoundedRect(QRectF(18, 10, 28, 42), 4, 4);
+        painter.drawLine(QPointF(34, 10), QPointF(46, 22));
+        painter.drawLine(QPointF(34, 10), QPointF(34, 22));
+        painter.drawLine(QPointF(34, 22), QPointF(46, 22));
+    };
+    auto folder = [&] {
+        painter.drawPath([] {
+            QPainterPath path;
+            path.moveTo(9, 23);
+            path.lineTo(25, 23);
+            path.lineTo(30, 17);
+            path.lineTo(42, 17);
+            path.quadTo(48, 17, 50, 23);
+            path.lineTo(55, 23);
+            path.lineTo(50, 50);
+            path.lineTo(12, 50);
+            path.closeSubpath();
+            return path;
+        }());
+    };
+
+    if (name == "new") {
+        page();
+        painter.setPen(QPen(accent, 4.8, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(32, 29), QPointF(32, 43));
+        painter.drawLine(QPointF(25, 36), QPointF(39, 36));
+    } else if (name == "open") {
+        folder();
+        painter.setPen(QPen(accent, 4.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(32, 43), QPointF(32, 28));
+        painter.drawLine(QPointF(24, 35), QPointF(32, 27));
+        painter.drawLine(QPointF(40, 35), QPointF(32, 27));
+    } else if (name == "save") {
+        painter.drawRoundedRect(QRectF(13, 11, 38, 42), 5, 5);
+        painter.drawRect(QRectF(21, 11, 22, 14));
+        painter.drawRoundedRect(QRectF(22, 35, 20, 14), 3, 3);
+    } else if (name == "saveAs") {
+        painter.drawRoundedRect(QRectF(12, 12, 34, 40), 5, 5);
+        painter.drawRect(QRectF(20, 12, 18, 12));
+        painter.setPen(QPen(warm, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(40, 41), QPointF(54, 27));
+        painter.drawLine(QPointF(47, 27), QPointF(54, 27));
+        painter.drawLine(QPointF(54, 27), QPointF(54, 34));
+    } else if (name == "run") {
+        painter.setBrush(accent);
+        painter.setPen(Qt::NoPen);
+        QPainterPath play;
+        play.moveTo(23, 14);
+        play.lineTo(50, 32);
+        play.lineTo(23, 50);
+        play.closeSubpath();
+        painter.drawPath(play);
+    } else if (name == "zoomIn" || name == "zoomOut") {
+        painter.drawEllipse(QPointF(28, 28), 16, 16);
+        painter.drawLine(QPointF(40, 40), QPointF(52, 52));
+        painter.setPen(QPen(accent, 4.8, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(20, 28), QPointF(36, 28));
+        if (name == "zoomIn") {
+            painter.drawLine(QPointF(28, 20), QPointF(28, 36));
+        }
+    } else if (name == "scaleReset") {
+        painter.drawArc(QRectF(16, 16, 32, 32), 45 * 16, 285 * 16);
+        painter.drawLine(QPointF(45, 15), QPointF(45, 27));
+        painter.drawLine(QPointF(45, 15), QPointF(33, 15));
+        painter.setFont(QFont("Arial", 14, QFont::Bold));
+        painter.drawText(QRectF(18, 24, 28, 18), Qt::AlignCenter, "1:1");
+    } else if (name == "dockLeft") {
+        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
+        painter.fillRect(QRectF(12, 12, 13, 40), QColor(10, 132, 255, 70));
+        painter.drawLine(QPointF(25, 12), QPointF(25, 52));
+    } else if (name == "dockRight") {
+        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
+        painter.fillRect(QRectF(39, 12, 13, 40), QColor(10, 132, 255, 70));
+        painter.drawLine(QPointF(39, 12), QPointF(39, 52));
+    } else if (name == "dockBottom") {
+        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
+        painter.fillRect(QRectF(12, 39, 40, 13), QColor(10, 132, 255, 70));
+        painter.drawLine(QPointF(12, 39), QPointF(52, 39));
+    } else if (name == "layoutReset") {
+        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
+        painter.drawLine(QPointF(25, 12), QPointF(25, 52));
+        painter.drawLine(QPointF(12, 39), QPointF(52, 39));
+        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawArc(QRectF(22, 22, 20, 20), 40 * 16, 260 * 16);
+    } else if (name == "fullscreen") {
+        painter.drawLine(QPointF(14, 26), QPointF(14, 14));
+        painter.drawLine(QPointF(14, 14), QPointF(26, 14));
+        painter.drawLine(QPointF(38, 14), QPointF(50, 14));
+        painter.drawLine(QPointF(50, 14), QPointF(50, 26));
+        painter.drawLine(QPointF(50, 38), QPointF(50, 50));
+        painter.drawLine(QPointF(50, 50), QPointF(38, 50));
+        painter.drawLine(QPointF(26, 50), QPointF(14, 50));
+        painter.drawLine(QPointF(14, 50), QPointF(14, 38));
+    } else if (name == "settings") {
+        painter.drawEllipse(QPointF(32, 32), 8, 8);
+        constexpr double pi = 3.14159265358979323846;
+        for (int i = 0; i < 8; ++i) {
+            const double a = i * pi / 4.0;
+            const QPointF inner(32 + std::cos(a) * 16, 32 + std::sin(a) * 16);
+            const QPointF outer(32 + std::cos(a) * 23, 32 + std::sin(a) * 23);
+            painter.drawLine(inner, outer);
+        }
+    }
+    return QIcon(pix);
+}
+
+class DelayedToolTipFilter final : public QObject {
+public:
+    explicit DelayedToolTipFilter(QObject* parent = nullptr) : QObject(parent)
+    {
+        timer_.setSingleShot(true);
+        timer_.setInterval(1500);
+        connect(&timer_, &QTimer::timeout, this, [this] {
+            if (watched_) {
+                QToolTip::showText(QCursor::pos() + QPoint(14, 18), watched_->toolTip(), watched_);
+            }
+        });
+    }
+
+protected:
+    bool eventFilter(QObject* object, QEvent* event) override
+    {
+        auto* widget = qobject_cast<QWidget*>(object);
+        if (!widget) {
+            return QObject::eventFilter(object, event);
+        }
+        if (event->type() == QEvent::Enter) {
+            watched_ = widget;
+            timer_.start();
+        } else if (event->type() == QEvent::ToolTip) {
+            return true;
+        } else if (event->type() == QEvent::Leave || event->type() == QEvent::MouseButtonPress || event->type() == QEvent::Hide) {
+            timer_.stop();
+            QToolTip::hideText();
+            if (watched_ == widget) {
+                watched_ = nullptr;
+            }
+        }
+        return QObject::eventFilter(object, event);
+    }
+
+private:
+    QTimer timer_;
+    QWidget* watched_ = nullptr;
+};
+
+void installDelayedTooltips(QToolBar* toolbar)
+{
+    if (!toolbar) {
+        return;
+    }
+    auto* filter = new DelayedToolTipFilter(toolbar);
+    for (auto* button : toolbar->findChildren<QToolButton*>()) {
+        button->setToolTipDuration(5000);
+        button->installEventFilter(filter);
+    }
 }
 
 class PortItem final : public QGraphicsEllipseItem {
@@ -647,13 +826,15 @@ private:
 }
 
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
+    : GuiCompat::MainWindowBase(parent)
 {
     NodeFactory::instance().registerBuiltins();
+    GuiCompat::configureMainWindow(this);
     setWindowTitle("ImageNodeEditor");
     resize(1280, 820);
     QSettings settings;
     uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
+    AppTheme::setThemePreference(settings.value("mainWindow/theme", "system").toString());
     if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
         AppTheme::apply(*app, uiScale_);
     }
@@ -668,37 +849,58 @@ void MainWindow::createActions()
     auto* file = menuBar()->addMenu("文件");
     mainToolbar_ = addToolBar("主工具栏");
     mainToolbar_->setObjectName("mainToolbar");
-    auto addAction = [&](const QString& text, auto slot) {
+    mainToolbar_->setMovable(false);
+    mainToolbar_->setFloatable(false);
+    auto addAction = [&](const QString& text, const QString& iconName, auto slot) {
         auto* action = new QAction(text, this);
+        action->setIcon(lineIcon(iconName));
+        action->setData(iconName);
+        action->setToolTip(text);
+        action->setStatusTip(text);
         connect(action, &QAction::triggered, this, slot);
         file->addAction(action);
         mainToolbar_->addAction(action);
         return action;
     };
-    addAction("新建", [this] { newWorkflow(); });
-    addAction("打开", [this] { openWorkflow(); });
-    addAction("保存", [this] { saveWorkflow(); });
-    addAction("另存为", [this] { saveWorkflowAs(); });
-    addAction("执行", [this] { runWorkflow(); });
+    addAction("新建", "new", [this] { newWorkflow(); });
+    addAction("打开", "open", [this] { openWorkflow(); });
+    addAction("保存", "save", [this] { saveWorkflow(); });
+    addAction("另存为", "saveAs", [this] { saveWorkflowAs(); });
+    addAction("执行", "run", [this] { runWorkflow(); });
 
     auto* viewMenu = menuBar()->addMenu("视图");
     viewToolbar_ = addToolBar("界面缩放");
     viewToolbar_->setObjectName("viewScaleToolbar");
-    auto addViewAction = [&](const QString& text, const QString& toolText, const QList<QKeySequence>& shortcuts, auto slot) {
+    viewToolbar_->setMovable(false);
+    viewToolbar_->setFloatable(false);
+    auto addViewAction = [&](const QString& text, const QString& iconName, const QList<QKeySequence>& shortcuts, auto slot) {
         auto* action = new QAction(text, this);
+        action->setIcon(lineIcon(iconName));
+        action->setData(iconName);
         action->setToolTip(text);
-        if (!toolText.isEmpty()) {
-            action->setIconText(toolText);
-        }
+        action->setStatusTip(text);
         action->setShortcuts(shortcuts);
         connect(action, &QAction::triggered, this, slot);
         viewMenu->addAction(action);
         viewToolbar_->addAction(action);
         return action;
     };
-    addViewAction("界面放大", "A+", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
-    addViewAction("界面缩小", "A-", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
-    addViewAction("重置界面大小", "100%", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
+    addViewAction("界面放大", "zoomIn", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
+    addViewAction("界面缩小", "zoomOut", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
+    addViewAction("重置界面大小", "scaleReset", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
+
+    auto* settingsMenu = menuBar()->addMenu("设置");
+    auto* settingsAction = new QAction(lineIcon("settings"), "打开设置", this);
+    settingsAction->setData("settings");
+    settingsAction->setToolTip("打开设置");
+    settingsAction->setStatusTip("打开设置");
+    connect(settingsAction, &QAction::triggered, this, [this] { showSettingsDialog(); });
+    settingsMenu->addAction(settingsAction);
+    viewToolbar_->addSeparator();
+    viewToolbar_->addAction(settingsAction);
+
+    installDelayedTooltips(mainToolbar_);
+    installDelayedTooltips(viewToolbar_);
 }
 
 void MainWindow::createLayout()
@@ -741,10 +943,10 @@ void MainWindow::createLayout()
     auto* zoomLayout = new QVBoxLayout(canvasZoomOverlay_);
     zoomLayout->setContentsMargins(0, 0, 0, 0);
     canvasZoomInButton_ = new QToolButton;
-    canvasZoomInButton_->setText("+");
+    canvasZoomInButton_->setIcon(lineIcon("zoomIn"));
     canvasZoomInButton_->setToolTip("放大画布");
     canvasZoomOutButton_ = new QToolButton;
-    canvasZoomOutButton_->setText("-");
+    canvasZoomOutButton_->setIcon(lineIcon("zoomOut"));
     canvasZoomOutButton_->setToolTip("缩小画布");
     zoomLayout->addWidget(canvasZoomInButton_, 0, Qt::AlignRight);
     zoomLayout->addWidget(canvasZoomOutButton_, 0, Qt::AlignRight);
@@ -772,10 +974,10 @@ void MainWindow::createLayout()
     bottomLayout->addWidget(log_);
 
     setDockOptions(QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AnimatedDocks | QMainWindow::GroupedDragging);
-    setCentralWidget(viewContainer);
+    GuiCompat::setMainContent(this, viewContainer);
 
     auto makeDock = [this](const QString& title, const QString& objectName, QWidget* widget) {
-        auto* dock = new QDockWidget(title, this);
+        auto* dock = new GuiCompat::DockWidget(title, this);
         dock->setObjectName(objectName);
         dock->setWidget(widget);
         dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
@@ -791,9 +993,10 @@ void MainWindow::createLayout()
 
     addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
     addDockWidget(Qt::RightDockWidgetArea, propertyDock_);
-    addDockWidget(Qt::BottomDockWidgetArea, bottomDock_);
+    addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
+    splitDockWidget(propertyDock_, bottomDock_, Qt::Vertical);
     resizeDocks({paletteDock_, propertyDock_}, {220, 300}, Qt::Horizontal);
-    resizeDocks({bottomDock_}, {250}, Qt::Vertical);
+    resizeDocks({propertyDock_, bottomDock_}, {360, 360}, Qt::Vertical);
 
     auto* layoutMenu = menuBar()->addMenu("布局");
     layoutMenu->addAction(paletteDock_->toggleViewAction());
@@ -823,15 +1026,37 @@ void MainWindow::createLayout()
 
     layoutToolbar_ = addToolBar("布局");
     layoutToolbar_->setObjectName("layoutToolbar");
+    layoutToolbar_->setMovable(false);
+    layoutToolbar_->setFloatable(false);
+    paletteDock_->toggleViewAction()->setIcon(lineIcon("dockLeft"));
+    paletteDock_->toggleViewAction()->setData("dockLeft");
+    paletteDock_->toggleViewAction()->setToolTip("显示或隐藏节点栏");
+    propertyDock_->toggleViewAction()->setIcon(lineIcon("dockRight"));
+    propertyDock_->toggleViewAction()->setData("dockRight");
+    propertyDock_->toggleViewAction()->setToolTip("显示或隐藏属性");
+    bottomDock_->toggleViewAction()->setIcon(lineIcon("dockBottom"));
+    bottomDock_->toggleViewAction()->setData("dockBottom");
+    bottomDock_->toggleViewAction()->setToolTip("显示或隐藏预览与日志");
+    resetAction->setIcon(lineIcon("layoutReset"));
+    resetAction->setData("layoutReset");
+    resetAction->setToolTip("重置布局");
+    fullScreenAction->setIcon(lineIcon("fullscreen"));
+    fullScreenAction->setData("fullscreen");
+    fullScreenAction->setToolTip("全屏切换");
     layoutToolbar_->addAction(paletteDock_->toggleViewAction());
     layoutToolbar_->addAction(propertyDock_->toggleViewAction());
     layoutToolbar_->addAction(bottomDock_->toggleViewAction());
     layoutToolbar_->addAction(resetAction);
     layoutToolbar_->addAction(fullScreenAction);
+    installDelayedTooltips(layoutToolbar_);
 
     QSettings settings;
     restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
-    restoreState(settings.value("mainWindow/state").toByteArray());
+    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 2) {
+        restoreState(settings.value("mainWindow/state").toByteArray());
+    } else {
+        resetDockLayout();
+    }
 }
 
 void MainWindow::rebuildPalette()
@@ -1071,7 +1296,7 @@ void MainWindow::rebuildProperties()
         const QVariant value = node->parameterValue(p.name);
         QWidget* editor = nullptr;
         if (p.type == ParameterType::Integer) {
-            auto* w = new QSpinBox;
+            auto* w = new GuiCompat::SpinBox;
             w->setRange(int(p.min), int(p.max));
             w->setValue(value.toInt());
             connect(w, &QSpinBox::valueChanged, this, [this, name = p.name](int v) {
@@ -1079,7 +1304,7 @@ void MainWindow::rebuildProperties()
             });
             editor = w;
         } else if (p.type == ParameterType::Double) {
-            auto* w = new QDoubleSpinBox;
+            auto* w = new GuiCompat::DoubleSpinBox;
             w->setRange(p.min, p.max);
             w->setSingleStep(0.05);
             w->setValue(value.toDouble());
@@ -1088,14 +1313,14 @@ void MainWindow::rebuildProperties()
             });
             editor = w;
         } else if (p.type == ParameterType::Boolean) {
-            auto* w = new QCheckBox;
+            auto* w = new GuiCompat::CheckBox;
             w->setChecked(value.toBool());
             connect(w, &QCheckBox::toggled, this, [this, name = p.name](bool v) {
                 if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, v);
             });
             editor = w;
         } else if (p.type == ParameterType::Choice) {
-            auto* w = new QComboBox;
+            auto* w = new GuiCompat::ComboBox;
             w->addItems(p.options);
             w->setCurrentText(value.toString());
             connect(w, &QComboBox::currentTextChanged, this, [this, name = p.name](const QString& v) {
@@ -1106,10 +1331,11 @@ void MainWindow::rebuildProperties()
             auto* container = new QWidget;
             auto* layout = new QHBoxLayout(container);
             layout->setContentsMargins(0, 0, 0, 0);
-            auto* edit = new QLineEdit(value.toString());
+            auto* edit = new GuiCompat::LineEdit;
+            edit->setText(value.toString());
             layout->addWidget(edit);
             if (p.type == ParameterType::FileOpen || p.type == ParameterType::FileSave || p.type == ParameterType::Color) {
-                auto* button = new QPushButton("...");
+                auto* button = new GuiCompat::PushButton("...");
                 layout->addWidget(button);
                 connect(button, &QPushButton::clicked, this, [this, edit, p] {
                     QString v;
@@ -1286,13 +1512,14 @@ void MainWindow::resetDockLayout()
     bottomDock_->setFloating(false);
     addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
     addDockWidget(Qt::RightDockWidgetArea, propertyDock_);
-    addDockWidget(Qt::BottomDockWidgetArea, bottomDock_);
+    addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
+    splitDockWidget(propertyDock_, bottomDock_, Qt::Vertical);
     paletteDock_->show();
     propertyDock_->show();
     bottomDock_->show();
     const auto metrics = AppTheme::metrics(uiScale_);
     resizeDocks({paletteDock_, propertyDock_}, {metrics.paletteMinWidth, metrics.propertyMinWidth}, Qt::Horizontal);
-    resizeDocks({bottomDock_}, {metrics.previewMinHeight + metrics.logMaxHeight}, Qt::Vertical);
+    resizeDocks({propertyDock_, bottomDock_}, {metrics.previewMinHeight + metrics.logMaxHeight, metrics.previewMinHeight + metrics.logMaxHeight}, Qt::Vertical);
 }
 
 void MainWindow::toggleFullScreenMode()
@@ -1302,6 +1529,125 @@ void MainWindow::toggleFullScreenMode()
     } else {
         showFullScreen();
     }
+}
+
+void MainWindow::showSettingsDialog()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle("设置");
+    dialog.resize(AppTheme::px(420, uiScale_), AppTheme::px(280, uiScale_));
+
+    auto* root = new QVBoxLayout(&dialog);
+    root->setContentsMargins(AppTheme::px(18, uiScale_), AppTheme::px(18, uiScale_), AppTheme::px(18, uiScale_), AppTheme::px(14, uiScale_));
+    root->setSpacing(AppTheme::px(12, uiScale_));
+
+    auto* title = new QLabel("软件设置");
+    QFont titleFont = title->font();
+    titleFont.setPointSizeF(titleFont.pointSizeF() + 2);
+    titleFont.setBold(true);
+    title->setFont(titleFont);
+    root->addWidget(title);
+
+    auto* formHost = new QWidget;
+    formHost->setObjectName("glassPanel");
+    auto* form = new QFormLayout(formHost);
+    form->setContentsMargins(AppTheme::px(14, uiScale_), AppTheme::px(14, uiScale_), AppTheme::px(14, uiScale_), AppTheme::px(14, uiScale_));
+    form->setHorizontalSpacing(AppTheme::px(14, uiScale_));
+    form->setVerticalSpacing(AppTheme::px(10, uiScale_));
+
+    auto* uiScaleSpin = new GuiCompat::DoubleSpinBox;
+    uiScaleSpin->setRange(AppTheme::kMinUiScale * 100.0, AppTheme::kMaxUiScale * 100.0);
+    uiScaleSpin->setSingleStep(AppTheme::kUiScaleStep * 100.0);
+    uiScaleSpin->setDecimals(0);
+    uiScaleSpin->setSuffix("%");
+    uiScaleSpin->setValue(uiScale_ * 100.0);
+    form->addRow("界面大小", uiScaleSpin);
+
+    auto* themeCombo = new GuiCompat::ComboBox;
+    themeCombo->addItem("跟随系统", "system");
+    themeCombo->addItem("浅色", "light");
+    themeCombo->addItem("深色", "dark");
+    const int themeIndex = themeCombo->findData(AppTheme::themePreferenceName());
+    themeCombo->setCurrentIndex(themeIndex >= 0 ? themeIndex : 0);
+    form->addRow("界面主题", themeCombo);
+
+    auto* canvasRow = new QWidget;
+    auto* canvasLayout = new QHBoxLayout(canvasRow);
+    canvasLayout->setContentsMargins(0, 0, 0, 0);
+    auto* canvasZoomSlider = new QSlider(Qt::Horizontal);
+    canvasZoomSlider->setRange(25, 300);
+    canvasZoomSlider->setValue(int(std::lround(zoomScale_ * 100.0)));
+    auto* canvasZoomLabel = new QLabel(QString("%1%").arg(canvasZoomSlider->value()));
+    canvasZoomLabel->setMinimumWidth(AppTheme::px(48, uiScale_));
+    canvasLayout->addWidget(canvasZoomSlider);
+    canvasLayout->addWidget(canvasZoomLabel);
+    connect(canvasZoomSlider, &QSlider::valueChanged, canvasZoomLabel, [canvasZoomLabel](int value) {
+        canvasZoomLabel->setText(QString("%1%").arg(value));
+    });
+    form->addRow("画布缩放", canvasRow);
+
+    auto* paletteVisible = new GuiCompat::CheckBox;
+    paletteVisible->setChecked(!paletteDock_ || paletteDock_->isVisible());
+    form->addRow("显示节点栏", paletteVisible);
+    auto* propertyVisible = new GuiCompat::CheckBox;
+    propertyVisible->setChecked(!propertyDock_ || propertyDock_->isVisible());
+    form->addRow("显示属性栏", propertyVisible);
+    auto* bottomVisible = new GuiCompat::CheckBox;
+    bottomVisible->setChecked(!bottomDock_ || bottomDock_->isVisible());
+    form->addRow("显示预览与日志", bottomVisible);
+
+    root->addWidget(formHost);
+
+    auto* utilityRow = new QWidget;
+    auto* utilityLayout = new QHBoxLayout(utilityRow);
+    utilityLayout->setContentsMargins(0, 0, 0, 0);
+    auto* resetScaleButton = new GuiCompat::PushButton("重置界面大小");
+    auto* resetLayoutButton = new GuiCompat::PushButton("重置布局");
+    utilityLayout->addWidget(resetScaleButton);
+    utilityLayout->addWidget(resetLayoutButton);
+    utilityLayout->addStretch();
+    root->addWidget(utilityRow);
+
+    connect(resetScaleButton, &QPushButton::clicked, this, [uiScaleSpin] {
+        uiScaleSpin->setValue(100.0);
+    });
+    connect(resetLayoutButton, &QPushButton::clicked, this, [this, paletteVisible, propertyVisible, bottomVisible] {
+        resetDockLayout();
+        paletteVisible->setChecked(true);
+        propertyVisible->setChecked(true);
+        bottomVisible->setChecked(true);
+    });
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Apply);
+    root->addWidget(buttons);
+
+    auto applySettings = [&] {
+        AppTheme::setThemePreference(themeCombo->currentData().toString());
+        QSettings settings;
+        settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
+        setUiScale(uiScaleSpin->value() / 100.0);
+        applyUiScale();
+        const double requestedZoom = canvasZoomSlider->value() / 100.0;
+        if (!qFuzzyCompare(requestedZoom, zoomScale_)) {
+            applyZoomFactor(requestedZoom / zoomScale_);
+        }
+        if (paletteDock_) paletteDock_->setVisible(paletteVisible->isChecked());
+        if (propertyDock_) propertyDock_->setVisible(propertyVisible->isChecked());
+        if (bottomDock_) bottomDock_->setVisible(bottomVisible->isChecked());
+    };
+
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        applySettings();
+        dialog.accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::clicked, &dialog, [&](QAbstractButton* button) {
+        if (buttons->standardButton(button) == QDialogButtonBox::Apply) {
+            applySettings();
+        }
+    });
+
+    dialog.exec();
 }
 
 void MainWindow::increaseUiScale()
@@ -1337,18 +1683,35 @@ void MainWindow::applyUiScale()
         AppTheme::apply(*app, uiScale_);
     }
 
+    auto refreshToolbar = [](QToolBar* toolbar) {
+        if (!toolbar) {
+            return;
+        }
+        toolbar->setMovable(false);
+        toolbar->setFloatable(false);
+        for (auto* action : toolbar->actions()) {
+            const QString iconName = action->data().toString();
+            if (!iconName.isEmpty()) {
+                action->setIcon(lineIcon(iconName));
+            }
+        }
+    };
+
     const auto metrics = AppTheme::metrics(uiScale_);
     if (mainToolbar_) {
+        refreshToolbar(mainToolbar_);
         mainToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        mainToolbar_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        mainToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
     if (layoutToolbar_) {
+        refreshToolbar(layoutToolbar_);
         layoutToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        layoutToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        layoutToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
     if (viewToolbar_) {
+        refreshToolbar(viewToolbar_);
         viewToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        viewToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        viewToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
 
     if (canvasZoomOverlay_) {
@@ -1357,9 +1720,13 @@ void MainWindow::applyUiScale()
     }
     if (canvasZoomInButton_) {
         canvasZoomInButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
+        canvasZoomInButton_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        canvasZoomInButton_->setIcon(lineIcon("zoomIn"));
     }
     if (canvasZoomOutButton_) {
         canvasZoomOutButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
+        canvasZoomOutButton_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        canvasZoomOutButton_->setIcon(lineIcon("zoomOut"));
     }
 
     if (palette_) {
@@ -1407,5 +1774,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     settings.setValue("mainWindow/geometry", saveGeometry());
     settings.setValue("mainWindow/state", saveState());
     settings.setValue("mainWindow/uiScale", uiScale_);
+    settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
+    settings.setValue("mainWindow/layoutVersion", 2);
     QMainWindow::closeEvent(event);
 }

@@ -15,9 +15,15 @@ constexpr double kMinUiScale = 0.8;
 constexpr double kMaxUiScale = 1.8;
 constexpr double kUiScaleStep = 0.1;
 
+enum class ThemePreference {
+    Light,
+    Dark,
+    System
+};
+
 struct Metrics {
-    int toolbarIcon = 22;
-    int toolbarButton = 34;
+    int toolbarIcon = 18;
+    int toolbarButton = 28;
     int canvasZoomButtonW = 38;
     int canvasZoomButtonH = 32;
     int canvasZoomOverlayW = 56;
@@ -68,6 +74,11 @@ QFont appFont(double uiScale);
 QString styleSheet(double uiScale);
 int px(double value, double uiScale);
 double clampedScale(double uiScale);
+ThemePreference themePreference();
+QString themePreferenceName();
+void setThemePreference(const QString& preference);
+void setThemePreference(ThemePreference preference);
+bool isDarkTheme();
 
 void apply(QApplication& app, double uiScale);
 QGraphicsDropShadowEffect* makeShadow(QWidget* parent, double uiScale, int alpha = 48);

@@ -1,9 +1,9 @@
 #pragma once
 
+#include "gui/ElaCompat.h"
 #include "workflow/ExecutionEngine.h"
 #include "workflow/WorkflowGraph.h"
 
-#include <QMainWindow>
 #include <QMap>
 
 class QFormLayout;
@@ -19,7 +19,7 @@ class QToolButton;
 class QToolBar;
 class QWidget;
 
-class MainWindow : public QMainWindow {
+class MainWindow : public GuiCompat::MainWindowBase {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
 
@@ -61,6 +61,7 @@ private:
     void updatePreviewForSelection();
     void resetDockLayout();
     void toggleFullScreenMode();
+    void showSettingsDialog();
     void increaseUiScale();
     void decreaseUiScale();
     void resetUiScale();
@@ -83,9 +84,9 @@ private:
     QFormLayout* propertyLayout_ = nullptr;
     QLabel* preview_ = nullptr;
     QTextEdit* log_ = nullptr;
-    QDockWidget* paletteDock_ = nullptr;
-    QDockWidget* propertyDock_ = nullptr;
-    QDockWidget* bottomDock_ = nullptr;
+    GuiCompat::DockWidget* paletteDock_ = nullptr;
+    GuiCompat::DockWidget* propertyDock_ = nullptr;
+    GuiCompat::DockWidget* bottomDock_ = nullptr;
     QToolButton* canvasZoomInButton_ = nullptr;
     QToolButton* canvasZoomOutButton_ = nullptr;
     QWidget* canvasZoomOverlay_ = nullptr;

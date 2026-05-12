@@ -10,6 +10,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
 qt_standard_project_setup()
 
+option(IMAGENODEEDITOR_USE_ELA "Use ElaWidgetTools for the widget shell when available." ON)
+
 qt_add_executable(ImageNodeEditor
     WIN32
     MACOSX_BUNDLE
@@ -52,6 +54,26 @@ target_link_libraries(ImageNodeEditor PRIVATE
     Qt6::Gui
     Qt6::Widgets
 )
+
+if(IMAGENODEEDITOR_USE_ELA)
+    set(ELA_WIDGET_TOOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ElaWidgetTools/ElaWidgetTools")
+    if(EXISTS "${ELA_WIDGET_TOOLS_DIR}/CMakeLists.txt")
+        find_package(Qt6 COMPONENTS WidgetsPrivate QUIET)
+        if(TARGET Qt6::WidgetsPrivate)
+            set(CMAKE_AUTOMOC ON)
+            set(CMAKE_AUTORCC ON)
+            set(CMAKE_AUTOUIC ON)
+            add_subdirectory("${ELA_WIDGET_TOOLS_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/ElaWidgetTools")
+            target_link_libraries(ImageNodeEditor PRIVATE ElaWidgetTools)
+            target_compile_definitions(ImageNodeEditor PRIVATE IMAGENODEEDITOR_USE_ELA=1)
+            message(STATUS "ElaWidgetTools integration enabled.")
+        else()
+            message(WARNING "ElaWidgetTools was found, but Qt6::WidgetsPrivate is unavailable; building with the built-in Qt Widgets shell.")
+        endif()
+    else()
+        message(WARNING "ElaWidgetTools source not found at ${ELA_WIDGET_TOOLS_DIR}; building with the built-in Qt Widgets shell.")
+    endif()
+endif()
 
 set_target_properties(ImageNodeEditor PROPERTIES
     MACOSX_BUNDLE TRUE

@@ -2,13 +2,17 @@
 
 #include <QApplication>
 #include <QGraphicsDropShadowEffect>
+#include <QGuiApplication>
 #include <QPalette>
+#include <QStyleHints>
 #include <QWidget>
 
 #include <algorithm>
 #include <cmath>
 
 namespace {
+
+AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::System;
 
 QString pxValue(double value, double scale)
 {
@@ -32,8 +36,8 @@ int px(double value, double uiScale)
 Metrics metrics(double uiScale)
 {
     Metrics m;
-    m.toolbarIcon = px(22, uiScale);
-    m.toolbarButton = px(34, uiScale);
+    m.toolbarIcon = px(18, uiScale);
+    m.toolbarButton = px(28, uiScale);
     m.canvasZoomButtonW = px(38, uiScale);
     m.canvasZoomButtonH = px(32, uiScale);
     m.canvasZoomOverlayW = px(56, uiScale);
@@ -66,7 +70,26 @@ NodeMetrics nodeMetrics(double uiScale)
 
 Colors colors()
 {
-    return {};
+    if (!isDarkTheme()) {
+        return {};
+    }
+    Colors c;
+    c.canvasTop = QColor("#111827");
+    c.canvasBottom = QColor("#0b1220");
+    c.canvasDot = QColor(148, 163, 184, 36);
+    c.nodeTop = QColor(35, 45, 63, 238);
+    c.nodeBottom = QColor(21, 29, 43, 232);
+    c.nodeBorder = QColor(99, 130, 170, 130);
+    c.nodeSelected = QColor("#60a5fa");
+    c.nodeShadow = QColor(0, 0, 0, 90);
+    c.textPrimary = QColor("#e5edf7");
+    c.textSecondary = QColor("#aab7c8");
+    c.inputPort = QColor("#30d158");
+    c.outputPort = QColor("#60a5fa");
+    c.edge = QColor("#8fb8e8");
+    c.edgeSelected = QColor("#ffb340");
+    c.pendingEdge = QColor("#60a5fa");
+    return c;
 }
 
 QFont appFont(double uiScale)
@@ -86,7 +109,7 @@ QString styleSheet(double uiScale)
     const int titleHeight = px(34, uiScale);
     const int border = std::max(1, px(1, uiScale));
 
-    return QString(R"(
+    QString sheet = QString(R"(
         QMainWindow {
             background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #fbfdff, stop:0.55 #f2f7ff, stop:1 #e8f1ff);
@@ -125,8 +148,17 @@ QString styleSheet(double uiScale)
             background: rgba(255, 255, 255, 178);
             border: %1px solid rgba(255, 255, 255, 180);
             border-bottom-color: rgba(120, 145, 180, 82);
-            spacing: %2px;
-            padding: %2px;
+            spacing: %1px;
+            padding: %1px %2px;
+            movable: false;
+        }
+        QToolBar QToolButton {
+            min-width: %12px;
+            min-height: %12px;
+            padding: %1px;
+            border: %1px solid transparent;
+            border-radius: %4px;
+            background: transparent;
         }
         QToolButton, QPushButton {
             min-height: %6px;
@@ -136,6 +168,15 @@ QString styleSheet(double uiScale)
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                 stop:0 rgba(255,255,255,238), stop:1 rgba(228,238,252,220));
             color: #1f2937;
+        }
+        QToolBar QToolButton:hover {
+            border-color: rgba(10, 132, 255, 96);
+            background: rgba(10, 132, 255, 28);
+        }
+        QToolBar QToolButton:pressed {
+            background: rgba(10, 132, 255, 52);
+            padding-top: %1px;
+            padding-bottom: %1px;
         }
         QToolButton:hover, QPushButton:hover {
             border-color: rgba(10, 132, 255, 148);
@@ -251,7 +292,86 @@ QString styleSheet(double uiScale)
         .arg(pxValue(7, uiScale))
         .arg(pxValue(5, uiScale))
         .arg(titleHeight)
-        .arg(radius);
+        .arg(radius)
+        .arg(pxValue(28, uiScale));
+    if (isDarkTheme()) {
+        sheet.replace("#fbfdff", "#111827");
+        sheet.replace("#f2f7ff", "#101827");
+        sheet.replace("#e8f1ff", "#0b1220");
+        sheet.replace("#1f2937", "#e5edf7");
+        sheet.replace("#263446", "#dbe7f5");
+        sheet.replace("#233044", "#dbe7f5");
+        sheet.replace("#526174", "#aab7c8");
+        sheet.replace("#0b3d72", "#cde5ff");
+        sheet.replace("rgba(255, 255, 255, 212)", "rgba(20, 28, 42, 226)");
+        sheet.replace("rgba(255, 255, 255, 238)", "rgba(22, 31, 46, 245)");
+        sheet.replace("rgba(255, 255, 255, 178)", "rgba(18, 27, 42, 220)");
+        sheet.replace("rgba(255, 255, 255, 196)", "rgba(24, 34, 50, 232)");
+        sheet.replace("rgba(255, 255, 255, 174)", "rgba(18, 27, 42, 224)");
+        sheet.replace("rgba(255, 255, 255, 188)", "rgba(19, 28, 43, 224)");
+        sheet.replace("rgba(255, 255, 255, 214)", "rgba(25, 36, 54, 238)");
+        sheet.replace("rgba(255, 255, 255, 220)", "rgba(25, 36, 54, 235)");
+        sheet.replace("rgba(255, 255, 255, 180)", "rgba(76, 96, 128, 100)");
+        sheet.replace("rgba(255, 255, 255, 168)", "rgba(76, 96, 128, 88)");
+        sheet.replace("rgba(255,255,255,238)", "rgba(35,45,63,238)");
+        sheet.replace("rgba(255,255,255,250)", "rgba(44,57,78,245)");
+        sheet.replace("rgba(228,238,252,220)", "rgba(24,34,50,232)");
+        sheet.replace("rgba(218,235,255,232)", "rgba(36,54,78,238)");
+        sheet.replace("rgba(232, 241, 255, 210)", "rgba(16, 24, 37, 224)");
+        sheet.replace("rgba(190, 217, 249, 232)", "rgba(42, 61, 88, 235)");
+    }
+    return sheet;
+}
+
+ThemePreference themePreference()
+{
+    return g_themePreference;
+}
+
+QString themePreferenceName()
+{
+    switch (g_themePreference) {
+    case ThemePreference::Light:
+        return "light";
+    case ThemePreference::Dark:
+        return "dark";
+    case ThemePreference::System:
+    default:
+        return "system";
+    }
+}
+
+void setThemePreference(const QString& preference)
+{
+    const QString normalized = preference.trimmed().toLower();
+    if (normalized == "light") {
+        setThemePreference(ThemePreference::Light);
+    } else if (normalized == "dark") {
+        setThemePreference(ThemePreference::Dark);
+    } else {
+        setThemePreference(ThemePreference::System);
+    }
+}
+
+void setThemePreference(ThemePreference preference)
+{
+    g_themePreference = preference;
+}
+
+bool isDarkTheme()
+{
+    if (g_themePreference == ThemePreference::Dark) {
+        return true;
+    }
+    if (g_themePreference == ThemePreference::Light) {
+        return false;
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    if (auto* hints = QGuiApplication::styleHints()) {
+        return hints->colorScheme() == Qt::ColorScheme::Dark;
+    }
+#endif
+    return false;
 }
 
 void apply(QApplication& app, double uiScale)
@@ -260,12 +380,21 @@ void apply(QApplication& app, double uiScale)
     app.setStyleSheet(styleSheet(uiScale));
 
     QPalette palette = app.palette();
-    palette.setColor(QPalette::Window, QColor("#f3f7ff"));
-    palette.setColor(QPalette::Base, QColor("#ffffff"));
-    palette.setColor(QPalette::AlternateBase, QColor("#edf4ff"));
-    palette.setColor(QPalette::Text, QColor("#1f2937"));
-    palette.setColor(QPalette::ButtonText, QColor("#1f2937"));
-    palette.setColor(QPalette::Highlight, QColor("#0a84ff"));
+    if (isDarkTheme()) {
+        palette.setColor(QPalette::Window, QColor("#111827"));
+        palette.setColor(QPalette::Base, QColor("#172033"));
+        palette.setColor(QPalette::AlternateBase, QColor("#101827"));
+        palette.setColor(QPalette::Text, QColor("#e5edf7"));
+        palette.setColor(QPalette::ButtonText, QColor("#e5edf7"));
+        palette.setColor(QPalette::Highlight, QColor("#60a5fa"));
+    } else {
+        palette.setColor(QPalette::Window, QColor("#f3f7ff"));
+        palette.setColor(QPalette::Base, QColor("#ffffff"));
+        palette.setColor(QPalette::AlternateBase, QColor("#edf4ff"));
+        palette.setColor(QPalette::Text, QColor("#1f2937"));
+        palette.setColor(QPalette::ButtonText, QColor("#1f2937"));
+        palette.setColor(QPalette::Highlight, QColor("#0a84ff"));
+    }
     app.setPalette(palette);
 }
 
