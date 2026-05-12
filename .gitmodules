@@ -1,0 +1,4 @@
+[submodule "third_party/qt-mvvm"]
+	path = third_party/qt-mvvm
+	url = https://github.com/gpospelov/qt-mvvm.git
+	branch = develop
