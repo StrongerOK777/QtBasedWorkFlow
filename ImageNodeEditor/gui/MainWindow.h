@@ -15,6 +15,8 @@ class QGraphicsView;
 class QLabel;
 class QListWidget;
 class QTextEdit;
+class QToolButton;
+class QToolBar;
 class QWidget;
 
 class MainWindow : public QMainWindow {
@@ -36,6 +38,7 @@ public:
     void zoomIn();
     void zoomOut();
     void applyZoomFactor(double factor);
+    double uiScale() const { return uiScale_; }
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -58,6 +61,11 @@ private:
     void updatePreviewForSelection();
     void resetDockLayout();
     void toggleFullScreenMode();
+    void increaseUiScale();
+    void decreaseUiScale();
+    void resetUiScale();
+    void setUiScale(double scale);
+    void applyUiScale();
 
     WorkflowGraph graph_;
     ExecutionResult lastResult_;
@@ -66,6 +74,7 @@ private:
     QString pendingFromNode_;
     QString pendingFromPort_;
     double zoomScale_ = 1.0;
+    double uiScale_ = 1.0;
 
     QListWidget* palette_ = nullptr;
     QGraphicsScene* scene_ = nullptr;
@@ -77,6 +86,12 @@ private:
     QDockWidget* paletteDock_ = nullptr;
     QDockWidget* propertyDock_ = nullptr;
     QDockWidget* bottomDock_ = nullptr;
+    QToolButton* canvasZoomInButton_ = nullptr;
+    QToolButton* canvasZoomOutButton_ = nullptr;
+    QWidget* canvasZoomOverlay_ = nullptr;
+    QToolBar* mainToolbar_ = nullptr;
+    QToolBar* layoutToolbar_ = nullptr;
+    QToolBar* viewToolbar_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
     QVector<QGraphicsItem*> edgeItems_;
 };

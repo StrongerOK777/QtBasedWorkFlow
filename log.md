@@ -185,3 +185,24 @@ GUI 增强保持在 `gui/` 层，不改变 `WorkflowGraph`、节点执行和 JSO
 
 后续注意：
 如果从 IDE 启动仍弹终端，需要检查 IDE 的 Run in terminal / External console 选项；这属于 IDE 运行配置，不是程序自身窗口。
+
+---
+
+### 2026-05-12 / Apple 风格主题与界面缩放阶段
+
+类型：修改
+
+概述：
+增加跨平台 Apple/Keynote 明亮玻璃风格主题和全局界面缩放功能。主题使用 Qt Widgets 自绘、stylesheet、半透明、圆角、渐变、阴影和 hover/pressed 状态模拟毛玻璃效果；全局缩放通过“视图”菜单和顶部工具栏提供界面放大、界面缩小、重置界面大小，并保存到 `QSettings`。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/gui/AppTheme.h`、`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`
+
+处理方式：
+新增 `AppTheme` 集中管理颜色、尺寸、字体、stylesheet 和阴影；节点、端口、连线、画布背景改为按 `uiScale_` 矢量重绘；缩放后重建 scene 和属性面板，避免位图拉伸导致模糊。
+
+当前状态：
+已解决
+
+后续注意：
+当前毛玻璃为跨平台模拟效果，不使用 macOS vibrancy 或 Windows Acrylic/Mica；`third_party/qt-mvvm` 继续保持隔离，未链接到主程序。

@@ -1,5 +1,6 @@
 #include "gui/MainWindow.h"
 
+#include "gui/AppTheme.h"
 #include "nodes/ImageNode.h"
 #include "nodes/NodeFactory.h"
 #include "workflow/ExecutionEngine.h"
@@ -18,7 +19,9 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGraphicsEllipseItem>
+#include <QGraphicsDropShadowEffect>
 #include <QGraphicsLineItem>
+#include <QGraphicsPathItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsSceneContextMenuEvent>
@@ -29,6 +32,7 @@
 #include <QHeaderView>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -57,58 +61,116 @@
 
 namespace {
 
+QPainterPath roundedRectPath(const QRectF& rect, qreal radius)
+{
+    QPainterPath path;
+    path.addRoundedRect(rect, radius, radius);
+    return path;
+}
+
 class PortItem final : public QGraphicsEllipseItem {
 public:
-    PortItem(QString nodeId, PortInfo port, QGraphicsItem* parent)
-        : QGraphicsEllipseItem(parent), nodeId_(std::move(nodeId)), port_(std::move(port))
+    PortItem(QString nodeId, PortInfo port, double uiScale, QGraphicsItem* parent)
+        : QGraphicsEllipseItem(parent), nodeId_(std::move(nodeId)), port_(std::move(port)), uiScale_(uiScale)
     {
-        setRect(-5, -5, 10, 10);
-        setBrush(port_.direction == PortDirection::Output ? QColor("#27ae60") : QColor("#2980b9"));
-        setPen(QPen(Qt::white, 1));
+        const auto metrics = AppTheme::nodeMetrics(uiScale_);
+        setRect(-metrics.portRadius, -metrics.portRadius, metrics.portRadius * 2, metrics.portRadius * 2);
+        setAcceptHoverEvents(true);
         setToolTip(QString("%1 (%2)").arg(port_.displayName, portTypeName(port_.type)));
     }
 
     QString nodeId() const { return nodeId_; }
     PortInfo port() const { return port_; }
 
+protected:
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override
+    {
+        hovered_ = true;
+        update();
+        QGraphicsEllipseItem::hoverEnterEvent(event);
+    }
+
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override
+    {
+        hovered_ = false;
+        update();
+        QGraphicsEllipseItem::hoverLeaveEvent(event);
+    }
+
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
+    {
+        Q_UNUSED(option);
+        Q_UNUSED(widget);
+        const auto colors = AppTheme::colors();
+        const QColor base = port_.direction == PortDirection::Output ? colors.outputPort : colors.inputPort;
+        const QRectF r = rect();
+
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(base.red(), base.green(), base.blue(), hovered_ ? 62 : 34));
+        painter->drawEllipse(r.adjusted(-3 * uiScale_, -3 * uiScale_, 3 * uiScale_, 3 * uiScale_));
+
+        QRadialGradient gradient(r.center() - QPointF(r.width() * 0.22, r.height() * 0.22), r.width());
+        gradient.setColorAt(0, base.lighter(165));
+        gradient.setColorAt(0.62, base);
+        gradient.setColorAt(1, base.darker(125));
+        painter->setBrush(gradient);
+        painter->setPen(QPen(QColor(255, 255, 255, hovered_ ? 245 : 210), std::max(1.0, 1.2 * uiScale_)));
+        painter->drawEllipse(r);
+    }
+
 private:
     QString nodeId_;
     PortInfo port_;
+    double uiScale_ = 1.0;
+    bool hovered_ = false;
 };
 
 class NodeItem final : public QGraphicsRectItem {
 public:
-    NodeItem(MainWindow* window, QString nodeId, QSharedPointer<ImageNode> node)
-        : QGraphicsRectItem(), window_(window), nodeId_(std::move(nodeId)), node_(std::move(node))
+    NodeItem(MainWindow* window, QString nodeId, QSharedPointer<ImageNode> node, double uiScale)
+        : QGraphicsRectItem(), window_(window), nodeId_(std::move(nodeId)), node_(std::move(node)), uiScale_(uiScale)
     {
-        setRect(0, 0, 172, 72 + 20 * std::max(node_->inputPorts().size(), node_->outputPorts().size()));
-        setBrush(QColor("#2c3e50"));
-        setPen(QPen(QColor("#566573"), 1.2));
+        const auto metrics = AppTheme::nodeMetrics(uiScale_);
+        const int rowCount = std::max(node_->inputPorts().size(), node_->outputPorts().size());
+        setRect(0, 0, metrics.width, metrics.topPadding + rowCount * metrics.rowHeight + metrics.bottomPadding);
+        setAcceptHoverEvents(true);
         setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemSendsGeometryChanges);
 
         auto* title = new QGraphicsTextItem(node_->displayName(), this);
-        title->setDefaultTextColor(Qt::white);
-        title->setPos(10, 6);
+        QFont titleFont;
+        titleFont.setPointSizeF(metrics.titleSize);
+        titleFont.setBold(true);
+        title->setFont(titleFont);
+        title->setDefaultTextColor(AppTheme::colors().textPrimary);
+        title->setPos(14 * uiScale_, 8 * uiScale_);
 
-        int y = 42;
+        qreal y = metrics.topPadding;
         for (const auto& port : node_->inputPorts()) {
-            auto* item = new PortItem(nodeId_, port, this);
+            auto* item = new PortItem(nodeId_, port, uiScale_, this);
             item->setPos(0, y);
             ports_.append(item);
             auto* label = new QGraphicsTextItem(port.displayName, this);
-            label->setDefaultTextColor(QColor("#d6dbdf"));
-            label->setPos(12, y - 11);
-            y += 20;
+            QFont labelFont;
+            labelFont.setPointSizeF(metrics.labelSize);
+            label->setFont(labelFont);
+            label->setDefaultTextColor(AppTheme::colors().textSecondary);
+            label->setPos(15 * uiScale_, y - 12 * uiScale_);
+            y += metrics.rowHeight;
         }
-        y = 42;
+        y = metrics.topPadding;
         for (const auto& port : node_->outputPorts()) {
-            auto* item = new PortItem(nodeId_, port, this);
+            auto* item = new PortItem(nodeId_, port, uiScale_, this);
             item->setPos(rect().width(), y);
             ports_.append(item);
             auto* label = new QGraphicsTextItem(port.displayName, this);
-            label->setDefaultTextColor(QColor("#d6dbdf"));
-            label->setPos(rect().width() - 54, y - 11);
-            y += 20;
+            QFont labelFont;
+            labelFont.setPointSizeF(metrics.labelSize);
+            label->setFont(labelFont);
+            label->setDefaultTextColor(AppTheme::colors().textSecondary);
+            const qreal labelWidth = label->boundingRect().width();
+            label->setPos(rect().width() - labelWidth - 15 * uiScale_, y - 12 * uiScale_);
+            y += metrics.rowHeight;
         }
     }
 
@@ -116,6 +178,34 @@ public:
     QVector<PortItem*> ports() const { return ports_; }
 
 protected:
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override
+    {
+        hovered_ = true;
+        update();
+        QGraphicsRectItem::hoverEnterEvent(event);
+    }
+
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override
+    {
+        hovered_ = false;
+        update();
+        QGraphicsRectItem::hoverLeaveEvent(event);
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override
+    {
+        pressed_ = true;
+        update();
+        QGraphicsRectItem::mousePressEvent(event);
+    }
+
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override
+    {
+        pressed_ = false;
+        update();
+        QGraphicsRectItem::mouseReleaseEvent(event);
+    }
+
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override
     {
         if (change == ItemPositionHasChanged && window_) {
@@ -124,50 +214,103 @@ protected:
         return QGraphicsRectItem::itemChange(change, value);
     }
 
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
+    {
+        Q_UNUSED(option);
+        Q_UNUSED(widget);
+        const auto metrics = AppTheme::nodeMetrics(uiScale_);
+        const auto colors = AppTheme::colors();
+        const QRectF body = rect();
+        const QRectF shadowRect = body.translated(0, pressed_ ? 2 * uiScale_ : 5 * uiScale_);
+
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(colors.nodeShadow);
+        painter->drawPath(roundedRectPath(shadowRect.adjusted(3 * uiScale_, 3 * uiScale_, -3 * uiScale_, -1 * uiScale_), metrics.cornerRadius));
+
+        QLinearGradient glass(body.topLeft(), body.bottomLeft());
+        glass.setColorAt(0, hovered_ ? colors.nodeTop.lighter(104) : colors.nodeTop);
+        glass.setColorAt(0.52, QColor(248, 251, 255, 226));
+        glass.setColorAt(1, hovered_ ? colors.nodeBottom.lighter(104) : colors.nodeBottom);
+        painter->setBrush(glass);
+        painter->setPen(QPen(isSelected() ? colors.nodeSelected : colors.nodeBorder, isSelected() ? 2.3 * uiScale_ : 1.1 * uiScale_));
+        painter->drawPath(roundedRectPath(body, metrics.cornerRadius));
+
+        QRectF header = body;
+        header.setHeight(metrics.headerHeight);
+        QLinearGradient highlight(header.topLeft(), header.bottomLeft());
+        highlight.setColorAt(0, QColor(255, 255, 255, 190));
+        highlight.setColorAt(1, QColor(255, 255, 255, 38));
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(highlight);
+        painter->drawPath(roundedRectPath(header, metrics.cornerRadius));
+
+        painter->setPen(QPen(QColor(255, 255, 255, 150), 1));
+        painter->drawLine(body.left() + metrics.cornerRadius, body.top() + 1, body.right() - metrics.cornerRadius, body.top() + 1);
+    }
+
 private:
     MainWindow* window_ = nullptr;
     QString nodeId_;
     QSharedPointer<ImageNode> node_;
+    double uiScale_ = 1.0;
     QVector<PortItem*> ports_;
+    bool hovered_ = false;
+    bool pressed_ = false;
 };
 
-class EdgeItem final : public QGraphicsLineItem {
+class EdgeItem final : public QGraphicsPathItem {
 public:
-    EdgeItem(int edgeIndex, const QLineF& line)
-        : QGraphicsLineItem(line), edgeIndex_(edgeIndex)
+    EdgeItem(int edgeIndex, const QPointF& start, const QPointF& end, double uiScale)
+        : QGraphicsPathItem(), edgeIndex_(edgeIndex), uiScale_(uiScale)
     {
         setFlags(QGraphicsItem::ItemIsSelectable);
         setAcceptHoverEvents(true);
-        setPen(QPen(QColor("#f1c40f"), 2));
         setToolTip("连线");
+        setPath(makePath(start, end));
     }
 
     int edgeIndex() const { return edgeIndex_; }
 
     QPainterPath shape() const override
     {
-        QPainterPath path;
-        path.moveTo(line().p1());
-        path.lineTo(line().p2());
         QPainterPathStroker stroker;
-        stroker.setWidth(12.0);
+        stroker.setWidth(14.0 * uiScale_);
         stroker.setCapStyle(Qt::RoundCap);
-        return stroker.createStroke(path);
+        return stroker.createStroke(path());
     }
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
     {
         Q_UNUSED(option);
         Q_UNUSED(widget);
-        QPen currentPen(isSelected() ? QColor("#ff7043") : QColor("#f1c40f"), isSelected() ? 4 : 2);
+        const auto colors = AppTheme::colors();
+        QPen glow(QColor(10, 132, 255, isSelected() ? 54 : 18), isSelected() ? 8 * uiScale_ : 5 * uiScale_);
+        glow.setCapStyle(Qt::RoundCap);
+        glow.setJoinStyle(Qt::RoundJoin);
+        QPen currentPen(isSelected() ? colors.edgeSelected : colors.edge, isSelected() ? 3.2 * uiScale_ : 2.1 * uiScale_);
         currentPen.setCapStyle(Qt::RoundCap);
+        currentPen.setJoinStyle(Qt::RoundJoin);
         painter->setRenderHint(QPainter::Antialiasing);
+        painter->setPen(glow);
+        painter->drawPath(path());
         painter->setPen(currentPen);
-        painter->drawLine(line());
+        painter->drawPath(path());
     }
 
 private:
+    QPainterPath makePath(const QPointF& start, const QPointF& end) const
+    {
+        QPainterPath path(start);
+        const qreal dx = std::max<qreal>(80 * uiScale_, std::abs(end.x() - start.x()) * 0.5);
+        const QPointF c1(start.x() + dx, start.y());
+        const QPointF c2(end.x() - dx, end.y());
+        path.cubicTo(c1, c2, end);
+        return path;
+    }
+
     int edgeIndex_ = -1;
+    double uiScale_ = 1.0;
 };
 
 class ImagePopupWindow final : public QWidget {
@@ -316,7 +459,7 @@ protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override
     {
         if (pendingLine_) {
-            pendingLine_->setLine(QLineF(pendingStart_, event->scenePos()));
+            pendingLine_->setPath(pendingPath(pendingStart_, event->scenePos()));
         }
         QGraphicsScene::mouseMoveEvent(event);
     }
@@ -367,13 +510,22 @@ private:
         pendingPort_ = port->port().name;
         pendingStart_ = port->mapToScene(port->rect().center());
 
-        auto* line = new QGraphicsLineItem(QLineF(pendingStart_, cursorPosition));
-        QPen pen(QColor("#f7dc6f"), 2.0, Qt::DashLine);
+        auto* line = new QGraphicsPathItem(pendingPath(pendingStart_, cursorPosition));
+        QPen pen(AppTheme::colors().pendingEdge, 2.4, Qt::DashLine);
         pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::RoundJoin);
         line->setPen(pen);
         line->setZValue(-0.5);
         addItem(line);
         pendingLine_ = line;
+    }
+
+    QPainterPath pendingPath(const QPointF& start, const QPointF& end) const
+    {
+        QPainterPath path(start);
+        const qreal dx = std::max<qreal>(80.0, std::abs(end.x() - start.x()) * 0.5);
+        path.cubicTo(QPointF(start.x() + dx, start.y()), QPointF(end.x() - dx, end.y()), end);
+        return path;
     }
 
     void clearPendingLine()
@@ -392,7 +544,7 @@ private:
     QString pendingNode_;
     QString pendingPort_;
     QPointF pendingStart_;
-    QGraphicsLineItem* pendingLine_ = nullptr;
+    QGraphicsPathItem* pendingLine_ = nullptr;
 };
 
 class ZoomGraphicsView final : public QGraphicsView {
@@ -403,6 +555,29 @@ public:
     }
 
 protected:
+    void drawBackground(QPainter* painter, const QRectF& rect) override
+    {
+        const auto colors = AppTheme::colors();
+        QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
+        gradient.setColorAt(0, colors.canvasTop);
+        gradient.setColorAt(1, colors.canvasBottom);
+        painter->fillRect(rect, gradient);
+
+        const double scale = window_ ? window_->uiScale() : 1.0;
+        const qreal step = 26.0 * scale;
+        const qreal dotRadius = std::max<qreal>(1.0, 1.15 * scale);
+        const qreal left = std::floor(rect.left() / step) * step;
+        const qreal top = std::floor(rect.top() / step) * step;
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(colors.canvasDot);
+        for (qreal x = left; x < rect.right(); x += step) {
+            for (qreal y = top; y < rect.bottom(); y += step) {
+                painter->drawEllipse(QPointF(x, y), dotRadius, dotRadius);
+            }
+        }
+    }
+
     void wheelEvent(QWheelEvent* event) override
     {
         const int delta = event->angleDelta().y();
@@ -477,20 +652,27 @@ MainWindow::MainWindow(QWidget* parent)
     NodeFactory::instance().registerBuiltins();
     setWindowTitle("ImageNodeEditor");
     resize(1280, 820);
+    QSettings settings;
+    uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
+    if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
+        AppTheme::apply(*app, uiScale_);
+    }
     createActions();
     createLayout();
     rebuildPalette();
+    applyUiScale();
 }
 
 void MainWindow::createActions()
 {
     auto* file = menuBar()->addMenu("文件");
-    auto* toolbar = addToolBar("主工具栏");
+    mainToolbar_ = addToolBar("主工具栏");
+    mainToolbar_->setObjectName("mainToolbar");
     auto addAction = [&](const QString& text, auto slot) {
         auto* action = new QAction(text, this);
         connect(action, &QAction::triggered, this, slot);
         file->addAction(action);
-        toolbar->addAction(action);
+        mainToolbar_->addAction(action);
         return action;
     };
     addAction("新建", [this] { newWorkflow(); });
@@ -498,6 +680,25 @@ void MainWindow::createActions()
     addAction("保存", [this] { saveWorkflow(); });
     addAction("另存为", [this] { saveWorkflowAs(); });
     addAction("执行", [this] { runWorkflow(); });
+
+    auto* viewMenu = menuBar()->addMenu("视图");
+    viewToolbar_ = addToolBar("界面缩放");
+    viewToolbar_->setObjectName("viewScaleToolbar");
+    auto addViewAction = [&](const QString& text, const QString& toolText, const QList<QKeySequence>& shortcuts, auto slot) {
+        auto* action = new QAction(text, this);
+        action->setToolTip(text);
+        if (!toolText.isEmpty()) {
+            action->setIconText(toolText);
+        }
+        action->setShortcuts(shortcuts);
+        connect(action, &QAction::triggered, this, slot);
+        viewMenu->addAction(action);
+        viewToolbar_->addAction(action);
+        return action;
+    };
+    addViewAction("界面放大", "A+", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
+    addViewAction("界面缩小", "A-", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
+    addViewAction("重置界面大小", "100%", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
 }
 
 void MainWindow::createLayout()
@@ -526,46 +727,46 @@ void MainWindow::createLayout()
     view_->setDragMode(QGraphicsView::NoDrag);
     view_->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     view_->setResizeAnchor(QGraphicsView::AnchorViewCenter);
+    view_->setFrameShape(QFrame::NoFrame);
 
     auto* viewContainer = new QWidget;
+    viewContainer->setObjectName("canvasContainer");
     auto* viewStack = new QStackedLayout(viewContainer);
     viewStack->setContentsMargins(0, 0, 0, 0);
     viewStack->setStackingMode(QStackedLayout::StackAll);
     viewStack->addWidget(view_);
-    auto* zoomOverlay = new QWidget;
-    zoomOverlay->setFixedSize(48, 76);
-    zoomOverlay->setAttribute(Qt::WA_TranslucentBackground);
-    auto* zoomLayout = new QVBoxLayout(zoomOverlay);
+    canvasZoomOverlay_ = new QWidget;
+    canvasZoomOverlay_->setObjectName("canvasZoomOverlay");
+    canvasZoomOverlay_->setAttribute(Qt::WA_TranslucentBackground);
+    auto* zoomLayout = new QVBoxLayout(canvasZoomOverlay_);
     zoomLayout->setContentsMargins(0, 0, 0, 0);
-    auto* zoomInButton = new QToolButton;
-    zoomInButton->setText("+");
-    zoomInButton->setToolTip("放大画布");
-    auto* zoomOutButton = new QToolButton;
-    zoomOutButton->setText("-");
-    zoomOutButton->setToolTip("缩小画布");
-    zoomInButton->setFixedSize(34, 30);
-    zoomOutButton->setFixedSize(34, 30);
-    zoomLayout->addWidget(zoomInButton, 0, Qt::AlignRight);
-    zoomLayout->addWidget(zoomOutButton, 0, Qt::AlignRight);
-    viewStack->addWidget(zoomOverlay);
-    viewStack->setAlignment(zoomOverlay, Qt::AlignRight | Qt::AlignBottom);
-    connect(zoomInButton, &QToolButton::clicked, this, [this] { zoomIn(); });
-    connect(zoomOutButton, &QToolButton::clicked, this, [this] { zoomOut(); });
+    canvasZoomInButton_ = new QToolButton;
+    canvasZoomInButton_->setText("+");
+    canvasZoomInButton_->setToolTip("放大画布");
+    canvasZoomOutButton_ = new QToolButton;
+    canvasZoomOutButton_->setText("-");
+    canvasZoomOutButton_->setToolTip("缩小画布");
+    zoomLayout->addWidget(canvasZoomInButton_, 0, Qt::AlignRight);
+    zoomLayout->addWidget(canvasZoomOutButton_, 0, Qt::AlignRight);
+    viewStack->addWidget(canvasZoomOverlay_);
+    viewStack->setAlignment(canvasZoomOverlay_, Qt::AlignRight | Qt::AlignBottom);
+    connect(canvasZoomInButton_, &QToolButton::clicked, this, [this] { zoomIn(); });
+    connect(canvasZoomOutButton_, &QToolButton::clicked, this, [this] { zoomOut(); });
 
     propertyPanel_ = new QWidget;
+    propertyPanel_->setObjectName("glassPanel");
     propertyLayout_ = new QFormLayout(propertyPanel_);
-    propertyPanel_->setMinimumWidth(260);
 
     preview_ = new PreviewLabel;
+    preview_->setObjectName("previewPanel");
     preview_->setAlignment(Qt::AlignCenter);
-    preview_->setMinimumHeight(210);
-    preview_->setStyleSheet("background:#111; color:#ddd;");
     static_cast<PreviewLabel*>(preview_)->setSourceImage({});
     log_ = new QTextEdit;
+    log_->setObjectName("logPanel");
     log_->setReadOnly(true);
-    log_->setMaximumHeight(160);
 
     auto* bottom = new QWidget;
+    bottom->setObjectName("glassPanel");
     auto* bottomLayout = new QVBoxLayout(bottom);
     bottomLayout->addWidget(preview_);
     bottomLayout->addWidget(log_);
@@ -584,6 +785,9 @@ void MainWindow::createLayout()
     paletteDock_ = makeDock("节点栏", "paletteDock", palette_);
     propertyDock_ = makeDock("属性", "propertyDock", propertyPanel_);
     bottomDock_ = makeDock("预览与日志", "bottomDock", bottom);
+    paletteDock_->setGraphicsEffect(AppTheme::makeShadow(paletteDock_, uiScale_));
+    propertyDock_->setGraphicsEffect(AppTheme::makeShadow(propertyDock_, uiScale_));
+    bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
 
     addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
     addDockWidget(Qt::RightDockWidgetArea, propertyDock_);
@@ -617,13 +821,13 @@ void MainWindow::createLayout()
     auto* fullScreenAction = layoutMenu->addAction("全屏切换");
     connect(fullScreenAction, &QAction::triggered, this, [this] { toggleFullScreenMode(); });
 
-    auto* layoutToolbar = addToolBar("布局");
-    layoutToolbar->setObjectName("layoutToolbar");
-    layoutToolbar->addAction(paletteDock_->toggleViewAction());
-    layoutToolbar->addAction(propertyDock_->toggleViewAction());
-    layoutToolbar->addAction(bottomDock_->toggleViewAction());
-    layoutToolbar->addAction(resetAction);
-    layoutToolbar->addAction(fullScreenAction);
+    layoutToolbar_ = addToolBar("布局");
+    layoutToolbar_->setObjectName("layoutToolbar");
+    layoutToolbar_->addAction(paletteDock_->toggleViewAction());
+    layoutToolbar_->addAction(propertyDock_->toggleViewAction());
+    layoutToolbar_->addAction(bottomDock_->toggleViewAction());
+    layoutToolbar_->addAction(resetAction);
+    layoutToolbar_->addAction(fullScreenAction);
 
     QSettings settings;
     restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
@@ -779,7 +983,7 @@ void MainWindow::rebuildScene()
     nodeItems_.clear();
     edgeItems_.clear();
     for (const auto& record : graph_.nodes()) {
-        auto* item = new NodeItem(this, record.id, record.node);
+        auto* item = new NodeItem(this, record.id, record.node, uiScale_);
         item->setPos(record.position);
         scene_->addItem(item);
         nodeItems_.insert(record.id, item);
@@ -810,7 +1014,7 @@ void MainWindow::rebuildEdges()
         const auto& edge = graph_.edges().at(i);
         const QPointF a = portPosition(edge.fromNode, edge.fromPort, PortDirection::Output);
         const QPointF b = portPosition(edge.toNode, edge.toPort, PortDirection::Input);
-        auto* line = new EdgeItem(i, QLineF(a, b));
+        auto* line = new EdgeItem(i, a, b, uiScale_);
         scene_->addItem(line);
         line->setZValue(-1);
         edgeItems_.append(line);
@@ -1000,8 +1204,9 @@ void MainWindow::removeEdgeByIndex(int edgeIndex)
 
 QPointF MainWindow::findAvailableNodePosition(const QPointF& requested) const
 {
-    constexpr qreal kNodeWidth = 190.0;
-    constexpr qreal kNodeHeight = 130.0;
+    const auto metrics = AppTheme::nodeMetrics(uiScale_);
+    const qreal kNodeWidth = metrics.width + 18.0 * uiScale_;
+    const qreal kNodeHeight = metrics.topPadding + 4 * metrics.rowHeight + metrics.bottomPadding + 18.0 * uiScale_;
     constexpr qreal kStep = 34.0;
     QPointF candidate = requested;
 
@@ -1085,8 +1290,9 @@ void MainWindow::resetDockLayout()
     paletteDock_->show();
     propertyDock_->show();
     bottomDock_->show();
-    resizeDocks({paletteDock_, propertyDock_}, {220, 300}, Qt::Horizontal);
-    resizeDocks({bottomDock_}, {250}, Qt::Vertical);
+    const auto metrics = AppTheme::metrics(uiScale_);
+    resizeDocks({paletteDock_, propertyDock_}, {metrics.paletteMinWidth, metrics.propertyMinWidth}, Qt::Horizontal);
+    resizeDocks({bottomDock_}, {metrics.previewMinHeight + metrics.logMaxHeight}, Qt::Vertical);
 }
 
 void MainWindow::toggleFullScreenMode()
@@ -1098,10 +1304,108 @@ void MainWindow::toggleFullScreenMode()
     }
 }
 
+void MainWindow::increaseUiScale()
+{
+    setUiScale(uiScale_ + AppTheme::kUiScaleStep);
+}
+
+void MainWindow::decreaseUiScale()
+{
+    setUiScale(uiScale_ - AppTheme::kUiScaleStep);
+}
+
+void MainWindow::resetUiScale()
+{
+    setUiScale(1.0);
+}
+
+void MainWindow::setUiScale(double scale)
+{
+    const double nextScale = AppTheme::clampedScale(scale);
+    if (qFuzzyCompare(nextScale, uiScale_)) {
+        return;
+    }
+    uiScale_ = nextScale;
+    applyUiScale();
+    QSettings settings;
+    settings.setValue("mainWindow/uiScale", uiScale_);
+}
+
+void MainWindow::applyUiScale()
+{
+    if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
+        AppTheme::apply(*app, uiScale_);
+    }
+
+    const auto metrics = AppTheme::metrics(uiScale_);
+    if (mainToolbar_) {
+        mainToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        mainToolbar_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    }
+    if (layoutToolbar_) {
+        layoutToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        layoutToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    }
+    if (viewToolbar_) {
+        viewToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        viewToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    }
+
+    if (canvasZoomOverlay_) {
+        canvasZoomOverlay_->setFixedSize(metrics.canvasZoomOverlayW, metrics.canvasZoomOverlayH);
+        canvasZoomOverlay_->setGraphicsEffect(AppTheme::makeShadow(canvasZoomOverlay_, uiScale_, 40));
+    }
+    if (canvasZoomInButton_) {
+        canvasZoomInButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
+    }
+    if (canvasZoomOutButton_) {
+        canvasZoomOutButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
+    }
+
+    if (palette_) {
+        palette_->setMinimumWidth(metrics.paletteMinWidth);
+    }
+    if (propertyPanel_) {
+        propertyPanel_->setMinimumWidth(metrics.propertyMinWidth);
+    }
+    if (propertyLayout_) {
+        propertyLayout_->setContentsMargins(metrics.formMargin, metrics.formMargin, metrics.formMargin, metrics.formMargin);
+        propertyLayout_->setHorizontalSpacing(metrics.formSpacing);
+        propertyLayout_->setVerticalSpacing(metrics.formSpacing);
+    }
+    if (preview_) {
+        preview_->setMinimumHeight(metrics.previewMinHeight);
+    }
+    if (log_) {
+        log_->setMaximumHeight(metrics.logMaxHeight);
+    }
+    if (paletteDock_) {
+        paletteDock_->setGraphicsEffect(AppTheme::makeShadow(paletteDock_, uiScale_));
+    }
+    if (propertyDock_) {
+        propertyDock_->setGraphicsEffect(AppTheme::makeShadow(propertyDock_, uiScale_));
+    }
+    if (bottomDock_) {
+        bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
+    }
+
+    if (scene_) {
+        const QString selected = selectedNodeId_;
+        rebuildScene();
+        if (auto* item = nodeItems_.value(selected)) {
+            item->setSelected(true);
+            selectedNodeId_ = selected;
+        }
+    }
+    rebuildProperties();
+    updatePreviewForSelection();
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     QSettings settings;
     settings.setValue("mainWindow/geometry", saveGeometry());
     settings.setValue("mainWindow/state", saveState());
+    settings.setValue("mainWindow/uiScale", uiScale_);
     QMainWindow::closeEvent(event);
 }

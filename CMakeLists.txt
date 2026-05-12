@@ -21,6 +21,8 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/core/NodeParameter.h
     ImageNodeEditor/core/PortType.h
     ImageNodeEditor/core/Result.h
+    ImageNodeEditor/gui/AppTheme.h
+    ImageNodeEditor/gui/AppTheme.cpp
     ImageNodeEditor/gui/MainWindow.h
     ImageNodeEditor/gui/MainWindow.cpp
     ImageNodeEditor/nodes/ImageNode.h
