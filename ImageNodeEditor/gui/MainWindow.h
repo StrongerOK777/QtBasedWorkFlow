@@ -15,9 +15,10 @@ class QGraphicsScene;
 class QGraphicsView;
 class QLabel;
 class QListWidget;
-class QTextEdit;
+class QListWidgetItem;
 class QToolButton;
 class QToolBar;
+class QTimer;
 class QUndoStack;
 class QWidget;
 
@@ -45,6 +46,7 @@ public:
     double uiScale() const { return uiScale_; }
     void restoreGraphFromUndo(const WorkflowGraph& graph, const QString& selectedNodeId);
     void commitNodeMove(const QString& nodeId, const QPointF& before, const QPointF& after);
+    void updateMiniMap();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -54,8 +56,9 @@ private:
     void createLayout();
     void rebuildPalette();
     void rebuildProperties();
-    void appendLog(const QString& message);
+    void appendLog(const QString& message, const QString& nodeId = {});
     void runWorkflow();
+    void exportCanvasImage();
     void newWorkflow();
     void openWorkflow();
     bool saveWorkflow();
@@ -86,6 +89,10 @@ private:
     void applyNodeRunState(const QString& nodeId, NodeExecutionState state);
     void handleNodeExecutionEvent(const NodeExecutionSummary& summary);
     void focusFailedNode(const QString& nodeId);
+    void focusLogNode(QListWidgetItem* item);
+    void highlightNodeBriefly(const QString& nodeId);
+    void scheduleLivePreview();
+    void runLivePreview();
 
     WorkflowGraph graph_;
     ExecutionEngine engine_;
@@ -103,7 +110,7 @@ private:
     QWidget* propertyPanel_ = nullptr;
     QFormLayout* propertyLayout_ = nullptr;
     QLabel* preview_ = nullptr;
-    QTextEdit* log_ = nullptr;
+    QListWidget* log_ = nullptr;
     GuiCompat::DockWidget* paletteDock_ = nullptr;
     GuiCompat::DockWidget* propertyDock_ = nullptr;
     GuiCompat::DockWidget* bottomDock_ = nullptr;
@@ -113,6 +120,8 @@ private:
     QToolBar* mainToolbar_ = nullptr;
     QToolBar* layoutToolbar_ = nullptr;
     QToolBar* viewToolbar_ = nullptr;
+    QWidget* miniMap_ = nullptr;
+    QTimer* livePreviewTimer_ = nullptr;
     QUndoStack* undoStack_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
     QMap<QString, NodeExecutionState> nodeRunStates_;

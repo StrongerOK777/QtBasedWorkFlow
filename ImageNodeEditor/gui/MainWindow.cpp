@@ -60,7 +60,6 @@
 #include <QStackedLayout>
 #include <QSpinBox>
 #include <QTimer>
-#include <QTextEdit>
 #include <QToolBar>
 #include <QToolButton>
 #include <QToolTip>
@@ -178,6 +177,14 @@ QIcon lineIcon(const QString& name)
         play.lineTo(23, 50);
         play.closeSubpath();
         painter.drawPath(play);
+    } else if (name == "exportCanvas") {
+        painter.drawRoundedRect(QRectF(12, 14, 40, 32), 4, 4);
+        painter.drawLine(QPointF(20, 24), QPointF(44, 24));
+        painter.drawLine(QPointF(20, 32), QPointF(36, 32));
+        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(32, 49), QPointF(32, 32));
+        painter.drawLine(QPointF(24, 41), QPointF(32, 49));
+        painter.drawLine(QPointF(40, 41), QPointF(32, 49));
     } else if (name == "zoomIn" || name == "zoomOut") {
         painter.drawEllipse(QPointF(28, 28), 16, 16);
         painter.drawLine(QPointF(40, 40), QPointF(52, 52));
@@ -292,7 +299,8 @@ public:
         const auto metrics = AppTheme::nodeMetrics(uiScale_);
         setRect(-metrics.portRadius, -metrics.portRadius, metrics.portRadius * 2, metrics.portRadius * 2);
         setAcceptHoverEvents(true);
-        setToolTip(QString("%1 (%2)").arg(port_.displayName, portTypeName(port_.type)));
+        setToolTip(QString("%1\n方向：%2\n类型：%3")
+                       .arg(port_.displayName, portDirectionName(port_.direction), portTypeName(port_.type)));
     }
 
     QString nodeId() const { return nodeId_; }
@@ -325,8 +333,7 @@ protected:
     {
         Q_UNUSED(option);
         Q_UNUSED(widget);
-        const auto colors = AppTheme::colors();
-        QColor base = port_.direction == PortDirection::Output ? colors.outputPort : colors.inputPort;
+        QColor base = portColor(port_.type);
         if (feedback_ == PortConnectionFeedback::Blocked) {
             base = QColor("#ff3b30");
         } else if (feedback_ == PortConnectionFeedback::Snapped) {
@@ -685,6 +692,138 @@ private:
     QImage image_;
 };
 
+class MiniMapWidget final : public QWidget {
+public:
+    MiniMapWidget(WorkflowGraph* graph, QGraphicsView* view, double* uiScale, QWidget* parent = nullptr)
+        : QWidget(parent), graph_(graph), view_(view), uiScale_(uiScale)
+    {
+        setObjectName("miniMap");
+        setCursor(Qt::PointingHandCursor);
+        setToolTip("小地图：点击或拖拽快速定位画布");
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF box = rect().adjusted(1, 1, -1, -1);
+        painter.setPen(QPen(QColor(126, 154, 192, 120), 1));
+        painter.setBrush(QColor(255, 255, 255, AppTheme::isDarkTheme() ? 36 : 190));
+        painter.drawRoundedRect(box, 8, 8);
+
+        const QRectF world = worldRect();
+        if (!world.isValid() || world.isEmpty()) {
+            return;
+        }
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor("#0a84ff"));
+        for (const auto& record : graph_->nodes()) {
+            QRectF nodeRect(record.position, QSizeF(AppTheme::nodeMetrics(scale()).width, AppTheme::nodeMetrics(scale()).headerHeight + 78 * scale()));
+            painter.drawRoundedRect(mapWorldRect(nodeRect, world), 2, 2);
+        }
+
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor("#ff9f0a"), 1.6));
+        painter.drawRoundedRect(mapWorldRect(viewSceneRect(), world), 2, 2);
+    }
+
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        centerAt(event->position());
+        event->accept();
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if (event->buttons().testFlag(Qt::LeftButton)) {
+            centerAt(event->position());
+            event->accept();
+            return;
+        }
+        QWidget::mouseMoveEvent(event);
+    }
+
+private:
+    double scale() const
+    {
+        return uiScale_ ? *uiScale_ : 1.0;
+    }
+
+    QRectF viewSceneRect() const
+    {
+        if (!view_) {
+            return {};
+        }
+        return view_->mapToScene(view_->viewport()->rect()).boundingRect();
+    }
+
+    QRectF worldRect() const
+    {
+        QRectF world = viewSceneRect();
+        const auto metrics = AppTheme::nodeMetrics(scale());
+        for (const auto& record : graph_->nodes()) {
+            QRectF nodeRect(record.position, QSizeF(metrics.width, metrics.headerHeight + 78 * scale()));
+            world = world.united(nodeRect);
+        }
+        return world.adjusted(-120 * scale(), -120 * scale(), 120 * scale(), 120 * scale());
+    }
+
+    QRectF contentRect() const
+    {
+        return rect().adjusted(10, 10, -10, -10);
+    }
+
+    QPointF mapWorldPoint(const QPointF& point, const QRectF& world) const
+    {
+        const QRectF content = contentRect();
+        const double sx = content.width() / std::max<qreal>(1.0, world.width());
+        const double sy = content.height() / std::max<qreal>(1.0, world.height());
+        const double s = std::min(sx, sy);
+        const QSizeF mappedSize(world.width() * s, world.height() * s);
+        const QPointF offset(content.center().x() - mappedSize.width() / 2.0,
+                             content.center().y() - mappedSize.height() / 2.0);
+        return QPointF(offset.x() + (point.x() - world.left()) * s,
+                       offset.y() + (point.y() - world.top()) * s);
+    }
+
+    QRectF mapWorldRect(const QRectF& source, const QRectF& world) const
+    {
+        const QPointF topLeft = mapWorldPoint(source.topLeft(), world);
+        const QPointF bottomRight = mapWorldPoint(source.bottomRight(), world);
+        return QRectF(topLeft, bottomRight).normalized();
+    }
+
+    QPointF unmapWorldPoint(const QPointF& point, const QRectF& world) const
+    {
+        const QRectF content = contentRect();
+        const double sx = content.width() / std::max<qreal>(1.0, world.width());
+        const double sy = content.height() / std::max<qreal>(1.0, world.height());
+        const double s = std::min(sx, sy);
+        const QSizeF mappedSize(world.width() * s, world.height() * s);
+        const QPointF offset(content.center().x() - mappedSize.width() / 2.0,
+                             content.center().y() - mappedSize.height() / 2.0);
+        return QPointF(world.left() + (point.x() - offset.x()) / s,
+                       world.top() + (point.y() - offset.y()) / s);
+    }
+
+    void centerAt(const QPointF& widgetPosition)
+    {
+        const QRectF world = worldRect();
+        if (!view_ || !world.isValid()) {
+            return;
+        }
+        view_->centerOn(unmapWorldPoint(widgetPosition, world));
+        update();
+    }
+
+    WorkflowGraph* graph_ = nullptr;
+    QGraphicsView* view_ = nullptr;
+    double* uiScale_ = nullptr;
+};
+
 class QuickNodePalettePopup final : public QDialog {
 public:
     explicit QuickNodePalettePopup(double uiScale, QWidget* parent = nullptr)
@@ -916,6 +1055,11 @@ protected:
             event->accept();
             return;
         }
+        if (event->matches(QKeySequence::Copy)) {
+            window_->copySelectedNode();
+            event->accept();
+            return;
+        }
         if (event->key() == Qt::Key_Tab && event->modifiers() == Qt::NoModifier) {
             window_->showQuickNodePalette();
             event->accept();
@@ -1111,6 +1255,15 @@ protected:
 
     void mousePressEvent(QMouseEvent* event) override
     {
+        if (event->button() == Qt::LeftButton &&
+            event->modifiers().testFlag(Qt::ShiftModifier) &&
+            !itemAt(event->position().toPoint())) {
+            panCandidate_ = false;
+            panning_ = false;
+            setDragMode(QGraphicsView::RubberBandDrag);
+            QGraphicsView::mousePressEvent(event);
+            return;
+        }
         if (event->button() == Qt::LeftButton && !itemAt(event->position().toPoint())) {
             panCandidate_ = true;
             panning_ = false;
@@ -1145,14 +1298,29 @@ protected:
 
     void mouseReleaseEvent(QMouseEvent* event) override
     {
+        if (dragMode() == QGraphicsView::RubberBandDrag) {
+            QGraphicsView::mouseReleaseEvent(event);
+            setDragMode(QGraphicsView::NoDrag);
+            window_->updateMiniMap();
+            return;
+        }
         if (event->button() == Qt::LeftButton && (panCandidate_ || panning_)) {
             panCandidate_ = false;
             panning_ = false;
             unsetCursor();
+            window_->updateMiniMap();
             event->accept();
             return;
         }
         QGraphicsView::mouseReleaseEvent(event);
+    }
+
+    void scrollContentsBy(int dx, int dy) override
+    {
+        QGraphicsView::scrollContentsBy(dx, dy);
+        if (window_) {
+            window_->updateMiniMap();
+        }
     }
 
 private:
@@ -1173,6 +1341,10 @@ MainWindow::MainWindow(QWidget* parent)
     undoStack_ = new QUndoStack(this);
     connect(undoStack_, &QUndoStack::cleanChanged, this, [this] { updateWindowTitle(); });
     connect(undoStack_, &QUndoStack::indexChanged, this, [this] { updateWindowTitle(); });
+    livePreviewTimer_ = new QTimer(this);
+    livePreviewTimer_->setSingleShot(true);
+    livePreviewTimer_->setInterval(350);
+    connect(livePreviewTimer_, &QTimer::timeout, this, [this] { runLivePreview(); });
     updateWindowTitle();
     resize(1280, 820);
     QSettings settings;
@@ -1210,6 +1382,10 @@ void MainWindow::createActions()
     addAction("保存", "save", [this] { saveWorkflow(); });
     addAction("另存为", "saveAs", [this] { saveWorkflowAs(); });
     addAction("执行", "run", [this] { runWorkflow(); });
+    auto* exportCanvasAction = addAction("导出画布截图", "exportCanvas", [this] { exportCanvasImage(); });
+    const QKeySequence exportShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_E);
+    exportCanvasAction->setShortcut(exportShortcut);
+    exportCanvasAction->setToolTip(QString("导出画布截图（%1）").arg(exportShortcut.toString(QKeySequence::NativeText)));
 
     auto* editMenu = menuBar()->addMenu("编辑");
     auto* undoAction = undoStack_->createUndoAction(this, "撤销");
@@ -1311,6 +1487,10 @@ void MainWindow::createLayout()
     zoomLayout->addWidget(canvasZoomOutButton_, 0, Qt::AlignRight);
     viewStack->addWidget(canvasZoomOverlay_);
     viewStack->setAlignment(canvasZoomOverlay_, Qt::AlignRight | Qt::AlignBottom);
+    miniMap_ = new MiniMapWidget(&graph_, view_, &uiScale_);
+    miniMap_->setAttribute(Qt::WA_TranslucentBackground);
+    viewStack->addWidget(miniMap_);
+    viewStack->setAlignment(miniMap_, Qt::AlignLeft | Qt::AlignBottom);
     connect(canvasZoomInButton_, &QToolButton::clicked, this, [this] { zoomIn(); });
     connect(canvasZoomOutButton_, &QToolButton::clicked, this, [this] { zoomOut(); });
 
@@ -1322,9 +1502,13 @@ void MainWindow::createLayout()
     preview_->setObjectName("previewPanel");
     preview_->setAlignment(Qt::AlignCenter);
     static_cast<PreviewLabel*>(preview_)->setSourceImage({});
-    log_ = new QTextEdit;
+    log_ = new QListWidget;
     log_->setObjectName("logPanel");
-    log_->setReadOnly(true);
+    log_->setSelectionMode(QAbstractItemView::SingleSelection);
+    log_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    connect(log_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        focusLogNode(item);
+    });
 
     auto* bottom = new QWidget;
     bottom->setObjectName("glassPanel");
@@ -1440,7 +1624,7 @@ void MainWindow::addNodeFromType(const QString& typeName, const QPointF& positio
     const QString id = graph_.addNode(created.value(), findAvailableNodePosition(position));
     selectedNodeId_ = id;
     resetNodeRunStates();
-    appendLog(QString("添加节点：%1").arg(id));
+    appendLog(QString("添加节点：%1").arg(id), id);
     rebuildScene();
     if (auto* item = nodeItems_.value(id)) {
         item->setSelected(true);
@@ -1505,34 +1689,63 @@ void MainWindow::copySelectedNode()
 {
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
-    auto source = graph_.node(selectedNodeId_);
-    const auto* sourceRecord = graph_.nodeRecord(selectedNodeId_);
-    if (!source || !sourceRecord) {
+
+    QStringList sourceIds;
+    for (auto* item : scene_->selectedItems()) {
+        if (auto* node = dynamic_cast<NodeItem*>(item)) {
+            sourceIds.append(node->nodeId());
+        }
+    }
+    sourceIds.removeDuplicates();
+    if (sourceIds.isEmpty() && !selectedNodeId_.isEmpty()) {
+        sourceIds.append(selectedNodeId_);
+    }
+    if (sourceIds.isEmpty()) {
         appendLog("没有可复制的节点");
         return;
     }
 
-    auto created = NodeFactory::instance().create(source->typeName());
-    if (created.isFail()) {
-        appendLog(created.error());
-        return;
+    QStringList newIds;
+    for (const QString& sourceId : sourceIds) {
+        auto source = graph_.node(sourceId);
+        const auto* sourceRecord = graph_.nodeRecord(sourceId);
+        if (!source || !sourceRecord) {
+            continue;
+        }
+
+        auto created = NodeFactory::instance().create(source->typeName());
+        if (created.isFail()) {
+            appendLog(created.error());
+            return;
+        }
+        auto loaded = created.value()->loadParams(source->saveParams());
+        if (loaded.isFail()) {
+            appendLog(QString("复制节点参数失败：%1").arg(loaded.error()), sourceId);
+            return;
+        }
+
+        const QPointF copyPosition = findAvailableNodePosition(sourceRecord->position + QPointF(36, 36));
+        const QString newId = graph_.addNode(created.value(), copyPosition);
+        newIds.append(newId);
+        appendLog(QString("复制节点：%1 -> %2").arg(sourceRecord->id, newId), newId);
     }
-    auto loaded = created.value()->loadParams(source->saveParams());
-    if (loaded.isFail()) {
-        appendLog(QString("复制节点参数失败：%1").arg(loaded.error()));
+
+    if (newIds.isEmpty()) {
+        appendLog("没有可复制的节点");
         return;
     }
 
-    const QPointF copyPosition = findAvailableNodePosition(sourceRecord->position + QPointF(36, 36));
-    const QString newId = graph_.addNode(created.value(), copyPosition);
-    selectedNodeId_ = newId;
+    selectedNodeId_ = newIds.last();
     resetNodeRunStates();
-    appendLog(QString("复制节点：%1 -> %2").arg(sourceRecord->id, newId));
     rebuildScene();
-    if (auto* item = nodeItems_.value(newId)) {
-        item->setSelected(true);
+    scene_->clearSelection();
+    for (const QString& newId : newIds) {
+        if (auto* item = nodeItems_.value(newId)) {
+            item->setSelected(true);
+        }
     }
-    pushGraphEditCommand(QString("复制节点 %1").arg(newId), before, selectedBefore,
+    pushGraphEditCommand(newIds.size() > 1 ? QString("批量复制节点 %1 个").arg(newIds.size()) : QString("复制节点 %1").arg(newIds.first()),
+                         before, selectedBefore,
                          WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 }
 
@@ -1583,7 +1796,7 @@ void MainWindow::focusParameterPanel()
         return;
     }
     propertyPanel_->setFocus(Qt::OtherFocusReason);
-    appendLog(QString("修改参数：%1").arg(selectedNodeId_));
+    appendLog(QString("修改参数：%1").arg(selectedNodeId_), selectedNodeId_);
 }
 
 void MainWindow::zoomIn()
@@ -1596,6 +1809,13 @@ void MainWindow::zoomOut()
     applyZoomFactor(1.0 / 1.10);
 }
 
+void MainWindow::updateMiniMap()
+{
+    if (miniMap_) {
+        miniMap_->update();
+    }
+}
+
 void MainWindow::applyZoomFactor(double factor)
 {
     const double nextScale = std::clamp(zoomScale_ * factor, 0.25, 3.0);
@@ -1605,6 +1825,7 @@ void MainWindow::applyZoomFactor(double factor)
     }
     zoomScale_ = nextScale;
     view_->scale(actualFactor, actualFactor);
+    updateMiniMap();
 }
 
 void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort, const QString& toNode, const QString& toPort)
@@ -1620,7 +1841,7 @@ void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort
     }
     graph_.addEdge(edge);
     resetNodeRunStates();
-    appendLog(QString("连接：%1.%2 -> %3.%4").arg(fromNode, fromPort, toNode, toPort));
+    appendLog(QString("连接：%1.%2 -> %3.%4").arg(fromNode, fromPort, toNode, toPort), toNode);
     rebuildEdges();
     pushGraphEditCommand("添加连线", before, selectedBefore, WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 }
@@ -1629,6 +1850,7 @@ void MainWindow::updateNodePosition(const QString& nodeId, const QPointF& positi
 {
     graph_.setNodePosition(nodeId, position);
     rebuildEdges();
+    updateMiniMap();
 }
 
 void MainWindow::rebuildScene()
@@ -1644,6 +1866,7 @@ void MainWindow::rebuildScene()
         nodeItems_.insert(record.id, item);
     }
     rebuildEdges();
+    updateMiniMap();
 }
 
 void MainWindow::rebuildEdges()
@@ -1706,7 +1929,7 @@ void MainWindow::removeSelectedItems()
     nodeIds.removeDuplicates();
     for (const QString& nodeId : nodeIds) {
         graph_.removeNode(nodeId);
-        appendLog(QString("删除节点：%1").arg(nodeId));
+        appendLog(QString("删除节点：%1").arg(nodeId), nodeId);
     }
 
     selectedNodeId_.clear();
@@ -1801,9 +2024,19 @@ void MainWindow::rebuildProperties()
     }
 }
 
-void MainWindow::appendLog(const QString& message)
+void MainWindow::appendLog(const QString& message, const QString& nodeId)
 {
-    log_->append(message);
+    if (!log_) {
+        return;
+    }
+    auto* item = new QListWidgetItem(message);
+    item->setData(Qt::UserRole, nodeId);
+    if (!nodeId.isEmpty()) {
+        item->setToolTip(QString("双击定位节点：%1").arg(nodeId));
+        item->setForeground(QBrush(AppTheme::colors().nodeSelected));
+    }
+    log_->addItem(item);
+    log_->scrollToBottom();
 }
 
 void MainWindow::setSelectedNodeParameter(const QString& name, const QVariant& value)
@@ -1827,6 +2060,7 @@ void MainWindow::setSelectedNodeParameter(const QString& name, const QVariant& v
     pushGraphEditCommand(QString("修改参数 %1").arg(name), before, selectedBefore,
                          WorkflowCommands::cloneGraph(graph_), selectedNodeId_,
                          QString("param:%1:%2").arg(selectedNodeId_, name));
+    scheduleLivePreview();
 }
 
 void MainWindow::resetNodeRunStates()
@@ -1875,30 +2109,168 @@ void MainWindow::focusFailedNode(const QString& nodeId)
     rebuildProperties();
 }
 
+void MainWindow::focusLogNode(QListWidgetItem* item)
+{
+    if (!item) {
+        return;
+    }
+    const QString nodeId = item->data(Qt::UserRole).toString();
+    if (nodeId.isEmpty() || !nodeItems_.contains(nodeId)) {
+        return;
+    }
+    scene_->clearSelection();
+    auto* nodeItem = nodeItems_.value(nodeId);
+    nodeItem->setSelected(true);
+    selectedNodeId_ = nodeId;
+    view_->centerOn(nodeItem);
+    rebuildProperties();
+    updatePreviewForSelection();
+    highlightNodeBriefly(nodeId);
+}
+
+void MainWindow::highlightNodeBriefly(const QString& nodeId)
+{
+    auto* item = nodeItems_.value(nodeId);
+    if (!item || !scene_) {
+        return;
+    }
+
+    auto* highlight = new QGraphicsRectItem(item->sceneBoundingRect().adjusted(-8 * uiScale_, -8 * uiScale_, 8 * uiScale_, 8 * uiScale_));
+    QPen pen(QColor("#ff9f0a"), 3.0 * uiScale_, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+    highlight->setPen(pen);
+    highlight->setBrush(Qt::NoBrush);
+    highlight->setZValue(10);
+    scene_->addItem(highlight);
+    QTimer::singleShot(650, scene_, [this, highlight] {
+        if (scene_ && highlight->scene() == scene_) {
+            scene_->removeItem(highlight);
+        }
+        delete highlight;
+    });
+}
+
 void MainWindow::runWorkflow()
 {
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
+    }
     resetNodeRunStates();
     auto result = engine_.execute(graph_, [this](const NodeExecutionSummary& summary) {
         handleNodeExecutionEvent(summary);
     });
     if (result.isFail()) {
         lastResult_ = engine_.lastResult();
-        for (const QString& line : lastResult_.log) appendLog(line);
-        appendLog(QString("执行失败：%1").arg(result.error()));
+        for (const auto& summary : lastResult_.nodeSummaries) {
+            appendLog(summary.message, summary.nodeId);
+        }
+        appendLog(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
         focusFailedNode(lastResult_.failedNodeId);
         QMessageBox::warning(this, "执行失败", result.error());
         return;
     }
     lastResult_ = result.value();
-    for (const QString& line : lastResult_.log) appendLog(line);
+    for (const auto& summary : lastResult_.nodeSummaries) {
+        appendLog(summary.message, summary.nodeId);
+    }
     appendLog("执行完成");
     updatePreviewForSelection();
+}
+
+void MainWindow::scheduleLivePreview()
+{
+    if (!livePreviewTimer_ || selectedNodeId_.isEmpty()) {
+        return;
+    }
+    livePreviewTimer_->start();
+}
+
+void MainWindow::runLivePreview()
+{
+    if (selectedNodeId_.isEmpty() || !graph_.containsNode(selectedNodeId_)) {
+        return;
+    }
+
+    const QString previewNodeId = selectedNodeId_;
+    resetNodeRunStates();
+    auto result = engine_.executeForNode(graph_, previewNodeId, [this](const NodeExecutionSummary& summary) {
+        handleNodeExecutionEvent(summary);
+    });
+    if (result.isFail()) {
+        lastResult_ = engine_.lastResult();
+        for (const auto& summary : lastResult_.nodeSummaries) {
+            appendLog(summary.message, summary.nodeId);
+        }
+        const QString failedNode = lastResult_.failedNodeId.isEmpty() ? previewNodeId : lastResult_.failedNodeId;
+        appendLog(QString("实时预览失败：%1").arg(result.error()), failedNode);
+        updatePreviewForSelection();
+        return;
+    }
+
+    lastResult_ = result.value();
+    for (const auto& summary : lastResult_.nodeSummaries) {
+        appendLog(summary.message, summary.nodeId);
+    }
+    appendLog(QString("实时预览完成：%1").arg(previewNodeId), previewNodeId);
+    updatePreviewForSelection();
+}
+
+void MainWindow::exportCanvasImage()
+{
+    if (!scene_) {
+        return;
+    }
+
+    QRectF bounds = scene_->itemsBoundingRect();
+    if (bounds.isEmpty()) {
+        bounds = view_->mapToScene(view_->viewport()->rect()).boundingRect();
+    }
+    bounds = bounds.adjusted(-80 * uiScale_, -80 * uiScale_, 80 * uiScale_, 80 * uiScale_);
+
+    const QString path = QFileDialog::getSaveFileName(this, "导出画布截图", "workflow-canvas.png", "PNG (*.png);;All files (*)");
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const auto selectedItems = scene_->selectedItems();
+    scene_->clearSelection();
+
+    constexpr qreal exportScale = 2.0;
+    QImage image((bounds.size() * exportScale).toSize(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(AppTheme::colors().canvasTop);
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+    painter.scale(exportScale, exportScale);
+
+    const auto colors = AppTheme::colors();
+    QLinearGradient gradient(QPointF(0, 0), QPointF(bounds.width(), bounds.height()));
+    gradient.setColorAt(0, colors.canvasTop);
+    gradient.setColorAt(1, colors.canvasBottom);
+    painter.fillRect(QRectF(QPointF(0, 0), bounds.size()), gradient);
+    scene_->render(&painter, QRectF(QPointF(0, 0), bounds.size()), bounds);
+    painter.end();
+
+    for (auto* item : selectedItems) {
+        if (item) {
+            item->setSelected(true);
+        }
+    }
+
+    if (!image.save(path, "PNG")) {
+        QMessageBox::warning(this, "导出失败", QString("无法写入图片：%1").arg(path));
+        return;
+    }
+    appendLog(QString("已导出画布截图：%1").arg(path));
 }
 
 void MainWindow::newWorkflow()
 {
     if (!confirmSaveIfNeeded()) {
         return;
+    }
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
     }
     graph_.clear();
     currentFile_.clear();
@@ -1917,6 +2289,9 @@ void MainWindow::openWorkflow()
 {
     if (!confirmSaveIfNeeded()) {
         return;
+    }
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
     }
     const QString path = QFileDialog::getOpenFileName(this, "打开 workflow", {}, "Workflow (*.json);;All files (*)");
     if (path.isEmpty()) return;
@@ -2322,6 +2697,10 @@ void MainWindow::applyUiScale()
         canvasZoomOutButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
         canvasZoomOutButton_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
         canvasZoomOutButton_->setIcon(lineIcon("zoomOut"));
+    }
+    if (miniMap_) {
+        miniMap_->setFixedSize(AppTheme::px(180, uiScale_), AppTheme::px(126, uiScale_));
+        miniMap_->update();
     }
 
     if (palette_) {

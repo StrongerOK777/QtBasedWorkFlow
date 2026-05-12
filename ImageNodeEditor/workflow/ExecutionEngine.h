@@ -39,6 +39,9 @@ public:
 
     Result<ExecutionResult> execute(const WorkflowGraph& graph);
     Result<ExecutionResult> execute(const WorkflowGraph& graph, const NodeEventCallback& onNodeEvent);
+    Result<ExecutionResult> executeForNode(const WorkflowGraph& graph,
+                                           const QString& targetNodeId,
+                                           const NodeEventCallback& onNodeEvent = {});
     void clearCache();
     const ExecutionResult& lastResult() const { return lastResult_; }
 
@@ -47,6 +50,10 @@ private:
         QString signature;
         QMap<QString, NodeData> outputs;
     };
+
+    Result<ExecutionResult> executeOrderedNodes(const WorkflowGraph& graph,
+                                                const QStringList& nodeOrder,
+                                                const NodeEventCallback& onNodeEvent);
 
     QMap<QString, CacheEntry> cache_;
     ExecutionResult lastResult_;

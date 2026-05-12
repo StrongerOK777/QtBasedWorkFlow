@@ -332,3 +332,234 @@ ElaWidgetTools 仍会在编译时输出第三方 warning；当前不影响功能
 
 后续注意：
 缓存仅保存在内存中，不写入 workflow JSON；当前执行仍是同步执行，后续实时预览或并行计算应继续复用节点摘要和缓存接口。
+
+---
+
+### 2026-05-12 / 撤销重做机制阶段
+
+类型：修改
+
+概述：
+实现 GUI 编辑操作的撤销 / 重做机制。新增 `QUndoStack` 和 `WorkflowCommands` 快照命令层，添加节点、复制节点、删除节点/连线、添加连线、移动节点和修改参数都进入撤销栈；窗口标题显示未保存状态，新建、打开和关闭时会提示保存未保存修改。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`ImageNodeEditor/gui/WorkflowCommands.h`、`ImageNodeEditor/gui/WorkflowCommands.cpp`、`plan.md`
+
+处理方式：
+采用深拷贝 workflow 快照恢复图模型，避免在现有 `MainWindow` 集中交互逻辑上大范围重构。参数修改和节点移动使用 merge key 合并连续操作；保存成功后调用 `undoStack->setClean()`，新建/打开 workflow 时清空撤销栈。
+
+当前状态：
+已解决
+
+后续注意：
+当前撤销命令采用整图快照，适合当前项目规模；如果后续出现超大 workflow，可再替换为更细粒度命令。当前本机默认 `build/` 缓存存在 x86_64/arm64 架构不匹配，已用临时 arm64 构建目录验证通过。
+
+---
+
+### 2026-05-12 / macOS 启动依赖修复阶段
+
+类型：修改
+
+概述：
+修复 macOS `.app` 无法正常打开的问题。原因是主程序链接了 `@rpath/libElaWidgetTools.dylib`，但 app 包内没有复制该动态库，dyld 启动时找不到依赖导致程序无法启动。
+
+影响范围：
+`CMakeLists.txt`、`build/` 重新配置和清理构建产物
+
+处理方式：
+在启用 ElaWidgetTools 且为 Apple 平台时，为 `ImageNodeEditor` 设置 app bundle 的 rpath，并在 `POST_BUILD` 阶段把 `$<TARGET_FILE:ElaWidgetTools>` 复制到 `ImageNodeEditor.app/Contents/Frameworks/`。同时默认 macOS 架构使用 `CMAKE_HOST_SYSTEM_PROCESSOR`，避免 Homebrew arm64 Qt 与旧 x86_64 构建缓存混用。
+
+当前状态：
+已解决
+
+后续注意：
+如果旧构建目录曾生成过不同架构的对象文件，需要先执行 `cmake --build build --target clean` 再重新构建。ElaWidgetTools 第三方 warning 不影响启动。
+
+---
+
+### 2026-05-12 / 快捷节点面板阶段
+
+类型：修改
+
+概述：
+实现快捷节点面板，支持通过当前平台主快捷键和画布 `Tab` 快速搜索并添加节点，减少从节点栏拖动或双击添加的操作成本。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增轻量弹出式节点搜索面板，搜索数据直接来自 `NodeFactory::descriptors()`，支持按中文显示名、英文类型名和分类过滤。通过 `Cmd/Ctrl+K` 或画布 `Tab` 打开时，节点会创建在鼠标所在画布位置；鼠标不在画布内时创建在视口中心。右键画布空白处也可打开快捷添加入口。实际创建仍复用 `addNodeFromType()`，因此保留自动避让、撤销/重做和运行状态重置。
+
+当前状态：
+已解决
+
+后续注意：
+当前面板只负责搜索和创建节点，不承担连线或参数编辑；后续连线磁吸和数据类型可视化仍按 `plan.md` 继续实现。
+
+---
+
+### 2026-05-12 / 连线磁吸与反馈阶段
+
+类型：修改
+
+概述：
+实现连线过程中的输入端口磁吸与视觉反馈。用户从输出端口开始连线后，合法输入端口会显示可连接反馈；靠近合法输入端口时临时连线自动吸附到端口中心，松开或点击即可优先连接；靠近非法输入端口时显示红色禁用反馈，避免误连。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+在 `WorkflowScene` 中维护当前吸附端口和端口反馈状态，吸附距离随 `uiScale` 缩放。合法性判断复用 `WorkflowValidator::validateEdge()`，因此端口类型、单输入限制和环检测都沿用模型层规则。`PortItem` 增加轻量连接反馈状态，绘制时通过颜色、光晕和轻微放大表达可连接、禁用和已吸附状态。
+
+当前状态：
+已解决
+
+后续注意：
+当前仍兼容原来的“先点输出端口、再点输入端口”操作；下一步数据类型可视化可以继续细化端口基础颜色，不需要重写连线校验。
+
+---
+
+### 2026-05-12 / 数据类型可视化阶段
+
+类型：修改
+
+概述：
+实现端口数据类型可视化。端口基础颜色现在由 `PortType` 决定，而不是只按输入 / 输出方向区分；用户可以通过颜色快速识别图像、数值、文本、Mask 和图片列表端口。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增端口类型到颜色的映射：`ImageRGBA` / `ImageGray` 使用蓝色，`Number` 使用绿色，`Text` 使用紫色，`Mask` 使用橙色，`ImageList` 使用青色。端口悬停提示补充方向和数据类型。连线拖拽时继续复用 `WorkflowValidator::validateEdge()` 给出可连接、吸附或禁用反馈，避免 GUI 层重复实现连接规则。
+
+当前状态：
+已解决
+
+后续注意：
+端口颜色现在表达数据类型，连线方向仍通过端口所在节点左右位置和悬停提示表达；如果后续引入更多类型，应同步扩展 `portColor()`。
+
+---
+
+### 2026-05-12 / 日志追溯阶段
+
+类型：修改
+
+概述：
+实现一键日志追溯。GUI 日志现在不再只是纯文本追加，而是带节点元数据的日志列表；用户双击执行、缓存、成功、失败等节点相关日志时，画布会自动定位并选中对应节点。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+将日志控件从只读文本框改为 `QListWidget`，`appendLog()` 支持可选 `nodeId` 元数据并通过 `Qt::UserRole` 保存。工作流执行日志改为根据 `ExecutionResult::nodeSummaries` 写入，避免 GUI 再解析纯文本日志。双击日志项时调用 `centerOn()`、选中目标节点、刷新属性和预览，并绘制短暂虚线高亮框。
+
+当前状态：
+已解决
+
+后续注意：
+没有节点关联的普通日志仍可显示，但双击不会触发定位；被删除节点对应的历史日志也会安全忽略。
+
+---
+
+### 2026-05-12 / 实时预览阶段
+
+类型：修改
+
+概述：
+实现参数修改后的防抖实时预览。用户修改当前选中节点参数后，程序会在短暂停顿后自动执行该节点及其上游依赖，并刷新预览区域。
+
+影响范围：
+`ImageNodeEditor/workflow/ExecutionEngine.h`、`ImageNodeEditor/workflow/ExecutionEngine.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+`ExecutionEngine` 新增 `executeForNode()`，根据目标节点反向收集上游依赖，只执行目标节点和必要上游节点，避免实时预览触发下游 `ImageOutput` 等副作用节点写文件。`MainWindow` 增加 350ms 单次 `QTimer` 防抖，在参数修改后自动调度预览；成功时刷新预览图，失败时只写入带节点定位能力的日志，不弹出阻塞对话框。
+
+当前状态：
+已解决
+
+后续注意：
+实时预览仍在主线程同步执行，依赖增量缓存降低重复计算成本；后续若实现并行计算或后台任务，可继续复用 `executeForNode()` 的局部执行边界。
+
+---
+
+### 2026-05-12 / 无依赖分支并行执行阶段
+
+类型：修改
+
+概述：
+实现无依赖 DAG 分支的并行执行。执行引擎现在会按依赖关系分层调度，同一轮中互不依赖的就绪节点会并行执行，下游节点等待所有必要上游完成后再进入下一轮。
+
+影响范围：
+`ImageNodeEditor/workflow/ExecutionEngine.cpp`、`plan.md`
+
+处理方式：
+将 `executeOrderedNodes()` 从简单顺序循环改为入度调度：构建当前执行范围内的入度和下游表，每轮收集入度为 0 的 ready 节点。缓存命中的节点直接复用输出；需要计算的节点通过 `std::async(std::launch::async)` 执行，主执行线程统一收集结果、更新缓存、记录摘要并触发 GUI 回调。这样缓存 `QMap` 和 UI 回调仍只在主执行线程访问，避免数据竞争。
+
+当前状态：
+已解决
+
+后续注意：
+当前并行粒度按就绪层控制，失败时不再调度下游节点；已启动的同层节点会自然完成后统一收集结果。后续如需取消长耗时节点，可再扩展节点执行接口的取消机制。
+
+---
+
+### 2026-05-12 / 框选与批量操作阶段
+
+类型：修改
+
+概述：
+实现框选和批量节点操作。用户可以在画布空白处按住 `Shift` 拖拽进行框选，多选后可整体移动、批量删除，也可以批量复制节点。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+在 `ZoomGraphicsView` 中为 `Shift + 左键拖拽空白区域` 启用 `QGraphicsView::RubberBandDrag`，释放后恢复原有无拖拽模式，保留普通左键空白拖动画布平移。删除逻辑沿用现有多选删除流程。复制逻辑扩展为读取当前选中的所有 `NodeItem`，逐个复制节点类型和参数，使用 `findAvailableNodePosition()` 避让重叠，默认不复制外部连线，并将批量复制作为一个撤销命令记录。
+
+当前状态：
+已解决
+
+后续注意：
+当前批量复制只复制节点本体和参数，不复制原节点之间的内部连线；如果后续需要完整子图复制，可在此基础上增加选区内连线重建。
+
+---
+
+### 2026-05-12 / 缩略小地图阶段
+
+类型：修改
+
+概述：
+实现画布缩略小地图。画布左下角现在显示全局节点分布和当前视口位置，节点较多时可快速判断当前位置，并支持点击或拖拽小地图快速移动视口。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增轻量 `MiniMapWidget` 自绘控件，挂载在画布 `QStackedLayout` 左下角。小地图根据当前 workflow 节点位置和 `QGraphicsView` 可见区域计算世界范围，绘制节点矩形和视口框；点击或拖拽时反算场景坐标并调用 `centerOn()`。节点移动、重建、滚动和缩放时都会触发小地图刷新。
+
+当前状态：
+已解决
+
+后续注意：
+当前小地图默认显示，尺寸随 UI 缩放变化；如后续需要设置开关，可在现有设置对话框里增加一个可见性选项。
+
+---
+
+### 2026-05-12 / 画布截图导出阶段
+
+类型：修改
+
+概述：
+实现画布拓扑截图导出。用户可以通过文件菜单、主工具栏或快捷键将当前完整 workflow 拓扑导出为高清 PNG，用于汇报、文档或作业展示。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增“导出画布截图”动作和图标，快捷键为 `Cmd/Ctrl+Shift+E`。导出时使用 `QFileDialog` 选择 PNG 路径，基于 `QGraphicsScene::itemsBoundingRect()` 计算完整拓扑范围，临时清除选择状态后用 `QGraphicsScene::render()` 以 2x 分辨率渲染到 `QImage`，保存失败时给出明确提示，成功后写入日志。
+
+当前状态：
+已解决
+
+后续注意：
+导出内容只包含节点与连线拓扑，不包含画布上的小地图和缩放按钮等悬浮控件；当前背景由导出逻辑直接绘制渐变底色。
