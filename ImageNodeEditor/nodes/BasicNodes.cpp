@@ -58,13 +58,14 @@ Result<OutputMap> imageOutput(const QImage& image)
 class SimpleNode final : public ImageNode {
 public:
     SimpleNode(QString typeName, QString displayName, QVector<PortInfo> inputs, QVector<PortInfo> outputs,
-               QVector<NodeParameter> parameters, Executor executor)
+               QVector<NodeParameter> parameters, Executor executor, bool cacheable)
         : typeName_(std::move(typeName)),
           displayName_(std::move(displayName)),
           inputs_(std::move(inputs)),
           outputs_(std::move(outputs)),
           parameters_(std::move(parameters)),
-          executor_(std::move(executor))
+          executor_(std::move(executor)),
+          cacheable_(cacheable)
     {
         for (const auto& p : parameters_) {
             params_.insert(p.name, QJsonValue::fromVariant(p.defaultValue));
@@ -104,6 +105,8 @@ public:
         return executor_(params_, inputs);
     }
 
+    bool isCacheable() const override { return cacheable_; }
+
 private:
     QString typeName_;
     QString displayName_;
@@ -112,20 +115,22 @@ private:
     QVector<NodeParameter> parameters_;
     QJsonObject params_;
     Executor executor_;
+    bool cacheable_ = true;
 };
 
 QSharedPointer<ImageNode> make(QString typeName, QString displayName, QVector<PortInfo> inputs, QVector<PortInfo> outputs,
-                               QVector<NodeParameter> parameters, Executor executor)
+                               QVector<NodeParameter> parameters, Executor executor, bool cacheable = true)
 {
     return QSharedPointer<ImageNode>(new SimpleNode(std::move(typeName), std::move(displayName), std::move(inputs),
-                                                    std::move(outputs), std::move(parameters), std::move(executor)));
+                                                    std::move(outputs), std::move(parameters), std::move(executor), cacheable));
 }
 
 void registerNode(NodeFactory& factory, const QString& type, const QString& label, const QString& category,
-                  QVector<PortInfo> inputs, QVector<PortInfo> outputs, QVector<NodeParameter> parameters, Executor executor)
+                  QVector<PortInfo> inputs, QVector<PortInfo> outputs, QVector<NodeParameter> parameters, Executor executor,
+                  bool cacheable = true)
 {
     factory.registerNode(type, label, category, [=]() {
-        return make(type, label, inputs, outputs, parameters, executor);
+        return make(type, label, inputs, outputs, parameters, executor, cacheable);
     });
 }
 
@@ -158,7 +163,8 @@ void registerBasicNodes(NodeFactory& factory)
                          return Result<OutputMap>::fail(QString("图片保存失败：%1").arg(path));
                      }
                      return Result<OutputMap>::ok(OutputMap{});
-                 });
+                 },
+                 false);
 
     registerNode(factory, "Preview", "预览图片", "输入输出", {in("image", "图片")}, {out()},
                  {}, [](const QJsonObject&, const QMap<QString, NodeData>& inputs) {

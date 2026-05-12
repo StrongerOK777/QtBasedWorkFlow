@@ -19,6 +19,7 @@
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QEventLoop>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGraphicsEllipseItem>
@@ -307,8 +308,8 @@ private:
 
 class NodeItem final : public QGraphicsRectItem {
 public:
-    NodeItem(MainWindow* window, QString nodeId, QSharedPointer<ImageNode> node, double uiScale)
-        : QGraphicsRectItem(), window_(window), nodeId_(std::move(nodeId)), node_(std::move(node)), uiScale_(uiScale)
+    NodeItem(MainWindow* window, QString nodeId, QSharedPointer<ImageNode> node, double uiScale, NodeExecutionState runState)
+        : QGraphicsRectItem(), window_(window), nodeId_(std::move(nodeId)), node_(std::move(node)), uiScale_(uiScale), runState_(runState)
     {
         const auto metrics = AppTheme::nodeMetrics(uiScale_);
         const int rowCount = std::max(node_->inputPorts().size(), node_->outputPorts().size());
@@ -355,6 +356,14 @@ public:
 
     QString nodeId() const { return nodeId_; }
     QVector<PortItem*> ports() const { return ports_; }
+    void setRunState(NodeExecutionState state)
+    {
+        if (runState_ == state) {
+            return;
+        }
+        runState_ = state;
+        update();
+    }
 
 protected:
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override
@@ -401,6 +410,16 @@ protected:
         const auto colors = AppTheme::colors();
         const QRectF body = rect();
         const QRectF shadowRect = body.translated(0, pressed_ ? 2 * uiScale_ : 5 * uiScale_);
+        const QColor stateColor = [&] {
+            switch (runState_) {
+            case NodeExecutionState::Running: return QColor("#f5a623");
+            case NodeExecutionState::Succeeded: return QColor("#34c759");
+            case NodeExecutionState::Failed: return QColor("#ff3b30");
+            case NodeExecutionState::CacheHit: return QColor("#7c3aed");
+            case NodeExecutionState::NotExecuted: return colors.nodeBorder;
+            }
+            return colors.nodeBorder;
+        }();
 
         painter->setRenderHint(QPainter::Antialiasing);
         painter->setPen(Qt::NoPen);
@@ -412,7 +431,8 @@ protected:
         glass.setColorAt(0.52, QColor(248, 251, 255, 226));
         glass.setColorAt(1, hovered_ ? colors.nodeBottom.lighter(104) : colors.nodeBottom);
         painter->setBrush(glass);
-        painter->setPen(QPen(isSelected() ? colors.nodeSelected : colors.nodeBorder, isSelected() ? 2.3 * uiScale_ : 1.1 * uiScale_));
+        painter->setPen(QPen(isSelected() ? colors.nodeSelected : stateColor,
+                             (isSelected() || runState_ != NodeExecutionState::NotExecuted) ? 2.3 * uiScale_ : 1.1 * uiScale_));
         painter->drawPath(roundedRectPath(body, metrics.cornerRadius));
 
         QRectF header = body;
@@ -426,6 +446,14 @@ protected:
 
         painter->setPen(QPen(QColor(255, 255, 255, 150), 1));
         painter->drawLine(body.left() + metrics.cornerRadius, body.top() + 1, body.right() - metrics.cornerRadius, body.top() + 1);
+
+        if (runState_ != NodeExecutionState::NotExecuted) {
+            const QRectF strip(body.left() + 8 * uiScale_, body.bottom() - 6 * uiScale_,
+                               body.width() - 16 * uiScale_, 3 * uiScale_);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(stateColor);
+            painter->drawRoundedRect(strip, 1.5 * uiScale_, 1.5 * uiScale_);
+        }
     }
 
 private:
@@ -434,6 +462,7 @@ private:
     QSharedPointer<ImageNode> node_;
     double uiScale_ = 1.0;
     QVector<PortItem*> ports_;
+    NodeExecutionState runState_ = NodeExecutionState::NotExecuted;
     bool hovered_ = false;
     bool pressed_ = false;
 };
@@ -1078,6 +1107,7 @@ void MainWindow::addNodeFromType(const QString& typeName, const QPointF& positio
     }
     const QString id = graph_.addNode(created.value(), findAvailableNodePosition(position));
     selectedNodeId_ = id;
+    resetNodeRunStates();
     appendLog(QString("添加节点：%1").arg(id));
     rebuildScene();
     if (auto* item = nodeItems_.value(id)) {
@@ -1145,6 +1175,7 @@ void MainWindow::copySelectedNode()
     const QPointF copyPosition = findAvailableNodePosition(sourceRecord->position + QPointF(36, 36));
     const QString newId = graph_.addNode(created.value(), copyPosition);
     selectedNodeId_ = newId;
+    resetNodeRunStates();
     appendLog(QString("复制节点：%1 -> %2").arg(sourceRecord->id, newId));
     rebuildScene();
     if (auto* item = nodeItems_.value(newId)) {
@@ -1192,6 +1223,7 @@ void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort
         return;
     }
     graph_.addEdge(edge);
+    resetNodeRunStates();
     appendLog(QString("连接：%1.%2 -> %3.%4").arg(fromNode, fromPort, toNode, toPort));
     rebuildEdges();
 }
@@ -1208,7 +1240,8 @@ void MainWindow::rebuildScene()
     nodeItems_.clear();
     edgeItems_.clear();
     for (const auto& record : graph_.nodes()) {
-        auto* item = new NodeItem(this, record.id, record.node, uiScale_);
+        auto* item = new NodeItem(this, record.id, record.node, uiScale_,
+                                  nodeRunStates_.value(record.id, NodeExecutionState::NotExecuted));
         item->setPos(record.position);
         scene_->addItem(item);
         nodeItems_.insert(record.id, item);
@@ -1273,6 +1306,7 @@ void MainWindow::removeSelectedItems()
         appendLog(QString("删除节点：%1").arg(nodeId));
     }
 
+    resetNodeRunStates();
     rebuildScene();
     rebuildProperties();
 }
@@ -1300,7 +1334,7 @@ void MainWindow::rebuildProperties()
             w->setRange(int(p.min), int(p.max));
             w->setValue(value.toInt());
             connect(w, &QSpinBox::valueChanged, this, [this, name = p.name](int v) {
-                if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, v);
+                setSelectedNodeParameter(name, v);
             });
             editor = w;
         } else if (p.type == ParameterType::Double) {
@@ -1309,14 +1343,14 @@ void MainWindow::rebuildProperties()
             w->setSingleStep(0.05);
             w->setValue(value.toDouble());
             connect(w, &QDoubleSpinBox::valueChanged, this, [this, name = p.name](double v) {
-                if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, v);
+                setSelectedNodeParameter(name, v);
             });
             editor = w;
         } else if (p.type == ParameterType::Boolean) {
             auto* w = new GuiCompat::CheckBox;
             w->setChecked(value.toBool());
             connect(w, &QCheckBox::toggled, this, [this, name = p.name](bool v) {
-                if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, v);
+                setSelectedNodeParameter(name, v);
             });
             editor = w;
         } else if (p.type == ParameterType::Choice) {
@@ -1324,7 +1358,7 @@ void MainWindow::rebuildProperties()
             w->addItems(p.options);
             w->setCurrentText(value.toString());
             connect(w, &QComboBox::currentTextChanged, this, [this, name = p.name](const QString& v) {
-                if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, v);
+                setSelectedNodeParameter(name, v);
             });
             editor = w;
         } else {
@@ -1349,12 +1383,12 @@ void MainWindow::rebuildProperties()
                     }
                     if (!v.isEmpty()) {
                         edit->setText(v);
-                        if (auto node = graph_.node(selectedNodeId_)) node->setParameter(p.name, v);
+                        setSelectedNodeParameter(p.name, v);
                     }
                 });
             }
             connect(edit, &QLineEdit::editingFinished, this, [this, edit, name = p.name] {
-                if (auto node = graph_.node(selectedNodeId_)) node->setParameter(name, edit->text());
+                setSelectedNodeParameter(name, edit->text());
             });
             editor = container;
         }
@@ -1367,12 +1401,77 @@ void MainWindow::appendLog(const QString& message)
     log_->append(message);
 }
 
+void MainWindow::setSelectedNodeParameter(const QString& name, const QVariant& value)
+{
+    auto node = graph_.node(selectedNodeId_);
+    if (!node) {
+        return;
+    }
+    auto status = node->setParameter(name, value);
+    if (status.isFail()) {
+        appendLog(QString("参数修改失败：%1").arg(status.error()));
+        return;
+    }
+    resetNodeRunStates();
+}
+
+void MainWindow::resetNodeRunStates()
+{
+    nodeRunStates_.clear();
+    for (const auto& record : graph_.nodes()) {
+        nodeRunStates_.insert(record.id, NodeExecutionState::NotExecuted);
+    }
+    for (auto it = nodeItems_.begin(); it != nodeItems_.end(); ++it) {
+        if (auto* nodeItem = dynamic_cast<NodeItem*>(it.value())) {
+            nodeItem->setRunState(NodeExecutionState::NotExecuted);
+        }
+    }
+}
+
+void MainWindow::applyNodeRunState(const QString& nodeId, NodeExecutionState state)
+{
+    if (nodeId.isEmpty()) {
+        return;
+    }
+    nodeRunStates_.insert(nodeId, state);
+    if (auto* nodeItem = dynamic_cast<NodeItem*>(nodeItems_.value(nodeId))) {
+        nodeItem->setRunState(state);
+    }
+}
+
+void MainWindow::handleNodeExecutionEvent(const NodeExecutionSummary& summary)
+{
+    applyNodeRunState(summary.nodeId, summary.state);
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
+void MainWindow::focusFailedNode(const QString& nodeId)
+{
+    if (nodeId.isEmpty()) {
+        return;
+    }
+    auto* item = nodeItems_.value(nodeId);
+    if (!item) {
+        return;
+    }
+    scene_->clearSelection();
+    item->setSelected(true);
+    selectedNodeId_ = nodeId;
+    view_->centerOn(item);
+    rebuildProperties();
+}
+
 void MainWindow::runWorkflow()
 {
-    ExecutionEngine engine;
-    auto result = engine.execute(graph_);
+    resetNodeRunStates();
+    auto result = engine_.execute(graph_, [this](const NodeExecutionSummary& summary) {
+        handleNodeExecutionEvent(summary);
+    });
     if (result.isFail()) {
+        lastResult_ = engine_.lastResult();
+        for (const QString& line : lastResult_.log) appendLog(line);
         appendLog(QString("执行失败：%1").arg(result.error()));
+        focusFailedNode(lastResult_.failedNodeId);
         QMessageBox::warning(this, "执行失败", result.error());
         return;
     }
@@ -1386,7 +1485,9 @@ void MainWindow::newWorkflow()
 {
     graph_.clear();
     currentFile_.clear();
+    engine_.clearCache();
     lastResult_ = {};
+    nodeRunStates_.clear();
     selectedNodeId_.clear();
     rebuildScene();
     rebuildProperties();
@@ -1405,7 +1506,9 @@ void MainWindow::openWorkflow()
     }
     graph_ = loaded.value();
     currentFile_ = path;
+    engine_.clearCache();
     lastResult_ = {};
+    nodeRunStates_.clear();
     rebuildScene();
     appendLog(QString("已打开：%1").arg(path));
 }
@@ -1425,6 +1528,7 @@ void MainWindow::removeEdgeByIndex(int edgeIndex)
         return;
     }
     appendLog(QString("删除连线：%1").arg(edgeIndex));
+    resetNodeRunStates();
     rebuildEdges();
 }
 

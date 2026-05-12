@@ -2,6 +2,11 @@
 
 #include <QJsonValue>
 
+bool ImageNode::isCacheable() const
+{
+    return true;
+}
+
 QVariant ImageNode::parameterValue(const QString& name) const
 {
     return saveParams().value(name).toVariant();

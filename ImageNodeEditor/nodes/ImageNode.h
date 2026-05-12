@@ -21,6 +21,7 @@ public:
     virtual QJsonObject saveParams() const = 0;
     virtual Status loadParams(const QJsonObject& object) = 0;
     virtual Result<QMap<QString, NodeData>> execute(const QMap<QString, NodeData>& inputs) = 0;
+    virtual bool isCacheable() const;
 
     virtual QVariant parameterValue(const QString& name) const;
     virtual Status setParameter(const QString& name, const QVariant& value);

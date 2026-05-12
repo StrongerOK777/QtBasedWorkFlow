@@ -311,3 +311,24 @@ ElaWidgetTools 仍会在编译时输出第三方 warning；当前不影响功能
 
 后续注意：
 若提示干扰到其他高频操作，可使用选项设置窗口进行参数抽离或后期调整。
+
+---
+
+### 2026-05-12 / 执行性能与状态反馈阶段
+
+类型：修改
+
+概述：
+实现节点级增量执行缓存和画布节点运行状态高亮。`ExecutionEngine` 现在维护内存缓存，基于节点类型、参数、输入连线、上游签名和读图文件信息生成签名；连续执行未变化 workflow 时可复用缓存。GUI 执行时节点会显示正在执行、成功、失败和复用缓存状态，失败节点会自动选中并居中。
+
+影响范围：
+`ImageNodeEditor/workflow/ExecutionEngine.h`、`ImageNodeEditor/workflow/ExecutionEngine.cpp`、`ImageNodeEditor/nodes/ImageNode.h`、`ImageNodeEditor/nodes/ImageNode.cpp`、`ImageNodeEditor/nodes/BasicNodes.cpp`、`ImageNodeEditor/gui/MainWindow.h`、`ImageNodeEditor/gui/MainWindow.cpp`、`plan.md`
+
+处理方式：
+新增 `ImageNode::isCacheable()`，默认节点可缓存，`ImageOutput` 标记为不可缓存，避免导出被跳过。`MainWindow` 持有同一个 `ExecutionEngine`，新建或打开 workflow 时清空缓存；参数、节点和连线修改会重置节点显示状态，但由签名负责实际缓存失效判断。
+
+当前状态：
+已解决
+
+后续注意：
+缓存仅保存在内存中，不写入 workflow JSON；当前执行仍是同步执行，后续实时预览或并行计算应继续复用节点摘要和缓存接口。

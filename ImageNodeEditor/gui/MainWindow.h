@@ -5,6 +5,7 @@
 #include "workflow/WorkflowGraph.h"
 
 #include <QMap>
+#include <QVariant>
 
 class QFormLayout;
 class QCloseEvent;
@@ -67,8 +68,14 @@ private:
     void resetUiScale();
     void setUiScale(double scale);
     void applyUiScale();
+    void setSelectedNodeParameter(const QString& name, const QVariant& value);
+    void resetNodeRunStates();
+    void applyNodeRunState(const QString& nodeId, NodeExecutionState state);
+    void handleNodeExecutionEvent(const NodeExecutionSummary& summary);
+    void focusFailedNode(const QString& nodeId);
 
     WorkflowGraph graph_;
+    ExecutionEngine engine_;
     ExecutionResult lastResult_;
     QString currentFile_;
     QString selectedNodeId_;
@@ -94,5 +101,6 @@ private:
     QToolBar* layoutToolbar_ = nullptr;
     QToolBar* viewToolbar_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
+    QMap<QString, NodeExecutionState> nodeRunStates_;
     QVector<QGraphicsItem*> edgeItems_;
 };
