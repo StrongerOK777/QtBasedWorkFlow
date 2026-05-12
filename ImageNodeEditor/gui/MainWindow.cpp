@@ -200,7 +200,7 @@ public:
     explicit DelayedToolTipFilter(QObject* parent = nullptr) : QObject(parent)
     {
         timer_.setSingleShot(true);
-        timer_.setInterval(1500);
+        timer_.setInterval(500);
         connect(&timer_, &QTimer::timeout, this, [this] {
             if (watched_) {
                 QToolTip::showText(QCursor::pos() + QPoint(14, 18), watched_->toolTip(), watched_);
