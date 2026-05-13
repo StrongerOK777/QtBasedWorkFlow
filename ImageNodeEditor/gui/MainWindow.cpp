@@ -60,11 +60,13 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSet>
+#include <QSignalBlocker>
 #include <QSlider>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStackedLayout>
 #include <QSpinBox>
+#include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -338,6 +340,14 @@ QIcon lineIcon(const QString& name)
             const QPointF outer(32 + std::cos(a) * 23, 32 + std::sin(a) * 23);
             painter.drawLine(inner, outer);
         }
+    } else if (name == "clearLog") {
+        painter.drawRoundedRect(QRectF(16, 14, 32, 38), 4, 4);
+        painter.drawLine(QPointF(22, 24), QPointF(42, 24));
+        painter.drawLine(QPointF(22, 32), QPointF(38, 32));
+        painter.drawLine(QPointF(22, 40), QPointF(34, 40));
+        painter.setPen(QPen(warm, 4.8, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(44, 14), QPointF(54, 24));
+        painter.drawLine(QPointF(54, 14), QPointF(44, 24));
     }
     return QIcon(pix);
 }
@@ -600,7 +610,9 @@ protected:
         if (change == ItemPositionHasChanged && window_) {
             window_->updateNodePosition(nodeId_, value.toPointF());
         } else if (change == ItemSelectedHasChanged) {
-            updateParameterExpansion(value.toBool());
+            const bool selected = value.toBool();
+            setZValue(selected ? 20.0 : 0.0);
+            updateParameterExpansion(selected);
         }
         return QGraphicsRectItem::itemChange(change, value);
     }
@@ -1382,8 +1394,10 @@ protected:
         }
         QGraphicsItem* hit = itemAt(event->scenePos(), QTransform());
         if (auto* node = nodeItemFrom(hit)) {
-            clearSelection();
-            node->setSelected(true);
+            if (!node->isSelected()) {
+                clearSelection();
+                node->setSelected(true);
+            }
             window_->showNodeContextMenu(node->nodeId(), event->screenPos());
             event->accept();
             return;
@@ -1704,6 +1718,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
     createActions();
     createLayout();
+    initializeWorkbook();
     rebuildPalette();
     applyUiScale();
 }
@@ -1881,6 +1896,19 @@ void MainWindow::createLayout()
     bottom->setAttribute(Qt::WA_StyledBackground, true);
     auto* bottomLayout = new QVBoxLayout(bottom);
     bottomLayout->addWidget(preview_);
+    auto* logHeader = new QWidget;
+    auto* logHeaderLayout = new QHBoxLayout(logHeader);
+    logHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    auto* logTitle = new QLabel("日志");
+    auto* clearLogButton = new QToolButton;
+    clearLogButton->setIcon(lineIcon("clearLog"));
+    clearLogButton->setToolTip("清空日志");
+    clearLogButton->setAutoRaise(true);
+    connect(clearLogButton, &QToolButton::clicked, this, [this] { clearLog(); });
+    logHeaderLayout->addWidget(logTitle);
+    logHeaderLayout->addStretch(1);
+    logHeaderLayout->addWidget(clearLogButton);
+    bottomLayout->addWidget(logHeader);
     bottomLayout->addWidget(log_);
 
     setDockOptions(QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AnimatedDocks | QMainWindow::GroupedDragging);
@@ -1953,6 +1981,43 @@ void MainWindow::createLayout()
     layoutToolbar_->addAction(autoLayoutAction);
     layoutToolbar_->addAction(fullScreenAction);
     installDelayedTooltips(layoutToolbar_);
+
+    workbookToolbar_ = addToolBar("工作簿");
+    workbookToolbar_->setObjectName("workbookToolbar");
+    workbookToolbar_->setMovable(false);
+    workbookToolbar_->setFloatable(false);
+    newWorkbookAction_ = new QAction(lineIcon("new"), "新建画布标签", this);
+    newWorkbookAction_->setData("new");
+    newWorkbookAction_->setToolTip("新建画布标签");
+    connect(newWorkbookAction_, &QAction::triggered, this, [this] { addWorkbookPage(); });
+    workbookToolbar_->addAction(newWorkbookAction_);
+    workbookTabs_ = new QTabBar;
+    workbookTabs_->setObjectName("workbookTabs");
+    workbookTabs_->setDocumentMode(true);
+    workbookTabs_->setExpanding(false);
+    workbookTabs_->setMovable(true);
+    workbookTabs_->setTabsClosable(true);
+    workbookTabs_->setElideMode(Qt::ElideRight);
+    workbookTabs_->setMinimumWidth(AppTheme::px(220, uiScale_));
+    workbookTabs_->setMaximumWidth(AppTheme::px(520, uiScale_));
+    connect(workbookTabs_, &QTabBar::currentChanged, this, [this](int index) { switchWorkbookPage(index); });
+    connect(workbookTabs_, &QTabBar::tabCloseRequested, this, [this](int index) { closeWorkbookPage(index); });
+    connect(workbookTabs_, &QTabBar::tabMoved, this, [this](int from, int to) {
+        if (from < 0 || from >= workbookPages_.size() || to < 0 || to >= workbookPages_.size()) {
+            return;
+        }
+        workbookPages_.move(from, to);
+        if (currentWorkbookIndex_ == from) {
+            currentWorkbookIndex_ = to;
+        } else if (from < currentWorkbookIndex_ && to >= currentWorkbookIndex_) {
+            --currentWorkbookIndex_;
+        } else if (from > currentWorkbookIndex_ && to <= currentWorkbookIndex_) {
+            ++currentWorkbookIndex_;
+        }
+        refreshWorkbookTabs();
+    });
+    workbookToolbar_->addWidget(workbookTabs_);
+    installDelayedTooltips(workbookToolbar_);
 
     navigationToolbar_ = addToolBar("导航");
     navigationToolbar_->setObjectName("navigationToolbar");
@@ -2636,6 +2701,13 @@ void MainWindow::appendLog(const QString& message, const QString& nodeId)
     log_->scrollToBottom();
 }
 
+void MainWindow::clearLog()
+{
+    if (log_) {
+        log_->clear();
+    }
+}
+
 void MainWindow::setSelectedNodeParameter(const QString& name, const QVariant& value)
 {
     setNodeParameterForNode(selectedNodeId_, name, value);
@@ -2933,6 +3005,14 @@ void MainWindow::newWorkflow()
     undoStack_->clear();
     rebuildScene();
     rebuildProperties();
+    if (currentWorkbookIndex_ >= 0 && currentWorkbookIndex_ < workbookPages_.size()) {
+        workbookPages_[currentWorkbookIndex_].graph = WorkflowCommands::cloneGraph(graph_);
+        workbookPages_[currentWorkbookIndex_].selectedNodeId.clear();
+        workbookPages_[currentWorkbookIndex_].filePath.clear();
+        workbookPages_[currentWorkbookIndex_].title = QString("画布 %1").arg(currentWorkbookIndex_ + 1);
+        workbookPages_[currentWorkbookIndex_].dirty = false;
+        refreshWorkbookTabs();
+    }
     updateWindowTitle();
     appendLog("新建 workflow");
 }
@@ -2967,13 +3047,21 @@ void MainWindow::openWorkflow()
     undoStack_->clear();
     rebuildScene();
     rebuildProperties();
+    if (currentWorkbookIndex_ >= 0 && currentWorkbookIndex_ < workbookPages_.size()) {
+        workbookPages_[currentWorkbookIndex_].graph = WorkflowCommands::cloneGraph(graph_);
+        workbookPages_[currentWorkbookIndex_].selectedNodeId.clear();
+        workbookPages_[currentWorkbookIndex_].filePath = currentFile_;
+        workbookPages_[currentWorkbookIndex_].title = QFileInfo(currentFile_).fileName();
+        workbookPages_[currentWorkbookIndex_].dirty = false;
+        refreshWorkbookTabs();
+    }
     updateWindowTitle();
     appendLog(QString("已打开：%1").arg(path));
 }
 
 bool MainWindow::confirmSaveIfNeeded()
 {
-    if (!undoStack_ || undoStack_->isClean()) {
+    if (!currentWorkbookDirty()) {
         return true;
     }
     const auto choice = QMessageBox::warning(this, "保存修改",
@@ -3052,6 +3140,14 @@ bool MainWindow::saveWorkflow()
     if (undoStack_) {
         undoStack_->setClean();
     }
+    if (currentWorkbookIndex_ >= 0 && currentWorkbookIndex_ < workbookPages_.size()) {
+        workbookPages_[currentWorkbookIndex_].graph = graphToSave;
+        workbookPages_[currentWorkbookIndex_].selectedNodeId = selectedNodeId_;
+        workbookPages_[currentWorkbookIndex_].filePath = currentFile_;
+        workbookPages_[currentWorkbookIndex_].title = QFileInfo(currentFile_).fileName();
+        workbookPages_[currentWorkbookIndex_].dirty = false;
+        refreshWorkbookTabs();
+    }
     updateWindowTitle();
     appendLog(QString("已保存：%1").arg(currentFile_));
     return true;
@@ -3094,12 +3190,189 @@ void MainWindow::pushGraphEditCommand(const QString& text,
     undoStack_->push(WorkflowCommands::makeSnapshotCommand(this, text, before, after, selectedBefore, selectedAfter, mergeKey));
 }
 
+void MainWindow::initializeWorkbook()
+{
+    if (!workbookTabs_ || !workbookPages_.isEmpty()) {
+        return;
+    }
+    WorkbookPage page;
+    page.graph = WorkflowCommands::cloneGraph(graph_);
+    page.selectedNodeId = selectedNodeId_;
+    page.title = "画布 1";
+    workbookPages_.append(page);
+    currentWorkbookIndex_ = 0;
+    refreshWorkbookTabs();
+}
+
+bool MainWindow::currentWorkbookDirty() const
+{
+    if (undoStack_ && !undoStack_->isClean()) {
+        return true;
+    }
+    if (currentWorkbookIndex_ >= 0 && currentWorkbookIndex_ < workbookPages_.size()) {
+        return workbookPages_.at(currentWorkbookIndex_).dirty;
+    }
+    return false;
+}
+
+void MainWindow::syncCurrentWorkbookPage()
+{
+    if (currentWorkbookIndex_ < 0 || currentWorkbookIndex_ >= workbookPages_.size()) {
+        return;
+    }
+    auto& page = workbookPages_[currentWorkbookIndex_];
+    page.graph = graphForPersistence();
+    page.selectedNodeId = selectedNodeId_;
+    page.filePath = currentFile_;
+    page.dirty = currentWorkbookDirty();
+    if (!currentFile_.isEmpty()) {
+        page.title = QFileInfo(currentFile_).fileName();
+    } else if (page.title.trimmed().isEmpty()) {
+        page.title = QString("画布 %1").arg(currentWorkbookIndex_ + 1);
+    }
+}
+
+void MainWindow::switchWorkbookPage(int index)
+{
+    if (switchingWorkbook_ || index < 0 || index >= workbookPages_.size() || index == currentWorkbookIndex_) {
+        return;
+    }
+    syncCurrentWorkbookPage();
+    switchingWorkbook_ = true;
+    currentWorkbookIndex_ = index;
+    const auto page = workbookPages_.at(index);
+    graph_ = WorkflowCommands::cloneGraph(page.graph);
+    selectedNodeId_ = page.selectedNodeId;
+    currentFile_ = page.filePath;
+    graphStack_.clear();
+    lastResult_ = {};
+    engine_.clearCache();
+    nodeRunStates_.clear();
+    nodeElapsedMs_.clear();
+    if (returnToParentAction_) {
+        returnToParentAction_->setEnabled(false);
+    }
+    if (undoStack_) {
+        undoStack_->clear();
+    }
+    resetNodeRunStates();
+    rebuildScene();
+    if (auto* item = nodeItems_.value(selectedNodeId_)) {
+        item->setSelected(true);
+    }
+    rebuildProperties();
+    updatePreviewForSelection();
+    refreshWorkbookTabs();
+    updateWindowTitle();
+    switchingWorkbook_ = false;
+}
+
+void MainWindow::addWorkbookPage()
+{
+    syncCurrentWorkbookPage();
+    WorkbookPage page;
+    page.title = QString("画布 %1").arg(workbookPages_.size() + 1);
+    workbookPages_.append(page);
+    refreshWorkbookTabs();
+    if (workbookTabs_) {
+        workbookTabs_->setCurrentIndex(workbookPages_.size() - 1);
+    }
+}
+
+void MainWindow::closeWorkbookPage(int index)
+{
+    if (index < 0 || index >= workbookPages_.size()) {
+        return;
+    }
+    if (index == currentWorkbookIndex_ && !confirmSaveIfNeeded()) {
+        return;
+    }
+
+    if (workbookPages_.size() == 1) {
+        graph_.clear();
+        graphStack_.clear();
+        currentFile_.clear();
+        selectedNodeId_.clear();
+        lastResult_ = {};
+        engine_.clearCache();
+        nodeRunStates_.clear();
+        nodeElapsedMs_.clear();
+        workbookPages_[0] = WorkbookPage{};
+        workbookPages_[0].title = "画布 1";
+        currentWorkbookIndex_ = 0;
+        if (undoStack_) {
+            undoStack_->clear();
+        }
+        rebuildScene();
+        rebuildProperties();
+        refreshWorkbookTabs();
+        updateWindowTitle();
+        return;
+    }
+
+    workbookPages_.removeAt(index);
+    if (currentWorkbookIndex_ > index) {
+        --currentWorkbookIndex_;
+    } else if (currentWorkbookIndex_ == index) {
+        currentWorkbookIndex_ = std::min(index, int(workbookPages_.size()) - 1);
+        const auto page = workbookPages_.at(currentWorkbookIndex_);
+        graph_ = WorkflowCommands::cloneGraph(page.graph);
+        selectedNodeId_ = page.selectedNodeId;
+        currentFile_ = page.filePath;
+        graphStack_.clear();
+        lastResult_ = {};
+        engine_.clearCache();
+        nodeRunStates_.clear();
+        nodeElapsedMs_.clear();
+        if (undoStack_) {
+            undoStack_->clear();
+        }
+        rebuildScene();
+        if (auto* item = nodeItems_.value(selectedNodeId_)) {
+            item->setSelected(true);
+        }
+        rebuildProperties();
+        updatePreviewForSelection();
+    }
+    refreshWorkbookTabs();
+    updateWindowTitle();
+}
+
+void MainWindow::refreshWorkbookTabs()
+{
+    if (!workbookTabs_) {
+        return;
+    }
+    QSignalBlocker blocker(workbookTabs_);
+    while (workbookTabs_->count() > 0) {
+        workbookTabs_->removeTab(0);
+    }
+    for (int i = 0; i < workbookPages_.size(); ++i) {
+        const auto& page = workbookPages_.at(i);
+        QString title = page.title.trimmed().isEmpty() ? QString("画布 %1").arg(i + 1) : page.title;
+        if (i == currentWorkbookIndex_ && currentWorkbookDirty()) {
+            title.prepend("*");
+        } else if (page.dirty) {
+            title.prepend("*");
+        }
+        workbookTabs_->addTab(title);
+        workbookTabs_->setTabToolTip(i, page.filePath.isEmpty() ? title : page.filePath);
+    }
+    if (currentWorkbookIndex_ >= 0 && currentWorkbookIndex_ < workbookTabs_->count()) {
+        workbookTabs_->setCurrentIndex(currentWorkbookIndex_);
+    }
+}
+
 void MainWindow::updateWindowTitle()
 {
     const QString fileName = currentFile_.isEmpty() ? "未命名" : QFileInfo(currentFile_).fileName();
-    const QString dirty = undoStack_ && !undoStack_->isClean() ? "*" : "";
+    const QString dirty = currentWorkbookDirty() ? "*" : "";
     const QString context = graphStack_.isEmpty() ? "" : QString(" [子图 x%1]").arg(graphStack_.size());
     setWindowTitle(QString("%1%2%3 - ImageNodeEditor").arg(fileName, dirty, context));
+    if (!switchingWorkbook_) {
+        syncCurrentWorkbookPage();
+        refreshWorkbookTabs();
+    }
 }
 
 void MainWindow::setPreviewImage(const QImage& image)
@@ -3364,6 +3637,15 @@ void MainWindow::applyUiScale()
         refreshToolbar(navigationToolbar_);
         navigationToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
         navigationToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    }
+    if (workbookToolbar_) {
+        refreshToolbar(workbookToolbar_);
+        workbookToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        workbookToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    }
+    if (workbookTabs_) {
+        workbookTabs_->setMinimumWidth(AppTheme::px(220, uiScale_));
+        workbookTabs_->setMaximumWidth(AppTheme::px(520, uiScale_));
     }
 
     if (canvasZoomOverlay_) {

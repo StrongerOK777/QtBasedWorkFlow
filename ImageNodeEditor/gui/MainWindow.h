@@ -17,6 +17,7 @@ class QGraphicsView;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
+class QTabBar;
 class QToolButton;
 class QToolBar;
 class QTimer;
@@ -60,6 +61,7 @@ private:
     void rebuildPalette();
     void rebuildProperties();
     void appendLog(const QString& message, const QString& nodeId = {});
+    void clearLog();
     void runWorkflow();
     void exportCanvasImage();
     void encapsulateSelectionAsMacro();
@@ -101,6 +103,13 @@ private:
     void highlightNodeBriefly(const QString& nodeId);
     void scheduleLivePreview();
     void runLivePreview();
+    void initializeWorkbook();
+    void syncCurrentWorkbookPage();
+    void switchWorkbookPage(int index);
+    void addWorkbookPage();
+    void closeWorkbookPage(int index);
+    void refreshWorkbookTabs();
+    bool currentWorkbookDirty() const;
 
     WorkflowGraph graph_;
     struct GraphContext {
@@ -117,6 +126,16 @@ private:
     QString pendingFromPort_;
     double zoomScale_ = 1.0;
     double uiScale_ = 1.0;
+    struct WorkbookPage {
+        WorkflowGraph graph;
+        QString selectedNodeId;
+        QString filePath;
+        QString title;
+        bool dirty = false;
+    };
+    QVector<WorkbookPage> workbookPages_;
+    int currentWorkbookIndex_ = -1;
+    bool switchingWorkbook_ = false;
 
     QListWidget* palette_ = nullptr;
     QGraphicsScene* scene_ = nullptr;
@@ -132,6 +151,9 @@ private:
     QToolBar* layoutToolbar_ = nullptr;
     QToolBar* viewToolbar_ = nullptr;
     QToolBar* navigationToolbar_ = nullptr;
+    QToolBar* workbookToolbar_ = nullptr;
+    QTabBar* workbookTabs_ = nullptr;
+    QAction* newWorkbookAction_ = nullptr;
     QAction* returnToParentAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
     QTimer* livePreviewTimer_ = nullptr;

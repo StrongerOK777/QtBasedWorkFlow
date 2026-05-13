@@ -40,8 +40,8 @@ int px(double value, double uiScale)
 Metrics metrics(double uiScale)
 {
     Metrics m;
-    m.toolbarIcon = px(26, uiScale);
-    m.toolbarButton = px(42, uiScale);
+    m.toolbarIcon = px(24, uiScale);
+    m.toolbarButton = px(30, uiScale);
     m.canvasZoomButtonW = px(46, uiScale);
     m.canvasZoomButtonH = px(40, uiScale);
     m.canvasZoomOverlayW = px(64, uiScale);
@@ -67,8 +67,8 @@ NodeMetrics nodeMetrics(double uiScale)
     m.bottomPadding = 22.0 * s;
     m.portRadius = 7.5 * s;
     m.cornerRadius = 18.0 * s;
-    m.titleSize = 13.0 * s;
-    m.labelSize = 11.5 * s;
+    m.titleSize = 15.0 * s;
+    m.labelSize = 13.0 * s;
     return m;
 }
 
@@ -108,6 +108,7 @@ QString styleSheet(double uiScale)
     const int radius = px(14, uiScale);
     const int smallRadius = px(9, uiScale);
     const int padV = px(6, uiScale);
+    const int toolbarPad = px(1, uiScale);
     const int padH = px(10, uiScale);
     const int itemHeight = px(28, uiScale);
     const int titleHeight = px(34, uiScale);
@@ -164,16 +165,16 @@ QString styleSheet(double uiScale)
             background: rgba(255, 255, 255, 178);
             border: %1px solid rgba(255, 255, 255, 180);
             border-bottom-color: rgba(120, 145, 180, 82);
-            spacing: %1px;
-            padding: %1px %2px;
+            spacing: 0px;
+            padding: 0px %13px;
             movable: false;
         }
         QToolBar QToolButton {
             min-width: %12px;
             min-height: %12px;
-            padding: %1px;
-            border: %1px solid transparent;
-            border-radius: %4px;
+            padding: 0px;
+            border: 0px solid transparent;
+            border-radius: %1px;
             background: transparent;
         }
         QToolButton, QPushButton {
@@ -193,6 +194,27 @@ QString styleSheet(double uiScale)
             background: rgba(10, 132, 255, 52);
             padding-top: %1px;
             padding-bottom: %1px;
+        }
+        QTabBar#workbookTabs {
+            background: transparent;
+            qproperty-drawBase: 0;
+        }
+        QTabBar#workbookTabs::tab {
+            min-height: %12px;
+            padding: 0px %5px;
+            margin: 0px %1px;
+            border: %1px solid rgba(126, 154, 192, 86);
+            border-radius: %4px;
+            background: rgba(255, 255, 255, 128);
+            color: #1f2937;
+        }
+        QTabBar#workbookTabs::tab:selected {
+            background: rgba(10, 132, 255, 42);
+            border-color: rgba(10, 132, 255, 118);
+            color: #0b3d72;
+        }
+        QTabBar#workbookTabs::tab:hover {
+            background: rgba(10, 132, 255, 28);
         }
         QToolButton:hover, QPushButton:hover {
             border-color: rgba(10, 132, 255, 148);
@@ -314,7 +336,8 @@ QString styleSheet(double uiScale)
         .arg(pxValue(5, uiScale))
         .arg(titleHeight)
         .arg(radius)
-        .arg(pxValue(42, uiScale));
+        .arg(pxValue(30, uiScale))
+        .arg(toolbarPad);
     if (isDarkTheme()) {
         sheet.replace("#fbfdff", "#111827");
         sheet.replace("#f2f7ff", "#101827");
@@ -336,6 +359,7 @@ QString styleSheet(double uiScale)
         sheet.replace("rgba(255, 255, 255, 220)", "rgba(25, 36, 54, 235)");
         sheet.replace("rgba(255, 255, 255, 180)", "rgba(76, 96, 128, 100)");
         sheet.replace("rgba(255, 255, 255, 168)", "rgba(76, 96, 128, 88)");
+        sheet.replace("rgba(255, 255, 255, 128)", "rgba(28, 40, 60, 190)");
         sheet.replace("rgba(255,255,255,238)", "rgba(35,45,63,238)");
         sheet.replace("rgba(255,255,255,250)", "rgba(44,57,78,245)");
         sheet.replace("rgba(228,238,252,220)", "rgba(24,34,50,232)");

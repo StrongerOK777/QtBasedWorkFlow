@@ -22,8 +22,8 @@ enum class ThemePreference {
 };
 
 struct Metrics {
-    int toolbarIcon = 26;
-    int toolbarButton = 42;
+    int toolbarIcon = 24;
+    int toolbarButton = 30;
     int canvasZoomButtonW = 46;
     int canvasZoomButtonH = 40;
     int canvasZoomOverlayW = 64;
@@ -45,8 +45,8 @@ struct NodeMetrics {
     double bottomPadding = 22.0;
     double portRadius = 7.5;
     double cornerRadius = 18.0;
-    double titleSize = 13.0;
-    double labelSize = 11.5;
+    double titleSize = 15.0;
+    double labelSize = 13.0;
 };
 
 struct Colors {
