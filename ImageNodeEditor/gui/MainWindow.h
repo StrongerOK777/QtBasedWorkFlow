@@ -17,12 +17,15 @@ class QGraphicsView;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
+class QMenu;
 class QTabBar;
+class QTabWidget;
 class QToolButton;
 class QToolBar;
 class QTimer;
 class QUndoStack;
 class QWidget;
+class TerminalPanel;
 
 class MainWindow : public GuiCompat::MainWindowBase {
 public:
@@ -58,9 +61,11 @@ protected:
 private:
     void createActions();
     void createLayout();
-    void rebuildPalette();
+    void rebuildNodeMenus();
+    void addNodeFromMenu(const QString& typeName);
     void rebuildProperties();
     void appendLog(const QString& message, const QString& nodeId = {});
+    void appendProblem(const QString& message, const QString& nodeId = {});
     void clearLog();
     void runWorkflow();
     void exportCanvasImage();
@@ -137,12 +142,14 @@ private:
     int currentWorkbookIndex_ = -1;
     bool switchingWorkbook_ = false;
 
-    QListWidget* palette_ = nullptr;
     QGraphicsScene* scene_ = nullptr;
     QGraphicsView* view_ = nullptr;
     QLabel* preview_ = nullptr;
     QListWidget* log_ = nullptr;
-    GuiCompat::DockWidget* paletteDock_ = nullptr;
+    QListWidget* problemLog_ = nullptr;
+    QTabWidget* bottomTabs_ = nullptr;
+    TerminalPanel* terminalPanel_ = nullptr;
+    GuiCompat::DockWidget* previewDock_ = nullptr;
     GuiCompat::DockWidget* bottomDock_ = nullptr;
     QToolButton* canvasZoomInButton_ = nullptr;
     QToolButton* canvasZoomOutButton_ = nullptr;
@@ -153,6 +160,9 @@ private:
     QToolBar* navigationToolbar_ = nullptr;
     QToolBar* workbookToolbar_ = nullptr;
     QTabBar* workbookTabs_ = nullptr;
+    QMenu* nodeOperationMenu_ = nullptr;
+    QMenu* commandCenterMenu_ = nullptr;
+    QAction* commandCenterAction_ = nullptr;
     QAction* newWorkbookAction_ = nullptr;
     QAction* returnToParentAction_ = nullptr;
     QWidget* miniMap_ = nullptr;

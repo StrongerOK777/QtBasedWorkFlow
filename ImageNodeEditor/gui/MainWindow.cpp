@@ -19,6 +19,7 @@
 #include <QCursor>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QEvent>
@@ -53,6 +54,8 @@
 #include <QPainterPathStroker>
 #include <QPalette>
 #include <QPixmap>
+#include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QResizeEvent>
@@ -66,7 +69,10 @@
 #include <QSplitter>
 #include <QStackedLayout>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QTabBar>
+#include <QTabWidget>
+#include <QTextCursor>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -223,7 +229,7 @@ QIcon lineIcon(const QString& name)
     QPainter painter(&pix);
     painter.setRenderHint(QPainter::Antialiasing);
     const QColor ink = AppTheme::isDarkTheme() ? QColor("#dbe7f5") : QColor("#23405f");
-    const QColor accent = AppTheme::isDarkTheme() ? QColor("#60a5fa") : QColor("#0a84ff");
+    const QColor accent = AppTheme::isDarkTheme() ? QColor("#e6e6e6") : QColor("#0a84ff");
     const QColor warm("#ff9f0a");
     QPen pen(ink, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     painter.setPen(pen);
@@ -306,15 +312,15 @@ QIcon lineIcon(const QString& name)
         painter.drawText(QRectF(18, 24, 28, 18), Qt::AlignCenter, "1:1");
     } else if (name == "dockLeft") {
         painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(12, 12, 13, 40), QColor(10, 132, 255, 70));
+        painter.fillRect(QRectF(12, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
         painter.drawLine(QPointF(25, 12), QPointF(25, 52));
     } else if (name == "dockRight") {
         painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(39, 12, 13, 40), QColor(10, 132, 255, 70));
+        painter.fillRect(QRectF(39, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
         painter.drawLine(QPointF(39, 12), QPointF(39, 52));
     } else if (name == "dockBottom") {
         painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(12, 39, 40, 13), QColor(10, 132, 255, 70));
+        painter.fillRect(QRectF(12, 39, 40, 13), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
         painter.drawLine(QPointF(12, 39), QPointF(52, 39));
     } else if (name == "layoutReset") {
         painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
@@ -348,6 +354,12 @@ QIcon lineIcon(const QString& name)
         painter.setPen(QPen(warm, 4.8, Qt::SolidLine, Qt::RoundCap));
         painter.drawLine(QPointF(44, 14), QPointF(54, 24));
         painter.drawLine(QPointF(54, 14), QPointF(44, 24));
+    } else if (name == "more") {
+        painter.setBrush(ink);
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(QPointF(20, 32), 4.2, 4.2);
+        painter.drawEllipse(QPointF(32, 32), 4.2, 4.2);
+        painter.drawEllipse(QPointF(44, 32), 4.2, 4.2);
     }
     return QIcon(pix);
 }
@@ -663,9 +675,9 @@ protected:
 
         QLinearGradient glass(body.topLeft(), body.bottomLeft());
         if (AppTheme::isDarkTheme()) {
-            glass.setColorAt(0, QColor(36, 55, 82, hovered_ ? 150 : 132));
-            glass.setColorAt(0.56, QColor(17, 28, 45, hovered_ ? 116 : 96));
-            glass.setColorAt(1, QColor(8, 14, 25, hovered_ ? 150 : 132));
+            glass.setColorAt(0, QColor(46, 46, 47, hovered_ ? 150 : 132));
+            glass.setColorAt(0.56, QColor(25, 26, 27, hovered_ ? 116 : 96));
+            glass.setColorAt(1, QColor(18, 19, 20, hovered_ ? 150 : 132));
         } else {
             glass.setColorAt(0, QColor(255, 255, 255, hovered_ ? 150 : 128));
             glass.setColorAt(0.55, QColor(226, 239, 255, hovered_ ? 100 : 82));
@@ -921,7 +933,9 @@ public:
         Q_UNUSED(option);
         Q_UNUSED(widget);
         const auto colors = AppTheme::colors();
-        QPen glow(QColor(10, 132, 255, isSelected() ? 54 : 18), isSelected() ? 8 * uiScale_ : 5 * uiScale_);
+        const QColor glowColor = AppTheme::isDarkTheme() ? QColor(238, 238, 238, isSelected() ? 42 : 14)
+                                                         : QColor(10, 132, 255, isSelected() ? 54 : 18);
+        QPen glow(glowColor, isSelected() ? 8 * uiScale_ : 5 * uiScale_);
         glow.setCapStyle(Qt::RoundCap);
         glow.setJoinStyle(Qt::RoundJoin);
         QPen currentPen(isSelected() ? colors.edgeSelected : colors.edge, isSelected() ? 3.2 * uiScale_ : 2.1 * uiScale_);
@@ -1693,6 +1707,125 @@ private:
 
 }
 
+class TerminalPanel final : public QWidget {
+public:
+    explicit TerminalPanel(double uiScale, QWidget* parent = nullptr)
+        : QWidget(parent)
+    {
+        setObjectName("terminalPanel");
+        auto* root = new QVBoxLayout(this);
+        root->setContentsMargins(AppTheme::px(8, uiScale), AppTheme::px(8, uiScale),
+                                 AppTheme::px(8, uiScale), AppTheme::px(8, uiScale));
+        root->setSpacing(AppTheme::px(6, uiScale));
+
+        output_ = new QPlainTextEdit;
+        output_->setObjectName("terminalOutput");
+        output_->setReadOnly(true);
+        output_->setLineWrapMode(QPlainTextEdit::NoWrap);
+        QFont mono("Menlo");
+        mono.setStyleHint(QFont::Monospace);
+        mono.setPointSizeF(std::max(10.0, 11.5 * uiScale));
+        output_->setFont(mono);
+        root->addWidget(output_, 1);
+
+        auto* controls = new QWidget;
+        auto* controlsLayout = new QHBoxLayout(controls);
+        controlsLayout->setContentsMargins(0, 0, 0, 0);
+        controlsLayout->setSpacing(AppTheme::px(6, uiScale));
+        input_ = new GuiCompat::LineEdit;
+        input_->setPlaceholderText("输入命令后按 Enter");
+        auto* runButton = new GuiCompat::PushButton("运行");
+        auto* clearButton = new GuiCompat::PushButton("清空");
+        auto* restartButton = new GuiCompat::PushButton("重启");
+        controlsLayout->addWidget(input_, 1);
+        controlsLayout->addWidget(runButton);
+        controlsLayout->addWidget(clearButton);
+        controlsLayout->addWidget(restartButton);
+        root->addWidget(controls);
+
+        process_.setProcessChannelMode(QProcess::MergedChannels);
+        process_.setWorkingDirectory(QDir::currentPath());
+        connect(&process_, &QProcess::readyReadStandardOutput, this, [this] {
+            append(QString::fromLocal8Bit(process_.readAllStandardOutput()));
+        });
+        connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+            Q_UNUSED(error);
+            append(QString("终端错误：%1\n").arg(process_.errorString()));
+        });
+        connect(&process_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this](int code, QProcess::ExitStatus status) {
+            Q_UNUSED(status);
+            append(QString("\n[进程结束，退出码 %1]\n").arg(code));
+        });
+        connect(input_, &QLineEdit::returnPressed, this, [this] { submitCommand(); });
+        connect(runButton, &QPushButton::clicked, this, [this] { submitCommand(); });
+        connect(clearButton, &QPushButton::clicked, output_, &QPlainTextEdit::clear);
+        connect(restartButton, &QPushButton::clicked, this, [this] { restartShell(); });
+
+        startShell();
+    }
+
+    void restartShell()
+    {
+        if (process_.state() != QProcess::NotRunning) {
+            process_.kill();
+            process_.waitForFinished(800);
+        }
+        startShell();
+    }
+
+private:
+    void append(const QString& text)
+    {
+        output_->moveCursor(QTextCursor::End);
+        output_->insertPlainText(text);
+        output_->moveCursor(QTextCursor::End);
+    }
+
+    void startShell()
+    {
+        QString program;
+        QStringList args;
+#ifdef Q_OS_WIN
+        program = QStandardPaths::findExecutable("powershell.exe");
+        if (!program.isEmpty()) {
+            args << "-NoLogo" << "-NoExit";
+        } else {
+            program = QStandardPaths::findExecutable("cmd.exe");
+        }
+#else
+        program = qEnvironmentVariable("SHELL");
+        if (program.isEmpty()) {
+            program = QStandardPaths::findExecutable("bash");
+        }
+        if (program.isEmpty()) {
+            program = "/bin/bash";
+        }
+        args << "-i";
+#endif
+        append(QString("[启动终端] %1 %2\n").arg(program, args.join(' ')).trimmed() + "\n");
+        process_.start(program, args);
+    }
+
+    void submitCommand()
+    {
+        const QString command = input_->text();
+        if (command.trimmed().isEmpty()) {
+            return;
+        }
+        if (process_.state() == QProcess::NotRunning) {
+            startShell();
+        }
+        append(QString("> %1\n").arg(command));
+        process_.write(command.toLocal8Bit());
+        process_.write("\n");
+        input_->clear();
+    }
+
+    QProcess process_;
+    QPlainTextEdit* output_ = nullptr;
+    QLineEdit* input_ = nullptr;
+};
+
 MainWindow::MainWindow(QWidget* parent)
     : GuiCompat::MainWindowBase(parent)
 {
@@ -1719,7 +1852,7 @@ MainWindow::MainWindow(QWidget* parent)
     createActions();
     createLayout();
     initializeWorkbook();
-    rebuildPalette();
+    rebuildNodeMenus();
     applyUiScale();
 }
 
@@ -1781,6 +1914,12 @@ void MainWindow::createActions()
     connect(quickNodeAction, &QAction::triggered, this, [this] { showQuickNodePalette(); });
     editMenu->addAction(quickNodeAction);
 
+    nodeOperationMenu_ = menuBar()->addMenu("节点操作");
+    commandCenterMenu_ = new QMenu("更多操作", this);
+    commandCenterAction_ = new QAction(lineIcon("more"), "更多操作", this);
+    commandCenterAction_->setData("more");
+    commandCenterAction_->setToolTip("更多操作");
+
     auto* viewMenu = menuBar()->addMenu("视图");
     viewToolbar_ = addToolBar("界面缩放");
     viewToolbar_->setObjectName("viewScaleToolbar");
@@ -1818,12 +1957,6 @@ void MainWindow::createActions()
 
 void MainWindow::createLayout()
 {
-    palette_ = new QListWidget;
-    palette_->setMinimumWidth(180);
-    connect(palette_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        addNodeFromType(item->data(Qt::UserRole).toString(), findAvailableNodePosition(view_->mapToScene(view_->viewport()->rect().center())));
-    });
-
     scene_ = new WorkflowScene(this);
     scene_->setSceneRect(-2000, -2000, 4000, 4000);
     connect(scene_, &QGraphicsScene::selectionChanged, this, [this] {
@@ -1883,6 +2016,7 @@ void MainWindow::createLayout()
     preview_->setObjectName("previewPanel");
     preview_->setAlignment(Qt::AlignCenter);
     static_cast<PreviewLabel*>(preview_)->setSourceImage({});
+
     log_ = new QListWidget;
     log_->setObjectName("logPanel");
     log_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -1890,26 +2024,46 @@ void MainWindow::createLayout()
     connect(log_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
         focusLogNode(item);
     });
+    problemLog_ = new QListWidget;
+    problemLog_->setObjectName("problemPanel");
+    problemLog_->setSelectionMode(QAbstractItemView::SingleSelection);
+    problemLog_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    connect(problemLog_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        focusLogNode(item);
+    });
+    terminalPanel_ = new TerminalPanel(uiScale_);
 
-    auto* bottom = new QWidget;
-    bottom->setObjectName("glassPanel");
-    bottom->setAttribute(Qt::WA_StyledBackground, true);
-    auto* bottomLayout = new QVBoxLayout(bottom);
-    bottomLayout->addWidget(preview_);
-    auto* logHeader = new QWidget;
-    auto* logHeaderLayout = new QHBoxLayout(logHeader);
-    logHeaderLayout->setContentsMargins(0, 0, 0, 0);
-    auto* logTitle = new QLabel("日志");
-    auto* clearLogButton = new QToolButton;
-    clearLogButton->setIcon(lineIcon("clearLog"));
-    clearLogButton->setToolTip("清空日志");
-    clearLogButton->setAutoRaise(true);
-    connect(clearLogButton, &QToolButton::clicked, this, [this] { clearLog(); });
-    logHeaderLayout->addWidget(logTitle);
-    logHeaderLayout->addStretch(1);
-    logHeaderLayout->addWidget(clearLogButton);
-    bottomLayout->addWidget(logHeader);
-    bottomLayout->addWidget(log_);
+    auto makeLogPage = [this](QListWidget* list, const QString& titleText) {
+        auto* page = new QWidget;
+        page->setObjectName("bottomTabPage");
+        page->setAttribute(Qt::WA_StyledBackground, true);
+        auto* layout = new QVBoxLayout(page);
+        layout->setContentsMargins(AppTheme::px(8, uiScale_), AppTheme::px(8, uiScale_),
+                                   AppTheme::px(8, uiScale_), AppTheme::px(8, uiScale_));
+        layout->setSpacing(AppTheme::px(6, uiScale_));
+        auto* header = new QWidget;
+        auto* headerLayout = new QHBoxLayout(header);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
+        auto* title = new QLabel(titleText);
+        auto* clearButton = new QToolButton;
+        clearButton->setIcon(lineIcon("clearLog"));
+        clearButton->setToolTip(QString("清空%1").arg(titleText));
+        clearButton->setAutoRaise(true);
+        connect(clearButton, &QToolButton::clicked, list, &QListWidget::clear);
+        headerLayout->addWidget(title);
+        headerLayout->addStretch(1);
+        headerLayout->addWidget(clearButton);
+        layout->addWidget(header);
+        layout->addWidget(list, 1);
+        return page;
+    };
+
+    bottomTabs_ = new QTabWidget;
+    bottomTabs_->setObjectName("bottomTabs");
+    bottomTabs_->setDocumentMode(true);
+    bottomTabs_->addTab(terminalPanel_, "终端");
+    bottomTabs_->addTab(makeLogPage(problemLog_, "问题"), "问题");
+    bottomTabs_->addTab(makeLogPage(log_, "输出"), "输出");
 
     setDockOptions(QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AnimatedDocks | QMainWindow::GroupedDragging);
     GuiCompat::setMainContent(this, viewContainer);
@@ -1922,17 +2076,18 @@ void MainWindow::createLayout()
         return dock;
     };
 
-    paletteDock_ = makeDock("节点栏", "paletteDock", palette_);
-    bottomDock_ = makeDock("预览与日志", "bottomDock", bottom);
-    paletteDock_->setGraphicsEffect(AppTheme::makeShadow(paletteDock_, uiScale_));
+    previewDock_ = makeDock("预览", "previewDock", preview_);
+    bottomDock_ = makeDock("终端 / 问题 / 输出", "bottomDock", bottomTabs_);
+    previewDock_->setGraphicsEffect(AppTheme::makeShadow(previewDock_, uiScale_));
     bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
 
-    addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
+    addDockWidget(Qt::RightDockWidgetArea, previewDock_);
     addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
-    resizeDocks({paletteDock_, bottomDock_}, {240, 360}, Qt::Horizontal);
+    splitDockWidget(previewDock_, bottomDock_, Qt::Vertical);
+    resizeDocks({previewDock_, bottomDock_}, {260, 340}, Qt::Vertical);
 
     auto* layoutMenu = menuBar()->addMenu("布局");
-    layoutMenu->addAction(paletteDock_->toggleViewAction());
+    layoutMenu->addAction(previewDock_->toggleViewAction());
     layoutMenu->addAction(bottomDock_->toggleViewAction());
     layoutMenu->addSeparator();
 
@@ -1944,10 +2099,10 @@ void MainWindow::createLayout()
         });
         return action;
     };
-    addDockMoveAction("节点栏在左侧", paletteDock_, Qt::LeftDockWidgetArea);
-    addDockMoveAction("节点栏在右侧", paletteDock_, Qt::RightDockWidgetArea);
-    addDockMoveAction("预览日志在底部", bottomDock_, Qt::BottomDockWidgetArea);
-    addDockMoveAction("预览日志在右侧", bottomDock_, Qt::RightDockWidgetArea);
+    addDockMoveAction("预览在右侧", previewDock_, Qt::RightDockWidgetArea);
+    addDockMoveAction("预览在左侧", previewDock_, Qt::LeftDockWidgetArea);
+    addDockMoveAction("底部面板在底部", bottomDock_, Qt::BottomDockWidgetArea);
+    addDockMoveAction("底部面板在右侧", bottomDock_, Qt::RightDockWidgetArea);
     layoutMenu->addSeparator();
     auto* resetAction = layoutMenu->addAction("重置布局");
     connect(resetAction, &QAction::triggered, this, [this] { resetDockLayout(); });
@@ -1960,12 +2115,12 @@ void MainWindow::createLayout()
     layoutToolbar_->setObjectName("layoutToolbar");
     layoutToolbar_->setMovable(false);
     layoutToolbar_->setFloatable(false);
-    paletteDock_->toggleViewAction()->setIcon(lineIcon("dockLeft"));
-    paletteDock_->toggleViewAction()->setData("dockLeft");
-    paletteDock_->toggleViewAction()->setToolTip("显示或隐藏节点栏");
+    previewDock_->toggleViewAction()->setIcon(lineIcon("dockRight"));
+    previewDock_->toggleViewAction()->setData("dockRight");
+    previewDock_->toggleViewAction()->setToolTip("显示或隐藏预览");
     bottomDock_->toggleViewAction()->setIcon(lineIcon("dockBottom"));
     bottomDock_->toggleViewAction()->setData("dockBottom");
-    bottomDock_->toggleViewAction()->setToolTip("显示或隐藏预览与日志");
+    bottomDock_->toggleViewAction()->setToolTip("显示或隐藏底部面板");
     resetAction->setIcon(lineIcon("layoutReset"));
     resetAction->setData("layoutReset");
     resetAction->setToolTip("重置布局");
@@ -1975,7 +2130,7 @@ void MainWindow::createLayout()
     fullScreenAction->setIcon(lineIcon("fullscreen"));
     fullScreenAction->setData("fullscreen");
     fullScreenAction->setToolTip("全屏切换");
-    layoutToolbar_->addAction(paletteDock_->toggleViewAction());
+    layoutToolbar_->addAction(previewDock_->toggleViewAction());
     layoutToolbar_->addAction(bottomDock_->toggleViewAction());
     layoutToolbar_->addAction(resetAction);
     layoutToolbar_->addAction(autoLayoutAction);
@@ -2026,26 +2181,83 @@ void MainWindow::createLayout()
     auto* navigationSpacer = new QWidget;
     navigationSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     navigationToolbar_->addWidget(navigationSpacer);
+    if (commandCenterAction_) {
+        auto* commandButton = new QToolButton;
+        commandButton->setDefaultAction(commandCenterAction_);
+        commandButton->setMenu(commandCenterMenu_);
+        commandButton->setPopupMode(QToolButton::InstantPopup);
+        commandButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        navigationToolbar_->addWidget(commandButton);
+    }
     navigationToolbar_->addAction(returnToParentAction_);
     installDelayedTooltips(navigationToolbar_);
 
     QSettings settings;
     restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
-    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 3) {
+    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 4) {
         restoreState(settings.value("mainWindow/state").toByteArray());
     } else {
         resetDockLayout();
     }
 }
 
-void MainWindow::rebuildPalette()
+void MainWindow::rebuildNodeMenus()
 {
-    palette_->clear();
-    for (const auto& descriptor : NodeFactory::instance().descriptors()) {
-        auto* item = new QListWidgetItem(QString("%1 / %2").arg(descriptor.category, descriptor.displayName));
-        item->setData(Qt::UserRole, descriptor.typeName);
-        palette_->addItem(item);
+    auto populateNodeMenu = [this](QMenu* root) {
+        if (!root) {
+            return;
+        }
+        QMap<QString, QMenu*> categoryMenus;
+        for (const auto& descriptor : NodeFactory::instance().descriptors()) {
+            QMenu* categoryMenu = categoryMenus.value(descriptor.category, nullptr);
+            if (!categoryMenu) {
+                categoryMenu = root->addMenu(descriptor.category);
+                categoryMenus.insert(descriptor.category, categoryMenu);
+            }
+            auto* action = categoryMenu->addAction(descriptor.displayName);
+            action->setToolTip(descriptor.typeName);
+            connect(action, &QAction::triggered, this, [this, typeName = descriptor.typeName] {
+                addNodeFromMenu(typeName);
+            });
+        }
+    };
+
+    if (nodeOperationMenu_) {
+        nodeOperationMenu_->clear();
+        populateNodeMenu(nodeOperationMenu_);
     }
+    if (commandCenterMenu_) {
+        commandCenterMenu_->clear();
+        auto* fileMenu = commandCenterMenu_->addMenu("文件");
+        fileMenu->addAction("新建", this, [this] { newWorkflow(); });
+        fileMenu->addAction("打开", this, [this] { openWorkflow(); });
+        fileMenu->addAction("保存", this, [this] { saveWorkflow(); });
+        fileMenu->addAction("另存为", this, [this] { saveWorkflowAs(); });
+        auto* runMenu = commandCenterMenu_->addMenu("执行");
+        runMenu->addAction("执行 workflow", this, [this] { runWorkflow(); });
+        runMenu->addAction("自动布局", this, [this] { autoLayoutWorkflow(); });
+        auto* nodesMenu = commandCenterMenu_->addMenu("节点操作");
+        populateNodeMenu(nodesMenu);
+        auto* viewMenu = commandCenterMenu_->addMenu("视图");
+        viewMenu->addAction("快捷添加节点", this, [this] { showQuickNodePalette(); });
+        viewMenu->addAction("界面放大", this, [this] { increaseUiScale(); });
+        viewMenu->addAction("界面缩小", this, [this] { decreaseUiScale(); });
+        viewMenu->addAction("重置界面大小", this, [this] { resetUiScale(); });
+        commandCenterMenu_->addSeparator();
+        commandCenterMenu_->addAction("打开设置", this, [this] { showSettingsDialog(); });
+    }
+}
+
+void MainWindow::addNodeFromMenu(const QString& typeName)
+{
+    QPointF targetPosition = view_ ? view_->mapToScene(view_->viewport()->rect().center()) : QPointF{};
+    if (view_) {
+        const QPoint cursorInView = view_->viewport()->mapFromGlobal(QCursor::pos());
+        if (view_->viewport()->rect().contains(cursorInView)) {
+            targetPosition = view_->mapToScene(cursorInView);
+        }
+    }
+    addNodeFromType(typeName, targetPosition);
 }
 
 void MainWindow::addNodeFromType(const QString& typeName, const QPointF& position)
@@ -2323,6 +2535,7 @@ void MainWindow::autoLayoutWorkflow()
         auto from = graph_.node(edge.fromNode);
         auto to = graph_.node(edge.toNode);
         if (!from || !to) {
+            appendProblem("自动布局失败：连线引用了不存在的节点");
             QMessageBox::warning(this, "自动布局失败", "连线引用了不存在的节点，布局未修改。");
             return;
         }
@@ -2330,12 +2543,16 @@ void MainWindow::autoLayoutWorkflow()
         PortInfo toPort;
         if (!findPortInfo(from, edge.fromPort, PortDirection::Output, &fromPort) ||
             !findPortInfo(to, edge.toPort, PortDirection::Input, &toPort)) {
+            appendProblem(QString("自动布局失败：连线端口不存在 %1.%2 -> %3.%4")
+                              .arg(edge.fromNode, edge.fromPort, edge.toNode, edge.toPort));
             QMessageBox::warning(this, "自动布局失败",
                                  QString("连线端口不存在：%1.%2 -> %3.%4，布局未修改。")
                                      .arg(edge.fromNode, edge.fromPort, edge.toNode, edge.toPort));
             return;
         }
         if (!portTypesCompatible(fromPort.type, toPort.type)) {
+            appendProblem(QString("自动布局失败：端口类型不兼容 %1.%2 -> %3.%4")
+                              .arg(edge.fromNode, edge.fromPort, edge.toNode, edge.toPort));
             QMessageBox::warning(this, "自动布局失败",
                                  QString("端口类型不兼容：%1.%2 -> %3.%4，布局未修改。")
                                      .arg(edge.fromNode, edge.fromPort, edge.toNode, edge.toPort));
@@ -2343,6 +2560,7 @@ void MainWindow::autoLayoutWorkflow()
         }
         const QString inputKey = edge.toNode + "." + edge.toPort;
         if (!toPort.allowMultipleConnections && occupiedInputs.contains(inputKey)) {
+            appendProblem(QString("自动布局失败：输入端口被多次连接 %1").arg(inputKey));
             QMessageBox::warning(this, "自动布局失败",
                                  QString("输入端口被多次连接：%1，布局未修改。").arg(inputKey));
             return;
@@ -2353,6 +2571,7 @@ void MainWindow::autoLayoutWorkflow()
     WorkflowValidator validator;
     auto orderResult = validator.topologicalOrder(graph_);
     if (orderResult.isFail()) {
+        appendProblem(QString("自动布局失败：%1").arg(orderResult.error()));
         QMessageBox::warning(this, "自动布局失败", orderResult.error() + "，布局未修改。");
         return;
     }
@@ -2577,6 +2796,7 @@ void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort
     auto valid = validator.validateEdge(graph_, edge);
     if (valid.isFail()) {
         appendLog(valid.error());
+        appendProblem(valid.error(), toNode);
         return;
     }
     graph_.addEdge(edge);
@@ -2699,6 +2919,24 @@ void MainWindow::appendLog(const QString& message, const QString& nodeId)
     }
     log_->addItem(item);
     log_->scrollToBottom();
+}
+
+void MainWindow::appendProblem(const QString& message, const QString& nodeId)
+{
+    if (!problemLog_) {
+        return;
+    }
+    auto* item = new QListWidgetItem(message);
+    item->setData(Qt::UserRole, nodeId);
+    item->setForeground(QBrush(QColor("#f87171")));
+    if (!nodeId.isEmpty()) {
+        item->setToolTip(QString("双击定位节点：%1").arg(nodeId));
+    }
+    problemLog_->addItem(item);
+    problemLog_->scrollToBottom();
+    if (bottomTabs_) {
+        bottomTabs_->setCurrentIndex(1);
+    }
 }
 
 void MainWindow::clearLog()
@@ -2883,6 +3121,7 @@ void MainWindow::runWorkflow()
             appendLog(summary.message, summary.nodeId);
         }
         appendLog(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
+        appendProblem(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
         focusFailedNode(lastResult_.failedNodeId);
         QMessageBox::warning(this, "执行失败", result.error());
         return;
@@ -2921,6 +3160,7 @@ void MainWindow::runLivePreview()
         }
         const QString failedNode = lastResult_.failedNodeId.isEmpty() ? previewNodeId : lastResult_.failedNodeId;
         appendLog(QString("实时预览失败：%1").arg(result.error()), failedNode);
+        appendProblem(QString("实时预览失败：%1").arg(result.error()), failedNode);
         updatePreviewForSelection();
         return;
     }
@@ -2977,6 +3217,7 @@ void MainWindow::exportCanvasImage()
     }
 
     if (!image.save(path, "PNG")) {
+        appendProblem(QString("导出失败：无法写入图片 %1").arg(path));
         QMessageBox::warning(this, "导出失败", QString("无法写入图片：%1").arg(path));
         return;
     }
@@ -3030,6 +3271,7 @@ void MainWindow::openWorkflow()
     WorkflowSerializer serializer;
     auto loaded = serializer.loadFile(path);
     if (loaded.isFail()) {
+        appendProblem(QString("打开失败：%1").arg(loaded.error()));
         QMessageBox::warning(this, "打开失败", loaded.error());
         return;
     }
@@ -3134,6 +3376,7 @@ bool MainWindow::saveWorkflow()
     const WorkflowGraph graphToSave = graphForPersistence();
     auto saved = serializer.saveFile(graphToSave, currentFile_);
     if (saved.isFail()) {
+        appendProblem(QString("保存失败：%1").arg(saved.error()));
         QMessageBox::warning(this, "保存失败", saved.error());
         return false;
     }
@@ -3406,14 +3649,15 @@ void MainWindow::updatePreviewForSelection()
 
 void MainWindow::resetDockLayout()
 {
-    if (!paletteDock_ || !bottomDock_) {
+    if (!previewDock_ || !bottomDock_) {
         return;
     }
-    paletteDock_->setFloating(false);
+    previewDock_->setFloating(false);
     bottomDock_->setFloating(false);
-    addDockWidget(Qt::LeftDockWidgetArea, paletteDock_);
+    addDockWidget(Qt::RightDockWidgetArea, previewDock_);
     addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
-    paletteDock_->show();
+    splitDockWidget(previewDock_, bottomDock_, Qt::Vertical);
+    previewDock_->show();
     bottomDock_->show();
     if (miniMap_) {
         miniMap_->show();
@@ -3421,7 +3665,7 @@ void MainWindow::resetDockLayout()
         settings.setValue("mainWindow/showMiniMap", true);
     }
     const auto metrics = AppTheme::metrics(uiScale_);
-    resizeDocks({paletteDock_, bottomDock_}, {metrics.paletteMinWidth, metrics.propertyMinWidth}, Qt::Horizontal);
+    resizeDocks({previewDock_, bottomDock_}, {metrics.previewMinHeight, metrics.logMaxHeight + metrics.previewMinHeight}, Qt::Vertical);
 }
 
 void MainWindow::toggleFullScreenMode()
@@ -3488,12 +3732,12 @@ void MainWindow::showSettingsDialog()
     });
     form->addRow("画布缩放", canvasRow);
 
-    auto* paletteVisible = new GuiCompat::CheckBox;
-    paletteVisible->setChecked(!paletteDock_ || paletteDock_->isVisible());
-    form->addRow("显示节点栏", paletteVisible);
+    auto* previewVisible = new GuiCompat::CheckBox;
+    previewVisible->setChecked(!previewDock_ || previewDock_->isVisible());
+    form->addRow("显示预览", previewVisible);
     auto* bottomVisible = new GuiCompat::CheckBox;
     bottomVisible->setChecked(!bottomDock_ || bottomDock_->isVisible());
-    form->addRow("显示预览与日志", bottomVisible);
+    form->addRow("显示底部面板", bottomVisible);
     auto* miniMapVisible = new GuiCompat::CheckBox;
     miniMapVisible->setChecked(!miniMap_ || miniMap_->isVisible());
     form->addRow("显示小地图", miniMapVisible);
@@ -3513,9 +3757,9 @@ void MainWindow::showSettingsDialog()
     connect(resetScaleButton, &QPushButton::clicked, this, [uiScaleSpin] {
         uiScaleSpin->setValue(100.0);
     });
-    connect(resetLayoutButton, &QPushButton::clicked, this, [this, paletteVisible, bottomVisible, miniMapVisible] {
+    connect(resetLayoutButton, &QPushButton::clicked, this, [this, previewVisible, bottomVisible, miniMapVisible] {
         resetDockLayout();
-        paletteVisible->setChecked(true);
+        previewVisible->setChecked(true);
         bottomVisible->setChecked(true);
         miniMapVisible->setChecked(true);
     });
@@ -3533,7 +3777,7 @@ void MainWindow::showSettingsDialog()
         if (!qFuzzyCompare(requestedZoom, zoomScale_)) {
             applyZoomFactor(requestedZoom / zoomScale_);
         }
-        if (paletteDock_) paletteDock_->setVisible(paletteVisible->isChecked());
+        if (previewDock_) previewDock_->setVisible(previewVisible->isChecked());
         if (bottomDock_) bottomDock_->setVisible(bottomVisible->isChecked());
         if (miniMap_) miniMap_->setVisible(miniMapVisible->isChecked());
         settings.setValue("mainWindow/showMiniMap", miniMapVisible->isChecked());
@@ -3667,21 +3911,17 @@ void MainWindow::applyUiScale()
         miniMap_->update();
     }
 
-    if (palette_) {
-        palette_->setMinimumWidth(metrics.paletteMinWidth);
-        QFont paletteFont = palette_->font();
-        paletteFont.setPointSizeF(std::max(11.5, 13.0 * uiScale_));
-        paletteFont.setBold(true);
-        palette_->setFont(paletteFont);
-    }
     if (preview_) {
         preview_->setMinimumHeight(metrics.previewMinHeight);
     }
     if (log_) {
-        log_->setMaximumHeight(metrics.logMaxHeight);
+        log_->setMinimumHeight(metrics.logMaxHeight);
     }
-    if (paletteDock_) {
-        paletteDock_->setGraphicsEffect(AppTheme::makeShadow(paletteDock_, uiScale_));
+    if (problemLog_) {
+        problemLog_->setMinimumHeight(metrics.logMaxHeight);
+    }
+    if (previewDock_) {
+        previewDock_->setGraphicsEffect(AppTheme::makeShadow(previewDock_, uiScale_));
     }
     if (bottomDock_) {
         bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
@@ -3710,6 +3950,6 @@ void MainWindow::closeEvent(QCloseEvent* event)
     settings.setValue("mainWindow/state", saveState());
     settings.setValue("mainWindow/uiScale", uiScale_);
     settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
-    settings.setValue("mainWindow/layoutVersion", 3);
+    settings.setValue("mainWindow/layoutVersion", 4);
     QMainWindow::closeEvent(event);
 }

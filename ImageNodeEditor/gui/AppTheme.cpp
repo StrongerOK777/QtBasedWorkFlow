@@ -78,21 +78,21 @@ Colors colors()
         return {};
     }
     Colors c;
-    c.canvasTop = QColor("#111827");
-    c.canvasBottom = QColor("#0b1220");
-    c.canvasDot = QColor(148, 163, 184, 36);
-    c.nodeTop = QColor(28, 42, 62, 148);
-    c.nodeBottom = QColor(11, 18, 32, 132);
-    c.nodeBorder = QColor(138, 174, 220, 118);
-    c.nodeSelected = QColor("#60a5fa");
+    c.canvasTop = QColor("#191A1B");
+    c.canvasBottom = QColor("#121314");
+    c.canvasDot = QColor(220, 220, 220, 28);
+    c.nodeTop = QColor(46, 46, 47, 148);
+    c.nodeBottom = QColor(18, 19, 20, 132);
+    c.nodeBorder = QColor(214, 214, 214, 96);
+    c.nodeSelected = QColor("#f2f2f2");
     c.nodeShadow = QColor(0, 0, 0, 90);
     c.textPrimary = QColor("#e5edf7");
-    c.textSecondary = QColor("#aab7c8");
+    c.textSecondary = QColor("#b8b8b8");
     c.inputPort = QColor("#30d158");
-    c.outputPort = QColor("#60a5fa");
-    c.edge = QColor("#8fb8e8");
+    c.outputPort = QColor("#d2d2d2");
+    c.edge = QColor("#a8a8a8");
     c.edgeSelected = QColor("#ffb340");
-    c.pendingEdge = QColor("#60a5fa");
+    c.pendingEdge = QColor("#eeeeee");
     return c;
 }
 
@@ -216,6 +216,24 @@ QString styleSheet(double uiScale)
         QTabBar#workbookTabs::tab:hover {
             background: rgba(10, 132, 255, 28);
         }
+        QTabWidget::pane {
+            border: %1px solid rgba(126, 154, 192, 86);
+            border-radius: %4px;
+            background: rgba(255, 255, 255, 128);
+        }
+        QTabBar::tab {
+            min-height: %12px;
+            padding: 0px %5px;
+            margin-right: %1px;
+            border-top-left-radius: %4px;
+            border-top-right-radius: %4px;
+            background: rgba(255, 255, 255, 128);
+            color: #1f2937;
+        }
+        QTabBar::tab:selected {
+            background: rgba(10, 132, 255, 42);
+            color: #0b3d72;
+        }
         QToolButton:hover, QPushButton:hover {
             border-color: rgba(10, 132, 255, 148);
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -263,11 +281,11 @@ QString styleSheet(double uiScale)
             border-radius: %11px;
             color: #526174;
         }
-        QListWidget#logPanel, QTextEdit#logPanel {
+        QListWidget#logPanel, QListWidget#problemPanel, QTextEdit#logPanel, QPlainTextEdit#terminalOutput {
             background: rgba(255, 255, 255, 188);
             border-radius: %11px;
         }
-        QListWidget, QTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+        QListWidget, QTextEdit, QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
             border: %1px solid rgba(126, 154, 192, 94);
             border-radius: %4px;
             background: rgba(255, 255, 255, 214);
@@ -295,7 +313,7 @@ QString styleSheet(double uiScale)
             min-height: %6px;
             padding: %2px %5px;
         }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus {
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
             border-color: rgba(10, 132, 255, 170);
             background: rgba(255, 255, 255, 238);
         }
@@ -339,35 +357,45 @@ QString styleSheet(double uiScale)
         .arg(pxValue(30, uiScale))
         .arg(toolbarPad);
     if (isDarkTheme()) {
-        sheet.replace("#fbfdff", "#111827");
-        sheet.replace("#f2f7ff", "#101827");
-        sheet.replace("#e8f1ff", "#0b1220");
-        sheet.replace("#edf4ff", "#0b1220");
-        sheet.replace("#1f2937", "#e5edf7");
-        sheet.replace("#263446", "#dbe7f5");
-        sheet.replace("#233044", "#dbe7f5");
-        sheet.replace("#526174", "#aab7c8");
-        sheet.replace("#0b3d72", "#cde5ff");
-        sheet.replace("rgba(255, 255, 255, 212)", "rgba(20, 28, 42, 226)");
-        sheet.replace("rgba(255, 255, 255, 238)", "rgba(22, 31, 46, 245)");
-        sheet.replace("rgba(255, 255, 255, 178)", "rgba(18, 27, 42, 220)");
-        sheet.replace("rgba(255, 255, 255, 196)", "rgba(24, 34, 50, 232)");
-        sheet.replace("rgba(255, 255, 255, 174)", "rgba(18, 27, 42, 224)");
-        sheet.replace("rgba(255, 255, 255, 188)", "rgba(19, 28, 43, 224)");
-        sheet.replace("rgba(243, 247, 255, 232)", "rgba(17, 24, 39, 245)");
-        sheet.replace("rgba(255, 255, 255, 214)", "rgba(25, 36, 54, 238)");
-        sheet.replace("rgba(255, 255, 255, 220)", "rgba(25, 36, 54, 235)");
-        sheet.replace("rgba(255, 255, 255, 180)", "rgba(76, 96, 128, 100)");
-        sheet.replace("rgba(255, 255, 255, 168)", "rgba(76, 96, 128, 88)");
-        sheet.replace("rgba(255, 255, 255, 128)", "rgba(28, 40, 60, 190)");
-        sheet.replace("rgba(255,255,255,238)", "rgba(35,45,63,238)");
-        sheet.replace("rgba(255,255,255,250)", "rgba(44,57,78,245)");
-        sheet.replace("rgba(228,238,252,220)", "rgba(24,34,50,232)");
-        sheet.replace("rgba(218,235,255,232)", "rgba(36,54,78,238)");
-        sheet.replace("rgba(232, 241, 255, 210)", "rgba(16, 24, 37, 224)");
-        sheet.replace("rgba(190, 217, 249, 232)", "rgba(42, 61, 88, 235)");
-        sheet.replace("rgba(126, 154, 192, 34)", "rgba(43, 57, 78, 180)");
-        sheet.replace("rgba(126, 154, 192, 74)", "rgba(76, 96, 128, 118)");
+        sheet.replace("#fbfdff", "#2E2E2F");
+        sheet.replace("#f2f7ff", "#191A1B");
+        sheet.replace("#e8f1ff", "#121314");
+        sheet.replace("#edf4ff", "#121314");
+        sheet.replace("#1f2937", "#eeeeee");
+        sheet.replace("#263446", "#dedede");
+        sheet.replace("#233044", "#dedede");
+        sheet.replace("#526174", "#b8b8b8");
+        sheet.replace("#0b3d72", "#f2f2f2");
+        sheet.replace("rgba(255, 255, 255, 212)", "rgba(46, 46, 47, 226)");
+        sheet.replace("rgba(255, 255, 255, 238)", "rgba(46, 46, 47, 245)");
+        sheet.replace("rgba(255, 255, 255, 178)", "rgba(25, 26, 27, 226)");
+        sheet.replace("rgba(255, 255, 255, 196)", "rgba(46, 46, 47, 232)");
+        sheet.replace("rgba(255, 255, 255, 174)", "rgba(25, 26, 27, 224)");
+        sheet.replace("rgba(255, 255, 255, 188)", "rgba(25, 26, 27, 224)");
+        sheet.replace("rgba(243, 247, 255, 232)", "rgba(18, 19, 20, 245)");
+        sheet.replace("rgba(255, 255, 255, 214)", "rgba(46, 46, 47, 238)");
+        sheet.replace("rgba(255, 255, 255, 220)", "rgba(46, 46, 47, 235)");
+        sheet.replace("rgba(255, 255, 255, 180)", "rgba(160, 160, 160, 86)");
+        sheet.replace("rgba(255, 255, 255, 168)", "rgba(160, 160, 160, 74)");
+        sheet.replace("rgba(255, 255, 255, 128)", "rgba(46, 46, 47, 190)");
+        sheet.replace("rgba(255,255,255,238)", "rgba(46,46,47,238)");
+        sheet.replace("rgba(255,255,255,250)", "rgba(58,58,59,245)");
+        sheet.replace("rgba(228,238,252,220)", "rgba(25,26,27,232)");
+        sheet.replace("rgba(218,235,255,232)", "rgba(58,58,59,238)");
+        sheet.replace("rgba(232, 241, 255, 210)", "rgba(25, 26, 27, 224)");
+        sheet.replace("rgba(190, 217, 249, 232)", "rgba(70, 70, 71, 235)");
+        sheet.replace("rgba(126, 154, 192, 34)", "rgba(85, 85, 86, 160)");
+        sheet.replace("rgba(126, 154, 192, 74)", "rgba(110, 110, 111, 118)");
+        sheet.replace("rgba(10, 132, 255, 28)", "rgba(238, 238, 238, 28)");
+        sheet.replace("rgba(10, 132, 255, 34)", "rgba(238, 238, 238, 34)");
+        sheet.replace("rgba(10, 132, 255, 42)", "rgba(238, 238, 238, 42)");
+        sheet.replace("rgba(10, 132, 255, 52)", "rgba(238, 238, 238, 52)");
+        sheet.replace("rgba(10, 132, 255, 56)", "rgba(238, 238, 238, 56)");
+        sheet.replace("rgba(10, 132, 255, 58)", "rgba(238, 238, 238, 58)");
+        sheet.replace("rgba(10, 132, 255, 96)", "rgba(238, 238, 238, 96)");
+        sheet.replace("rgba(10, 132, 255, 118)", "rgba(238, 238, 238, 118)");
+        sheet.replace("rgba(10, 132, 255, 148)", "rgba(238, 238, 238, 148)");
+        sheet.replace("rgba(10, 132, 255, 170)", "rgba(238, 238, 238, 170)");
     }
     return sheet;
 }
@@ -433,20 +461,20 @@ void apply(QApplication& app, double uiScale)
 
     QPalette palette = app.palette();
     if (isDarkTheme()) {
-        palette.setColor(QPalette::Window, QColor("#111827"));
-        palette.setColor(QPalette::WindowText, QColor("#e5edf7"));
-        palette.setColor(QPalette::Button, QColor("#192436"));
-        palette.setColor(QPalette::Base, QColor("#172033"));
-        palette.setColor(QPalette::AlternateBase, QColor("#101827"));
-        palette.setColor(QPalette::Text, QColor("#e5edf7"));
-        palette.setColor(QPalette::ButtonText, QColor("#e5edf7"));
+        palette.setColor(QPalette::Window, QColor("#121314"));
+        palette.setColor(QPalette::WindowText, QColor("#eeeeee"));
+        palette.setColor(QPalette::Button, QColor("#2E2E2F"));
+        palette.setColor(QPalette::Base, QColor("#191A1B"));
+        palette.setColor(QPalette::AlternateBase, QColor("#2E2E2F"));
+        palette.setColor(QPalette::Text, QColor("#eeeeee"));
+        palette.setColor(QPalette::ButtonText, QColor("#eeeeee"));
         palette.setColor(QPalette::BrightText, QColor("#ffffff"));
-        palette.setColor(QPalette::Highlight, QColor("#60a5fa"));
-        palette.setColor(QPalette::HighlightedText, QColor("#08111f"));
-        palette.setColor(QPalette::ToolTipBase, QColor("#1f2a3d"));
-        palette.setColor(QPalette::ToolTipText, QColor("#e5edf7"));
+        palette.setColor(QPalette::Highlight, QColor("#d6d6d6"));
+        palette.setColor(QPalette::HighlightedText, QColor("#121314"));
+        palette.setColor(QPalette::ToolTipBase, QColor("#2E2E2F"));
+        palette.setColor(QPalette::ToolTipText, QColor("#eeeeee"));
 #if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
-        palette.setColor(QPalette::PlaceholderText, QColor("#8fa1b8"));
+        palette.setColor(QPalette::PlaceholderText, QColor("#a8a8a8"));
 #endif
     } else {
         palette.setColor(QPalette::Window, QColor("#f3f7ff"));
