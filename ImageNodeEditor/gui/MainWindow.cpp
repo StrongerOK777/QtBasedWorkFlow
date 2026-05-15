@@ -37,6 +37,7 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsTextItem>
 #include <QGraphicsView>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QGuiApplication>
@@ -99,17 +100,17 @@ QColor portColor(PortType type)
     switch (type) {
     case PortType::ImageRGBA:
     case PortType::ImageGray:
-        return QColor("#0a84ff");
+        return QColor("#404040");
     case PortType::Number:
-        return QColor("#34c759");
+        return QColor("#606060");
     case PortType::Text:
-        return QColor("#af52de");
+        return QColor("#808080");
     case PortType::Mask:
-        return QColor("#ff9f0a");
+        return QColor("#a0a0a0");
     case PortType::ImageList:
-        return QColor("#14c9c9");
+        return QColor("#505050");
     }
-    return QColor("#8e9aab");
+    return QColor("#707070");
 }
 
 QString portDirectionName(PortDirection direction)
@@ -117,10 +118,10 @@ QString portDirectionName(PortDirection direction)
     return direction == PortDirection::Input ? "输入" : "输出";
 }
 
-QPainterPath roundedRectPath(const QRectF& rect, qreal radius)
+QPainterPath rectPath(const QRectF& rect)
 {
     QPainterPath path;
-    path.addRoundedRect(rect, radius, radius);
+    path.addRect(rect);
     return path;
 }
 
@@ -228,15 +229,15 @@ QIcon lineIcon(const QString& name)
     pix.fill(Qt::transparent);
     QPainter painter(&pix);
     painter.setRenderHint(QPainter::Antialiasing);
-    const QColor ink = AppTheme::isDarkTheme() ? QColor("#dbe7f5") : QColor("#23405f");
-    const QColor accent = AppTheme::isDarkTheme() ? QColor("#e6e6e6") : QColor("#0a84ff");
-    const QColor warm("#ff9f0a");
+    const QColor ink = AppTheme::isDarkTheme() ? QColor("#e0e0e0") : QColor("#303030");
+    const QColor accent = AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#505050");
+    const QColor warm = AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#707070");
     QPen pen(ink, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
 
     auto page = [&] {
-        painter.drawRoundedRect(QRectF(18, 10, 28, 42), 4, 4);
+        painter.drawRect(QRectF(18, 10, 28, 42));
         painter.drawLine(QPointF(34, 10), QPointF(46, 22));
         painter.drawLine(QPointF(34, 10), QPointF(34, 22));
         painter.drawLine(QPointF(34, 22), QPointF(46, 22));
@@ -269,18 +270,18 @@ QIcon lineIcon(const QString& name)
         painter.drawLine(QPointF(24, 35), QPointF(32, 27));
         painter.drawLine(QPointF(40, 35), QPointF(32, 27));
     } else if (name == "save") {
-        painter.drawRoundedRect(QRectF(13, 11, 38, 42), 5, 5);
+        painter.drawRect(QRectF(13, 11, 38, 42));
         painter.drawRect(QRectF(21, 11, 22, 14));
-        painter.drawRoundedRect(QRectF(22, 35, 20, 14), 3, 3);
+        painter.drawRect(QRectF(22, 35, 20, 14));
     } else if (name == "saveAs") {
-        painter.drawRoundedRect(QRectF(12, 12, 34, 40), 5, 5);
+        painter.drawRect(QRectF(12, 12, 34, 40));
         painter.drawRect(QRectF(20, 12, 18, 12));
         painter.setPen(QPen(warm, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.drawLine(QPointF(40, 41), QPointF(54, 27));
         painter.drawLine(QPointF(47, 27), QPointF(54, 27));
         painter.drawLine(QPointF(54, 27), QPointF(54, 34));
     } else if (name == "run") {
-        painter.setBrush(accent);
+        painter.setBrush(QColor("#34c759"));
         painter.setPen(Qt::NoPen);
         QPainterPath play;
         play.moveTo(23, 14);
@@ -289,13 +290,28 @@ QIcon lineIcon(const QString& name)
         play.closeSubpath();
         painter.drawPath(play);
     } else if (name == "exportCanvas") {
-        painter.drawRoundedRect(QRectF(12, 14, 40, 32), 4, 4);
+        painter.drawRect(QRectF(12, 14, 40, 32));
         painter.drawLine(QPointF(20, 24), QPointF(44, 24));
         painter.drawLine(QPointF(20, 32), QPointF(36, 32));
         painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.drawLine(QPointF(32, 49), QPointF(32, 32));
         painter.drawLine(QPointF(24, 41), QPointF(32, 49));
         painter.drawLine(QPointF(40, 41), QPointF(32, 49));
+    } else if (name == "exportWorkflow") {
+        page();
+        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(32, 48), QPointF(32, 29));
+        painter.drawLine(QPointF(24, 40), QPointF(32, 48));
+        painter.drawLine(QPointF(40, 40), QPointF(32, 48));
+    } else if (name == "exportPreview") {
+        painter.drawRect(QRectF(12, 14, 40, 30));
+        painter.drawLine(QPointF(18, 38), QPointF(28, 27));
+        painter.drawLine(QPointF(28, 27), QPointF(35, 34));
+        painter.drawLine(QPointF(35, 34), QPointF(44, 23));
+        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawLine(QPointF(32, 51), QPointF(32, 34));
+        painter.drawLine(QPointF(24, 43), QPointF(32, 51));
+        painter.drawLine(QPointF(40, 43), QPointF(32, 51));
     } else if (name == "zoomIn" || name == "zoomOut") {
         painter.drawEllipse(QPointF(28, 28), 16, 16);
         painter.drawLine(QPointF(40, 40), QPointF(52, 52));
@@ -311,19 +327,19 @@ QIcon lineIcon(const QString& name)
         painter.setFont(QFont("Arial", 14, QFont::Bold));
         painter.drawText(QRectF(18, 24, 28, 18), Qt::AlignCenter, "1:1");
     } else if (name == "dockLeft") {
-        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(12, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
+        painter.drawRect(QRectF(12, 12, 40, 40));
+        painter.fillRect(QRectF(12, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
         painter.drawLine(QPointF(25, 12), QPointF(25, 52));
     } else if (name == "dockRight") {
-        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(39, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
+        painter.drawRect(QRectF(12, 12, 40, 40));
+        painter.fillRect(QRectF(39, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
         painter.drawLine(QPointF(39, 12), QPointF(39, 52));
     } else if (name == "dockBottom") {
-        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
-        painter.fillRect(QRectF(12, 39, 40, 13), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(10, 132, 255, 70));
+        painter.drawRect(QRectF(12, 12, 40, 40));
+        painter.fillRect(QRectF(12, 39, 40, 13), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
         painter.drawLine(QPointF(12, 39), QPointF(52, 39));
     } else if (name == "layoutReset") {
-        painter.drawRoundedRect(QRectF(12, 12, 40, 40), 4, 4);
+        painter.drawRect(QRectF(12, 12, 40, 40));
         painter.drawLine(QPointF(25, 12), QPointF(25, 52));
         painter.drawLine(QPointF(12, 39), QPointF(52, 39));
         painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -347,13 +363,18 @@ QIcon lineIcon(const QString& name)
             painter.drawLine(inner, outer);
         }
     } else if (name == "clearLog") {
-        painter.drawRoundedRect(QRectF(16, 14, 32, 38), 4, 4);
+        painter.drawRect(QRectF(16, 14, 32, 38));
         painter.drawLine(QPointF(22, 24), QPointF(42, 24));
         painter.drawLine(QPointF(22, 32), QPointF(38, 32));
         painter.drawLine(QPointF(22, 40), QPointF(34, 40));
         painter.setPen(QPen(warm, 4.8, Qt::SolidLine, Qt::RoundCap));
         painter.drawLine(QPointF(44, 14), QPointF(54, 24));
         painter.drawLine(QPointF(54, 14), QPointF(44, 24));
+    } else if (name == "back" || name == "forward") {
+        const qreal start = name == "back" ? 42 : 22;
+        const qreal tip = name == "back" ? 20 : 44;
+        painter.drawLine(QPointF(start, 18), QPointF(tip, 32));
+        painter.drawLine(QPointF(tip, 32), QPointF(start, 46));
     } else if (name == "more") {
         painter.setBrush(ink);
         painter.setPen(Qt::NoPen);
@@ -460,11 +481,11 @@ protected:
         Q_UNUSED(widget);
         QColor base = portColor(port_.type);
         if (feedback_ == PortConnectionFeedback::Blocked) {
-            base = QColor("#ff3b30");
+            base = AppTheme::isDarkTheme() ? QColor("#707070") : QColor("#404040");
         } else if (feedback_ == PortConnectionFeedback::Snapped) {
-            base = QColor("#ff9f0a");
+            base = AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020");
         } else if (feedback_ == PortConnectionFeedback::Connectable) {
-            base = QColor("#34c759");
+            base = AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#808080");
         }
         const QRectF r = rect();
         const qreal halo = feedback_ == PortConnectionFeedback::Snapped ? 5.5 * uiScale_ :
@@ -638,11 +659,12 @@ protected:
         const QRectF body = rect();
         const QRectF shadowRect = body.translated(0, pressed_ ? 2 * uiScale_ : 5 * uiScale_);
         const QColor stateColor = [&] {
+            const bool dark = AppTheme::isDarkTheme();
             switch (runState_) {
-            case NodeExecutionState::Running: return QColor("#f5a623");
-            case NodeExecutionState::Succeeded: return QColor("#34c759");
-            case NodeExecutionState::Failed: return QColor("#ff3b30");
-            case NodeExecutionState::CacheHit: return QColor("#7c3aed");
+            case NodeExecutionState::Running: return dark ? QColor("#d0d0d0") : QColor("#707070");
+            case NodeExecutionState::Succeeded: return dark ? QColor("#b8b8b8") : QColor("#505050");
+            case NodeExecutionState::Failed: return QColor("#ff453a");
+            case NodeExecutionState::CacheHit: return QColor("#909090");
             case NodeExecutionState::NotExecuted: return colors.nodeBorder;
             }
             return colors.nodeBorder;
@@ -651,10 +673,10 @@ protected:
         painter->setRenderHint(QPainter::Antialiasing);
         painter->setPen(Qt::NoPen);
         painter->setBrush(colors.nodeShadow);
-        painter->drawPath(roundedRectPath(shadowRect.adjusted(3 * uiScale_, 3 * uiScale_, -3 * uiScale_, -1 * uiScale_), metrics.cornerRadius));
+        painter->drawPath(rectPath(shadowRect.adjusted(3 * uiScale_, 3 * uiScale_, -3 * uiScale_, -1 * uiScale_)));
 
         painter->save();
-        painter->setClipPath(roundedRectPath(body, metrics.cornerRadius));
+        painter->setClipPath(rectPath(body));
         const QRectF sampleSceneRect = mapRectToScene(body).adjusted(-12 * uiScale_, -12 * uiScale_, 12 * uiScale_, 12 * uiScale_);
         const QSize backdropSize = body.size().toSize() + QSize(AppTheme::px(24, uiScale_), AppTheme::px(24, uiScale_));
         const bool dark = AppTheme::isDarkTheme();
@@ -680,13 +702,13 @@ protected:
             glass.setColorAt(1, QColor(18, 19, 20, hovered_ ? 150 : 132));
         } else {
             glass.setColorAt(0, QColor(255, 255, 255, hovered_ ? 150 : 128));
-            glass.setColorAt(0.55, QColor(226, 239, 255, hovered_ ? 100 : 82));
-            glass.setColorAt(1, QColor(190, 214, 245, hovered_ ? 126 : 104));
+            glass.setColorAt(0.55, QColor(238, 238, 238, hovered_ ? 100 : 82));
+            glass.setColorAt(1, QColor(214, 214, 214, hovered_ ? 126 : 104));
         }
         painter->setBrush(glass);
         painter->setPen(QPen(isSelected() ? colors.nodeSelected : stateColor,
                              (isSelected() || runState_ != NodeExecutionState::NotExecuted) ? 2.3 * uiScale_ : 1.1 * uiScale_));
-        painter->drawPath(roundedRectPath(body, metrics.cornerRadius));
+        painter->drawPath(rectPath(body));
 
         QRectF header = body;
         header.setHeight(metrics.headerHeight);
@@ -695,17 +717,17 @@ protected:
         highlight.setColorAt(1, QColor(255, 255, 255, AppTheme::isDarkTheme() ? 16 : 34));
         painter->setPen(Qt::NoPen);
         painter->setBrush(highlight);
-        painter->drawPath(roundedRectPath(header, metrics.cornerRadius));
+        painter->drawPath(rectPath(header));
 
         painter->setPen(QPen(QColor(255, 255, 255, 150), 1));
-        painter->drawLine(body.left() + metrics.cornerRadius, body.top() + 1, body.right() - metrics.cornerRadius, body.top() + 1);
+        painter->drawLine(body.left(), body.top() + 1, body.right(), body.top() + 1);
 
         if (runState_ != NodeExecutionState::NotExecuted) {
             const QRectF strip(body.left() + 8 * uiScale_, body.bottom() - 6 * uiScale_,
                                body.width() - 16 * uiScale_, 3 * uiScale_);
             painter->setPen(Qt::NoPen);
             painter->setBrush(QColor(stateColor.red(), stateColor.green(), stateColor.blue(), 110));
-            painter->drawRoundedRect(strip, 1.5 * uiScale_, 1.5 * uiScale_);
+            painter->drawRect(strip);
             if (runState_ == NodeExecutionState::Running) {
                 const qreal segmentWidth = std::max<qreal>(18.0 * uiScale_, strip.width() * 0.22);
                 const qreal travel = strip.width() + segmentWidth;
@@ -713,10 +735,10 @@ protected:
                 QRectF segment(strip.left() + offset, strip.top(), segmentWidth, strip.height());
                 segment = segment.intersected(strip);
                 painter->setBrush(stateColor.lighter(135));
-                painter->drawRoundedRect(segment, 1.5 * uiScale_, 1.5 * uiScale_);
+                painter->drawRect(segment);
             } else {
                 painter->setBrush(stateColor);
-                painter->drawRoundedRect(strip, 1.5 * uiScale_, 1.5 * uiScale_);
+                painter->drawRect(strip);
             }
         }
 
@@ -733,7 +755,7 @@ protected:
                                17 * uiScale_);
             painter->setPen(Qt::NoPen);
             painter->setBrush(QColor(stateColor.red(), stateColor.green(), stateColor.blue(), AppTheme::isDarkTheme() ? 88 : 54));
-            painter->drawRoundedRect(badge, 5 * uiScale_, 5 * uiScale_);
+            painter->drawRect(badge);
             painter->setPen(stateColor.darker(AppTheme::isDarkTheme() ? 80 : 120));
             painter->drawText(badge, Qt::AlignCenter, text);
         }
@@ -839,9 +861,9 @@ private:
         panel->setObjectName("nodeInlineParameters");
         panel->setStyleSheet(QString(R"(
             QWidget#nodeInlineParameters {
-                background: rgba(6, 12, 22, 68);
+                background: rgba(0, 0, 0, 68);
                 border: 1px solid rgba(255, 255, 255, 42);
-                border-radius: %1px;
+                border-radius: 0px;
             }
             QLabel {
                 color: %2;
@@ -919,6 +941,11 @@ public:
     }
 
     int edgeIndex() const { return edgeIndex_; }
+    void setFailureRelated(bool failureRelated)
+    {
+        failureRelated_ = failureRelated;
+        update();
+    }
 
     QPainterPath shape() const override
     {
@@ -933,12 +960,14 @@ public:
         Q_UNUSED(option);
         Q_UNUSED(widget);
         const auto colors = AppTheme::colors();
-        const QColor glowColor = AppTheme::isDarkTheme() ? QColor(238, 238, 238, isSelected() ? 42 : 14)
-                                                         : QColor(10, 132, 255, isSelected() ? 54 : 18);
+        const QColor lineColor = failureRelated_ ? QColor("#ff453a") : (isSelected() ? colors.edgeSelected : colors.edge);
+        const QColor glowColor = failureRelated_ ? QColor(255, 69, 58, isSelected() ? 72 : 42)
+                                                 : AppTheme::isDarkTheme() ? QColor(238, 238, 238, isSelected() ? 42 : 14)
+                                                                           : QColor(64, 64, 64, isSelected() ? 54 : 18);
         QPen glow(glowColor, isSelected() ? 8 * uiScale_ : 5 * uiScale_);
         glow.setCapStyle(Qt::RoundCap);
         glow.setJoinStyle(Qt::RoundJoin);
-        QPen currentPen(isSelected() ? colors.edgeSelected : colors.edge, isSelected() ? 3.2 * uiScale_ : 2.1 * uiScale_);
+        QPen currentPen(lineColor, isSelected() ? 3.2 * uiScale_ : 2.1 * uiScale_);
         currentPen.setCapStyle(Qt::RoundCap);
         currentPen.setJoinStyle(Qt::RoundJoin);
         painter->setRenderHint(QPainter::Antialiasing);
@@ -961,6 +990,7 @@ private:
 
     int edgeIndex_ = -1;
     double uiScale_ = 1.0;
+    bool failureRelated_ = false;
 };
 
 class ImagePopupWindow final : public QWidget {
@@ -1081,9 +1111,9 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
         const QRectF box = rect().adjusted(1, 1, -1, -1);
-        painter.setPen(QPen(QColor(126, 154, 192, 120), 1));
+        painter.setPen(QPen(QColor(128, 128, 128, 120), 1));
         painter.setBrush(QColor(255, 255, 255, AppTheme::isDarkTheme() ? 36 : 190));
-        painter.drawRoundedRect(box, 8, 8);
+        painter.drawRect(box);
 
         const QRectF world = worldRect();
         if (!world.isValid() || world.isEmpty()) {
@@ -1091,15 +1121,15 @@ protected:
         }
 
         painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor("#0a84ff"));
+        painter.setBrush(AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#505050"));
         for (const auto& record : graph_->nodes()) {
             QRectF nodeRect(record.position, QSizeF(AppTheme::nodeMetrics(scale()).width, AppTheme::nodeMetrics(scale()).headerHeight + 78 * scale()));
-            painter.drawRoundedRect(mapWorldRect(nodeRect, world), 2, 2);
+            painter.drawRect(mapWorldRect(nodeRect, world));
         }
 
         painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(QColor("#ff9f0a"), 1.6));
-        painter.drawRoundedRect(mapWorldRect(viewSceneRect(), world), 2, 2);
+        painter.setPen(QPen(AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020"), 1.6));
+        painter.drawRect(mapWorldRect(viewSceneRect(), world));
     }
 
     void mousePressEvent(QMouseEvent* event) override
@@ -1485,8 +1515,8 @@ private:
                                 ? snappedPort_->mapToScene(snappedPort_->rect().center())
                                 : cursorPosition;
         pendingLine_->setPath(pendingPath(pendingStart_, end));
-        QPen pen(snappedPort_ && snappedConnectable_ ? QColor("#34c759") :
-                     blockedNearPort_ ? QColor("#ff3b30") : AppTheme::colors().pendingEdge,
+        QPen pen(snappedPort_ && snappedConnectable_ ? (AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020")) :
+                     blockedNearPort_ ? (AppTheme::isDarkTheme() ? QColor("#707070") : QColor("#404040")) : AppTheme::colors().pendingEdge,
                  2.4, Qt::DashLine);
         pen.setCapStyle(Qt::RoundCap);
         pen.setJoinStyle(Qt::RoundJoin);
@@ -1860,51 +1890,74 @@ void MainWindow::createActions()
 {
     // QMenuBar is intentionally kept: macOS renders it in the system menu bar,
     // while Windows/Linux render it inside the window. The same QAction objects
-    // are also exposed on toolbars for fast access.
-    auto* file = menuBar()->addMenu("文件");
+    // are also exposed through the custom in-window header and toolbars.
+    fileMenu_ = menuBar()->addMenu("文件");
     mainToolbar_ = addToolBar("主工具栏");
     mainToolbar_->setObjectName("mainToolbar");
     mainToolbar_->setMovable(false);
     mainToolbar_->setFloatable(false);
-    auto addAction = [&](const QString& text, const QString& iconName, auto slot) {
+    auto makeAction = [&](const QString& text, const QString& iconName, auto slot) {
         auto* action = new QAction(text, this);
         action->setIcon(lineIcon(iconName));
         action->setData(iconName);
         action->setToolTip(text);
         action->setStatusTip(text);
         connect(action, &QAction::triggered, this, slot);
-        file->addAction(action);
-        mainToolbar_->addAction(action);
         return action;
     };
-    addAction("新建", "new", [this] { newWorkflow(); });
-    addAction("打开", "open", [this] { openWorkflow(); });
-    addAction("保存", "save", [this] { saveWorkflow(); });
-    addAction("另存为", "saveAs", [this] { saveWorkflowAs(); });
-    addAction("执行", "run", [this] { runWorkflow(); });
-    auto* exportCanvasAction = addAction("导出画布截图", "exportCanvas", [this] { exportCanvasImage(); });
+    auto* newAction = makeAction("新建", "new", [this] { newWorkflow(); });
+    auto* openAction = makeAction("打开", "open", [this] { openWorkflow(); });
+    auto* saveAction = makeAction("保存", "save", [this] { saveWorkflow(); });
+    auto* saveAsAction = makeAction("另存为", "saveAs", [this] { saveWorkflowAs(); });
+    exportWorkflowCopyAction_ = makeAction("导出工作流", "exportWorkflow", [this] { exportWorkflowCopy(); });
+    exportPreviewAction_ = makeAction("导出预览结果", "exportPreview", [this] { exportPreviewImage(); });
+    exportPreviewAction_->setEnabled(false);
+    runAction_ = makeAction("执行", "run", [this] { runWorkflow(); });
+    auto* exportCanvasAction = makeAction("导出画布截图", "exportCanvas", [this] { exportCanvasImage(); });
     const QKeySequence exportShortcut(Qt::CTRL | Qt::SHIFT | Qt::Key_E);
     exportCanvasAction->setShortcut(exportShortcut);
     exportCanvasAction->setToolTip(QString("导出画布截图（%1）").arg(exportShortcut.toString(QKeySequence::NativeText)));
-    mainToolbar_->addSeparator();
 
-    returnToParentAction_ = new QAction(lineIcon("layoutReset"), "返回上级图", this);
-    returnToParentAction_->setData("layoutReset");
+    fileMenu_->addAction(newAction);
+    fileMenu_->addAction(openAction);
+    fileMenu_->addAction(saveAction);
+    fileMenu_->addAction(saveAsAction);
+    fileMenu_->addSeparator();
+    fileMenu_->addAction(exportWorkflowCopyAction_);
+    fileMenu_->addAction(exportPreviewAction_);
+    fileMenu_->addAction(exportCanvasAction);
+    fileMenu_->addSeparator();
+    fileMenu_->addAction(runAction_);
+
+    mainToolbar_->addAction(newAction);
+    mainToolbar_->addAction(saveAction);
+    mainToolbar_->addAction(saveAsAction);
+    mainToolbar_->addAction(openAction);
+    mainToolbar_->addAction(exportWorkflowCopyAction_);
+    mainToolbar_->addAction(exportPreviewAction_);
+
+    returnToParentAction_ = new QAction(lineIcon("back"), "返回上一级视图", this);
+    returnToParentAction_->setData("back");
     returnToParentAction_->setToolTip("返回上级图");
     returnToParentAction_->setStatusTip("返回宏节点外层图");
     connect(returnToParentAction_, &QAction::triggered, this, [this] { leaveMacroNode(); });
-    file->addAction(returnToParentAction_);
     returnToParentAction_->setEnabled(false);
+    forwardToChildAction_ = new QAction(lineIcon("forward"), "前往下一级视图", this);
+    forwardToChildAction_->setData("forward");
+    forwardToChildAction_->setToolTip("前往刚离开的子图");
+    forwardToChildAction_->setStatusTip("按导航历史前进");
+    connect(forwardToChildAction_, &QAction::triggered, this, [this] { navigateForwardMacroNode(); });
+    forwardToChildAction_->setEnabled(false);
 
-    auto* editMenu = menuBar()->addMenu("编辑");
+    editMenu_ = menuBar()->addMenu("编辑");
     auto* undoAction = undoStack_->createUndoAction(this, "撤销");
     undoAction->setShortcuts(QKeySequence::Undo);
     auto* redoAction = undoStack_->createRedoAction(this, "重做");
     redoAction->setShortcuts(QKeySequence::Redo);
-    editMenu->addAction(undoAction);
-    editMenu->addAction(redoAction);
-    editMenu->addSeparator();
-    auto* macroAction = editMenu->addAction("封装为宏节点");
+    editMenu_->addAction(undoAction);
+    editMenu_->addAction(redoAction);
+    editMenu_->addSeparator();
+    auto* macroAction = editMenu_->addAction("封装为宏节点");
     connect(macroAction, &QAction::triggered, this, [this] { encapsulateSelectionAsMacro(); });
     auto* quickNodeAction = new QAction("快捷添加节点", this);
     const QKeySequence quickNodeShortcut(Qt::CTRL | Qt::Key_K);
@@ -1912,7 +1965,7 @@ void MainWindow::createActions()
     quickNodeAction->setToolTip(QString("快捷添加节点（%1；画布 Tab）").arg(quickNodeShortcut.toString(QKeySequence::NativeText)));
     quickNodeAction->setStatusTip("搜索并在当前画布位置添加节点");
     connect(quickNodeAction, &QAction::triggered, this, [this] { showQuickNodePalette(); });
-    editMenu->addAction(quickNodeAction);
+    editMenu_->addAction(quickNodeAction);
 
     nodeOperationMenu_ = menuBar()->addMenu("节点操作");
     commandCenterMenu_ = new QMenu("更多操作", this);
@@ -1920,11 +1973,7 @@ void MainWindow::createActions()
     commandCenterAction_->setData("more");
     commandCenterAction_->setToolTip("更多操作");
 
-    auto* viewMenu = menuBar()->addMenu("视图");
-    viewToolbar_ = addToolBar("界面缩放");
-    viewToolbar_->setObjectName("viewScaleToolbar");
-    viewToolbar_->setMovable(false);
-    viewToolbar_->setFloatable(false);
+    viewMenu_ = menuBar()->addMenu("视图");
     auto addViewAction = [&](const QString& text, const QString& iconName, const QList<QKeySequence>& shortcuts, auto slot) {
         auto* action = new QAction(text, this);
         action->setIcon(lineIcon(iconName));
@@ -1933,26 +1982,28 @@ void MainWindow::createActions()
         action->setStatusTip(text);
         action->setShortcuts(shortcuts);
         connect(action, &QAction::triggered, this, slot);
-        viewMenu->addAction(action);
-        viewToolbar_->addAction(action);
+        viewMenu_->addAction(action);
         return action;
     };
-    addViewAction("界面放大", "zoomIn", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
-    addViewAction("界面缩小", "zoomOut", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
-    addViewAction("重置界面大小", "scaleReset", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
+    auto* zoomInAction = addViewAction("放大视图", "zoomIn", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
+    auto* zoomOutAction = addViewAction("缩小视图", "zoomOut", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
+    auto* resetScaleAction = addViewAction("恢复默认视图", "scaleReset", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
+    auto* mainSpacer = new QWidget;
+    mainSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    mainToolbar_->addWidget(mainSpacer);
+    mainToolbar_->addAction(zoomInAction);
+    mainToolbar_->addAction(zoomOutAction);
+    mainToolbar_->addAction(resetScaleAction);
 
-    auto* settingsMenu = menuBar()->addMenu("设置");
-    auto* settingsAction = new QAction(lineIcon("settings"), "打开设置", this);
-    settingsAction->setData("settings");
-    settingsAction->setToolTip("打开设置");
-    settingsAction->setStatusTip("打开设置");
-    connect(settingsAction, &QAction::triggered, this, [this] { showSettingsDialog(); });
-    settingsMenu->addAction(settingsAction);
-    viewToolbar_->addSeparator();
-    viewToolbar_->addAction(settingsAction);
+    settingsMenu_ = menuBar()->addMenu("设置");
+    settingsAction_ = new QAction(lineIcon("settings"), "打开设置", this);
+    settingsAction_->setData("settings");
+    settingsAction_->setToolTip("打开设置");
+    settingsAction_->setStatusTip("打开设置");
+    connect(settingsAction_, &QAction::triggered, this, [this] { showSettingsDialog(); });
+    settingsMenu_->addAction(settingsAction_);
 
     installDelayedTooltips(mainToolbar_);
-    installDelayedTooltips(viewToolbar_);
 }
 
 void MainWindow::createLayout()
@@ -2086,13 +2137,15 @@ void MainWindow::createLayout()
     splitDockWidget(previewDock_, bottomDock_, Qt::Vertical);
     resizeDocks({previewDock_, bottomDock_}, {260, 340}, Qt::Vertical);
 
-    auto* layoutMenu = menuBar()->addMenu("布局");
-    layoutMenu->addAction(previewDock_->toggleViewAction());
-    layoutMenu->addAction(bottomDock_->toggleViewAction());
-    layoutMenu->addSeparator();
+    layoutMenu_ = menuBar()->addMenu("布局");
+    previewToggleAction_ = previewDock_->toggleViewAction();
+    bottomToggleAction_ = bottomDock_->toggleViewAction();
+    layoutMenu_->addAction(previewToggleAction_);
+    layoutMenu_->addAction(bottomToggleAction_);
+    layoutMenu_->addSeparator();
 
     auto addDockMoveAction = [&](const QString& text, QDockWidget* dock, Qt::DockWidgetArea area) {
-        auto* action = layoutMenu->addAction(text);
+        auto* action = layoutMenu_->addAction(text);
         connect(action, &QAction::triggered, this, [this, dock, area] {
             addDockWidget(area, dock);
             dock->show();
@@ -2103,24 +2156,19 @@ void MainWindow::createLayout()
     addDockMoveAction("预览在左侧", previewDock_, Qt::LeftDockWidgetArea);
     addDockMoveAction("底部面板在底部", bottomDock_, Qt::BottomDockWidgetArea);
     addDockMoveAction("底部面板在右侧", bottomDock_, Qt::RightDockWidgetArea);
-    layoutMenu->addSeparator();
-    auto* resetAction = layoutMenu->addAction("重置布局");
+    layoutMenu_->addSeparator();
+    auto* resetAction = layoutMenu_->addAction("重置布局");
     connect(resetAction, &QAction::triggered, this, [this] { resetDockLayout(); });
-    auto* autoLayoutAction = layoutMenu->addAction("自动布局");
+    auto* autoLayoutAction = layoutMenu_->addAction("自动布局");
     connect(autoLayoutAction, &QAction::triggered, this, [this] { autoLayoutWorkflow(); });
-    auto* fullScreenAction = layoutMenu->addAction("全屏切换");
+    auto* fullScreenAction = layoutMenu_->addAction("全屏切换");
     connect(fullScreenAction, &QAction::triggered, this, [this] { toggleFullScreenMode(); });
-
-    layoutToolbar_ = addToolBar("布局");
-    layoutToolbar_->setObjectName("layoutToolbar");
-    layoutToolbar_->setMovable(false);
-    layoutToolbar_->setFloatable(false);
-    previewDock_->toggleViewAction()->setIcon(lineIcon("dockRight"));
-    previewDock_->toggleViewAction()->setData("dockRight");
-    previewDock_->toggleViewAction()->setToolTip("显示或隐藏预览");
-    bottomDock_->toggleViewAction()->setIcon(lineIcon("dockBottom"));
-    bottomDock_->toggleViewAction()->setData("dockBottom");
-    bottomDock_->toggleViewAction()->setToolTip("显示或隐藏底部面板");
+    previewToggleAction_->setIcon(lineIcon("dockRight"));
+    previewToggleAction_->setData("dockRight");
+    previewToggleAction_->setToolTip("显示或隐藏预览");
+    bottomToggleAction_->setIcon(lineIcon("dockBottom"));
+    bottomToggleAction_->setData("dockBottom");
+    bottomToggleAction_->setToolTip("显示或隐藏底部面板");
     resetAction->setIcon(lineIcon("layoutReset"));
     resetAction->setData("layoutReset");
     resetAction->setToolTip("重置布局");
@@ -2130,13 +2178,83 @@ void MainWindow::createLayout()
     fullScreenAction->setIcon(lineIcon("fullscreen"));
     fullScreenAction->setData("fullscreen");
     fullScreenAction->setToolTip("全屏切换");
-    layoutToolbar_->addAction(previewDock_->toggleViewAction());
-    layoutToolbar_->addAction(bottomDock_->toggleViewAction());
-    layoutToolbar_->addAction(resetAction);
-    layoutToolbar_->addAction(autoLayoutAction);
-    layoutToolbar_->addAction(fullScreenAction);
-    installDelayedTooltips(layoutToolbar_);
 
+    headerToolbar_ = addToolBar("窗口标题层");
+    headerToolbar_->setObjectName("headerToolbar");
+    headerToolbar_->setMovable(false);
+    headerToolbar_->setFloatable(false);
+    auto* header = new QWidget;
+    header->setObjectName("windowHeader");
+    header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    auto* headerLayout = new QGridLayout(header);
+    headerLayout->setContentsMargins(AppTheme::px(8, uiScale_), 0, AppTheme::px(8, uiScale_), 0);
+    headerLayout->setHorizontalSpacing(AppTheme::px(8, uiScale_));
+    headerLayout->setColumnStretch(0, 1);
+    headerLayout->setColumnStretch(1, 1);
+    headerLayout->setColumnStretch(2, 1);
+
+    auto* leftMenus = new QWidget;
+    auto* leftLayout = new QHBoxLayout(leftMenus);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+#if !defined(Q_OS_MACOS)
+    auto addHeaderMenu = [leftLayout](QMenu* menu) {
+        auto* button = new QToolButton;
+        button->setText(menu->title());
+        button->setMenu(menu);
+        button->setPopupMode(QToolButton::InstantPopup);
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        leftLayout->addWidget(button);
+    };
+    addHeaderMenu(fileMenu_);
+    addHeaderMenu(editMenu_);
+    addHeaderMenu(nodeOperationMenu_);
+    addHeaderMenu(viewMenu_);
+    addHeaderMenu(settingsMenu_);
+    addHeaderMenu(layoutMenu_);
+    menuBar()->setVisible(false);
+#endif
+    leftLayout->addStretch(1);
+    headerLayout->addWidget(leftMenus, 0, 0, Qt::AlignLeft);
+
+    auto* titleCluster = new QWidget;
+    auto* titleLayout = new QHBoxLayout(titleCluster);
+    titleLayout->setContentsMargins(0, 0, 0, 0);
+    titleLayout->setSpacing(AppTheme::px(4, uiScale_));
+    documentTitleLabel_ = new QLabel;
+    documentTitleLabel_->setObjectName("documentTitleLabel");
+    documentTitleLabel_->setAlignment(Qt::AlignCenter);
+    titleLayout->addWidget(documentTitleLabel_);
+    auto* backButton = new QToolButton;
+    backButton->setDefaultAction(returnToParentAction_);
+    backButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    titleLayout->addWidget(backButton);
+    auto* forwardButton = new QToolButton;
+    forwardButton->setDefaultAction(forwardToChildAction_);
+    forwardButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    titleLayout->addWidget(forwardButton);
+    headerLayout->addWidget(titleCluster, 0, 1, Qt::AlignCenter);
+
+    auto* rightActions = new QWidget;
+    auto* rightLayout = new QHBoxLayout(rightActions);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(0);
+    auto addHeaderAction = [rightLayout](QAction* action) {
+        auto* button = new QToolButton;
+        button->setDefaultAction(action);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        rightLayout->addWidget(button);
+    };
+    addHeaderAction(previewToggleAction_);
+    addHeaderAction(bottomToggleAction_);
+    addHeaderAction(settingsAction_);
+    headerLayout->addWidget(rightActions, 0, 2, Qt::AlignRight);
+    headerToolbar_->addWidget(header);
+    insertToolBar(mainToolbar_, headerToolbar_);
+    insertToolBarBreak(mainToolbar_);
+    installDelayedTooltips(headerToolbar_);
+
+    addToolBarBreak(Qt::TopToolBarArea);
     workbookToolbar_ = addToolBar("工作簿");
     workbookToolbar_->setObjectName("workbookToolbar");
     workbookToolbar_->setMovable(false);
@@ -2172,29 +2290,17 @@ void MainWindow::createLayout()
         refreshWorkbookTabs();
     });
     workbookToolbar_->addWidget(workbookTabs_);
+    auto* workbookSpacer = new QWidget;
+    workbookSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    workbookToolbar_->addWidget(workbookSpacer);
+    workbookToolbar_->addAction(runAction_);
     installDelayedTooltips(workbookToolbar_);
-
-    navigationToolbar_ = addToolBar("导航");
-    navigationToolbar_->setObjectName("navigationToolbar");
-    navigationToolbar_->setMovable(false);
-    navigationToolbar_->setFloatable(false);
-    auto* navigationSpacer = new QWidget;
-    navigationSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    navigationToolbar_->addWidget(navigationSpacer);
-    if (commandCenterAction_) {
-        auto* commandButton = new QToolButton;
-        commandButton->setDefaultAction(commandCenterAction_);
-        commandButton->setMenu(commandCenterMenu_);
-        commandButton->setPopupMode(QToolButton::InstantPopup);
-        commandButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        navigationToolbar_->addWidget(commandButton);
-    }
-    navigationToolbar_->addAction(returnToParentAction_);
-    installDelayedTooltips(navigationToolbar_);
+    updateNavigationActions();
+    updateWindowTitle();
 
     QSettings settings;
     restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
-    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 4) {
+    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 5) {
         restoreState(settings.value("mainWindow/state").toByteArray());
     } else {
         resetDockLayout();
@@ -2643,22 +2749,29 @@ void MainWindow::autoLayoutWorkflow()
 
 void MainWindow::enterMacroNode(const QString& nodeId)
 {
+    enterMacroNodeInternal(nodeId, true);
+}
+
+void MainWindow::enterMacroNodeInternal(const QString& nodeId, bool clearForwardHistory)
+{
     auto macro = dynamic_cast<MacroNode*>(graph_.node(nodeId).data());
     if (!macro) {
         return;
+    }
+    if (clearForwardHistory) {
+        forwardMacroHistory_.clear();
     }
     graphStack_.append(GraphContext{WorkflowCommands::cloneGraph(graph_), nodeId, selectedNodeId_});
     graph_ = WorkflowCommands::cloneGraph(macro->subgraph());
     selectedNodeId_.clear();
     lastResult_ = {};
+    setPreviewImage({});
     engine_.clearCache();
     undoStack_->clear();
     resetNodeRunStates();
     rebuildScene();
     rebuildProperties();
-    if (returnToParentAction_) {
-        returnToParentAction_->setEnabled(true);
-    }
+    updateNavigationActions();
     updateWindowTitle();
     appendLog(QString("进入宏节点子图：%1").arg(nodeId), nodeId);
 }
@@ -2669,6 +2782,7 @@ void MainWindow::leaveMacroNode()
         return;
     }
     GraphContext context = graphStack_.takeLast();
+    forwardMacroHistory_.append(context.macroNodeId);
     auto macro = dynamic_cast<MacroNode*>(context.graph.node(context.macroNodeId).data());
     if (macro) {
         macro->setSubgraph(WorkflowCommands::cloneGraph(graph_));
@@ -2676,6 +2790,7 @@ void MainWindow::leaveMacroNode()
     graph_ = WorkflowCommands::cloneGraph(context.graph);
     selectedNodeId_ = context.macroNodeId;
     lastResult_ = {};
+    setPreviewImage({});
     engine_.clearCache();
     undoStack_->clear();
     resetNodeRunStates();
@@ -2684,11 +2799,23 @@ void MainWindow::leaveMacroNode()
         item->setSelected(true);
     }
     rebuildProperties();
-    if (returnToParentAction_) {
-        returnToParentAction_->setEnabled(!graphStack_.isEmpty());
-    }
+    updateNavigationActions();
     updateWindowTitle();
     appendLog(QString("返回上级图：%1").arg(selectedNodeId_), selectedNodeId_);
+}
+
+void MainWindow::navigateForwardMacroNode()
+{
+    if (forwardMacroHistory_.isEmpty()) {
+        return;
+    }
+    const QString macroNodeId = forwardMacroHistory_.takeLast();
+    if (!graph_.containsNode(macroNodeId) || !dynamic_cast<MacroNode*>(graph_.node(macroNodeId).data())) {
+        updateNavigationActions();
+        appendLog(QString("前进失败：宏节点已不存在 %1").arg(macroNodeId));
+        return;
+    }
+    enterMacroNodeInternal(macroNodeId, false);
 }
 
 WorkflowGraph MainWindow::graphForPersistence() const
@@ -2849,11 +2976,27 @@ void MainWindow::rebuildEdges()
         return item->scenePos();
     };
 
+    QSet<QString> failedChainNodes;
+    if (!lastResult_.failedNodeId.isEmpty()) {
+        failedChainNodes.insert(lastResult_.failedNodeId);
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto& edge : graph_.edges()) {
+                if (failedChainNodes.contains(edge.toNode) && !failedChainNodes.contains(edge.fromNode)) {
+                    failedChainNodes.insert(edge.fromNode);
+                    changed = true;
+                }
+            }
+        }
+    }
+
     for (int i = 0; i < graph_.edges().size(); ++i) {
         const auto& edge = graph_.edges().at(i);
         const QPointF a = portPosition(edge.fromNode, edge.fromPort, PortDirection::Output);
         const QPointF b = portPosition(edge.toNode, edge.toPort, PortDirection::Input);
         auto* line = new EdgeItem(i, a, b, uiScale_);
+        line->setFailureRelated(failedChainNodes.contains(edge.fromNode) && failedChainNodes.contains(edge.toNode));
         scene_->addItem(line);
         line->setZValue(-1);
         edgeItems_.append(line);
@@ -2928,7 +3071,7 @@ void MainWindow::appendProblem(const QString& message, const QString& nodeId)
     }
     auto* item = new QListWidgetItem(message);
     item->setData(Qt::UserRole, nodeId);
-    item->setForeground(QBrush(QColor("#f87171")));
+    item->setForeground(QBrush(QColor("#ff453a")));
     if (!nodeId.isEmpty()) {
         item->setToolTip(QString("双击定位节点：%1").arg(nodeId));
     }
@@ -3093,7 +3236,7 @@ void MainWindow::highlightNodeBriefly(const QString& nodeId)
     }
 
     auto* highlight = new QGraphicsRectItem(item->sceneBoundingRect().adjusted(-8 * uiScale_, -8 * uiScale_, 8 * uiScale_, 8 * uiScale_));
-    QPen pen(QColor("#ff9f0a"), 3.0 * uiScale_, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+    QPen pen(AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020"), 3.0 * uiScale_, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
     highlight->setPen(pen);
     highlight->setBrush(Qt::NoBrush);
     highlight->setZValue(10);
@@ -3117,6 +3260,7 @@ void MainWindow::runWorkflow()
     });
     if (result.isFail()) {
         lastResult_ = engine_.lastResult();
+        rebuildEdges();
         for (const auto& summary : lastResult_.nodeSummaries) {
             appendLog(summary.message, summary.nodeId);
         }
@@ -3127,6 +3271,7 @@ void MainWindow::runWorkflow()
         return;
     }
     lastResult_ = result.value();
+    rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
         appendLog(summary.message, summary.nodeId);
     }
@@ -3155,6 +3300,7 @@ void MainWindow::runLivePreview()
     });
     if (result.isFail()) {
         lastResult_ = engine_.lastResult();
+        rebuildEdges();
         for (const auto& summary : lastResult_.nodeSummaries) {
             appendLog(summary.message, summary.nodeId);
         }
@@ -3166,11 +3312,50 @@ void MainWindow::runLivePreview()
     }
 
     lastResult_ = result.value();
+    rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
         appendLog(summary.message, summary.nodeId);
     }
     appendLog(QString("实时预览完成：%1").arg(previewNodeId), previewNodeId);
     updatePreviewForSelection();
+}
+
+void MainWindow::exportWorkflowCopy()
+{
+    const QString defaultName = currentFile_.isEmpty()
+                                    ? "workflow-export.json"
+                                    : QString("%1-export.json").arg(QFileInfo(currentFile_).completeBaseName());
+    const QString path = QFileDialog::getSaveFileName(this, "导出工作流", defaultName, "Workflow (*.json);;All files (*)");
+    if (path.isEmpty()) {
+        return;
+    }
+    WorkflowSerializer serializer;
+    auto saved = serializer.saveFile(graphForPersistence(), path);
+    if (saved.isFail()) {
+        appendProblem(QString("导出工作流失败：%1").arg(saved.error()));
+        QMessageBox::warning(this, "导出工作流失败", saved.error());
+        return;
+    }
+    appendLog(QString("已导出工作流副本：%1").arg(path));
+}
+
+void MainWindow::exportPreviewImage()
+{
+    if (currentPreviewImage_.isNull()) {
+        appendProblem("导出预览结果失败：当前没有可导出的预览图");
+        QMessageBox::information(this, "导出预览结果", "当前没有可导出的预览图。");
+        return;
+    }
+    const QString path = QFileDialog::getSaveFileName(this, "导出预览结果", "preview-result.png", "PNG (*.png);;All files (*)");
+    if (path.isEmpty()) {
+        return;
+    }
+    if (!currentPreviewImage_.save(path, "PNG")) {
+        appendProblem(QString("导出预览结果失败：无法写入图片 %1").arg(path));
+        QMessageBox::warning(this, "导出预览结果失败", QString("无法写入图片：%1").arg(path));
+        return;
+    }
+    appendLog(QString("已导出预览结果：%1").arg(path));
 }
 
 void MainWindow::exportCanvasImage()
@@ -3234,15 +3419,15 @@ void MainWindow::newWorkflow()
     }
     graph_.clear();
     graphStack_.clear();
+    forwardMacroHistory_.clear();
     currentFile_.clear();
     engine_.clearCache();
     lastResult_ = {};
+    setPreviewImage({});
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
     selectedNodeId_.clear();
-    if (returnToParentAction_) {
-        returnToParentAction_->setEnabled(false);
-    }
+    updateNavigationActions();
     undoStack_->clear();
     rebuildScene();
     rebuildProperties();
@@ -3277,15 +3462,15 @@ void MainWindow::openWorkflow()
     }
     graph_ = loaded.value();
     graphStack_.clear();
+    forwardMacroHistory_.clear();
     currentFile_ = path;
     engine_.clearCache();
     lastResult_ = {};
+    setPreviewImage({});
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
     selectedNodeId_.clear();
-    if (returnToParentAction_) {
-        returnToParentAction_->setEnabled(false);
-    }
+    updateNavigationActions();
     undoStack_->clear();
     rebuildScene();
     rebuildProperties();
@@ -3430,6 +3615,10 @@ void MainWindow::pushGraphEditCommand(const QString& text,
     if (!undoStack_) {
         return;
     }
+    if (!forwardMacroHistory_.isEmpty()) {
+        forwardMacroHistory_.clear();
+        updateNavigationActions();
+    }
     undoStack_->push(WorkflowCommands::makeSnapshotCommand(this, text, before, after, selectedBefore, selectedAfter, mergeKey));
 }
 
@@ -3488,13 +3677,12 @@ void MainWindow::switchWorkbookPage(int index)
     selectedNodeId_ = page.selectedNodeId;
     currentFile_ = page.filePath;
     graphStack_.clear();
+    forwardMacroHistory_.clear();
     lastResult_ = {};
     engine_.clearCache();
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
-    if (returnToParentAction_) {
-        returnToParentAction_->setEnabled(false);
-    }
+    updateNavigationActions();
     if (undoStack_) {
         undoStack_->clear();
     }
@@ -3534,12 +3722,15 @@ void MainWindow::closeWorkbookPage(int index)
     if (workbookPages_.size() == 1) {
         graph_.clear();
         graphStack_.clear();
+        forwardMacroHistory_.clear();
         currentFile_.clear();
         selectedNodeId_.clear();
         lastResult_ = {};
+        setPreviewImage({});
         engine_.clearCache();
         nodeRunStates_.clear();
         nodeElapsedMs_.clear();
+        updateNavigationActions();
         workbookPages_[0] = WorkbookPage{};
         workbookPages_[0].title = "画布 1";
         currentWorkbookIndex_ = 0;
@@ -3563,10 +3754,12 @@ void MainWindow::closeWorkbookPage(int index)
         selectedNodeId_ = page.selectedNodeId;
         currentFile_ = page.filePath;
         graphStack_.clear();
+        forwardMacroHistory_.clear();
         lastResult_ = {};
         engine_.clearCache();
         nodeRunStates_.clear();
         nodeElapsedMs_.clear();
+        updateNavigationActions();
         if (undoStack_) {
             undoStack_->clear();
         }
@@ -3610,16 +3803,33 @@ void MainWindow::updateWindowTitle()
 {
     const QString fileName = currentFile_.isEmpty() ? "未命名" : QFileInfo(currentFile_).fileName();
     const QString dirty = currentWorkbookDirty() ? "*" : "";
-    const QString context = graphStack_.isEmpty() ? "" : QString(" [子图 x%1]").arg(graphStack_.size());
-    setWindowTitle(QString("%1%2%3 - ImageNodeEditor").arg(fileName, dirty, context));
+    const QString title = QString("%1%2").arg(fileName, dirty);
+    setWindowTitle(QString("%1 - ImageNodeEditor").arg(title));
+    if (documentTitleLabel_) {
+        documentTitleLabel_->setText(title);
+    }
     if (!switchingWorkbook_) {
         syncCurrentWorkbookPage();
         refreshWorkbookTabs();
     }
 }
 
+void MainWindow::updateNavigationActions()
+{
+    if (returnToParentAction_) {
+        returnToParentAction_->setEnabled(!graphStack_.isEmpty());
+    }
+    if (forwardToChildAction_) {
+        forwardToChildAction_->setEnabled(!forwardMacroHistory_.isEmpty());
+    }
+}
+
 void MainWindow::setPreviewImage(const QImage& image)
 {
+    currentPreviewImage_ = image;
+    if (exportPreviewAction_) {
+        exportPreviewAction_->setEnabled(!currentPreviewImage_.isNull());
+    }
     if (auto* label = dynamic_cast<PreviewLabel*>(preview_)) {
         label->setSourceImage(image);
     }
@@ -3860,6 +4070,15 @@ void MainWindow::applyUiScale()
             }
         }
     };
+    auto refreshActionIcon = [](QAction* action) {
+        if (!action) {
+            return;
+        }
+        const QString iconName = action->data().toString();
+        if (!iconName.isEmpty()) {
+            action->setIcon(lineIcon(iconName));
+        }
+    };
 
     const auto metrics = AppTheme::metrics(uiScale_);
     if (mainToolbar_) {
@@ -3867,26 +4086,21 @@ void MainWindow::applyUiScale()
         mainToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
         mainToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
-    if (layoutToolbar_) {
-        refreshToolbar(layoutToolbar_);
-        layoutToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        layoutToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    }
-    if (viewToolbar_) {
-        refreshToolbar(viewToolbar_);
-        viewToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        viewToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    }
-    if (navigationToolbar_) {
-        refreshToolbar(navigationToolbar_);
-        navigationToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        navigationToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    if (headerToolbar_) {
+        refreshToolbar(headerToolbar_);
+        headerToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+        headerToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
     if (workbookToolbar_) {
         refreshToolbar(workbookToolbar_);
         workbookToolbar_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
         workbookToolbar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     }
+    refreshActionIcon(returnToParentAction_);
+    refreshActionIcon(forwardToChildAction_);
+    refreshActionIcon(previewToggleAction_);
+    refreshActionIcon(bottomToggleAction_);
+    refreshActionIcon(settingsAction_);
     if (workbookTabs_) {
         workbookTabs_->setMinimumWidth(AppTheme::px(220, uiScale_));
         workbookTabs_->setMaximumWidth(AppTheme::px(520, uiScale_));
@@ -3950,6 +4164,6 @@ void MainWindow::closeEvent(QCloseEvent* event)
     settings.setValue("mainWindow/state", saveState());
     settings.setValue("mainWindow/uiScale", uiScale_);
     settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
-    settings.setValue("mainWindow/layoutVersion", 4);
+    settings.setValue("mainWindow/layoutVersion", 5);
     QMainWindow::closeEvent(event);
 }

@@ -44,27 +44,27 @@ struct NodeMetrics {
     double rowHeight = 30.0;
     double bottomPadding = 22.0;
     double portRadius = 7.5;
-    double cornerRadius = 18.0;
+    double cornerRadius = 0.0;
     double titleSize = 15.0;
     double labelSize = 13.0;
 };
 
 struct Colors {
-    QColor canvasTop = QColor("#f8fbff");
-    QColor canvasBottom = QColor("#edf4ff");
-    QColor canvasDot = QColor(112, 138, 168, 38);
+    QColor canvasTop = QColor("#ffffff");
+    QColor canvasBottom = QColor("#f2f2f2");
+    QColor canvasDot = QColor(128, 128, 128, 38);
     QColor nodeTop = QColor(255, 255, 255, 232);
-    QColor nodeBottom = QColor(232, 240, 252, 226);
-    QColor nodeBorder = QColor(126, 154, 192, 120);
-    QColor nodeSelected = QColor("#0a84ff");
-    QColor nodeShadow = QColor(54, 78, 116, 55);
-    QColor textPrimary = QColor("#1f2937");
-    QColor textSecondary = QColor("#506174");
-    QColor inputPort = QColor("#34c759");
-    QColor outputPort = QColor("#0a84ff");
-    QColor edge = QColor("#5a7da8");
-    QColor edgeSelected = QColor("#ff9f0a");
-    QColor pendingEdge = QColor("#0a84ff");
+    QColor nodeBottom = QColor(232, 232, 232, 226);
+    QColor nodeBorder = QColor(128, 128, 128, 120);
+    QColor nodeSelected = QColor("#111111");
+    QColor nodeShadow = QColor(0, 0, 0, 55);
+    QColor textPrimary = QColor("#202020");
+    QColor textSecondary = QColor("#606060");
+    QColor inputPort = QColor("#707070");
+    QColor outputPort = QColor("#404040");
+    QColor edge = QColor("#707070");
+    QColor edgeSelected = QColor("#202020");
+    QColor pendingEdge = QColor("#404040");
 };
 
 Metrics metrics(double uiScale);

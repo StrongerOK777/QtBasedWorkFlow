@@ -4,7 +4,9 @@
 #include "workflow/ExecutionEngine.h"
 #include "workflow/WorkflowGraph.h"
 
+#include <QImage>
 #include <QMap>
+#include <QStringList>
 #include <QVariant>
 #include <QVector>
 
@@ -68,10 +70,14 @@ private:
     void appendProblem(const QString& message, const QString& nodeId = {});
     void clearLog();
     void runWorkflow();
+    void exportWorkflowCopy();
+    void exportPreviewImage();
     void exportCanvasImage();
     void encapsulateSelectionAsMacro();
     void autoLayoutWorkflow();
     void leaveMacroNode();
+    void navigateForwardMacroNode();
+    void enterMacroNodeInternal(const QString& nodeId, bool clearForwardHistory);
     WorkflowGraph graphForPersistence() const;
     void newWorkflow();
     void openWorkflow();
@@ -80,6 +86,7 @@ private:
     bool confirmSaveIfNeeded();
     bool ensureSavePath();
     void updateWindowTitle();
+    void updateNavigationActions();
     void pushGraphEditCommand(const QString& text,
                               const WorkflowGraph& before,
                               const QString& selectedBefore,
@@ -123,6 +130,7 @@ private:
         QString selectedNodeId;
     };
     QVector<GraphContext> graphStack_;
+    QStringList forwardMacroHistory_;
     ExecutionEngine engine_;
     ExecutionResult lastResult_;
     QString currentFile_;
@@ -155,16 +163,27 @@ private:
     QToolButton* canvasZoomOutButton_ = nullptr;
     QWidget* canvasZoomOverlay_ = nullptr;
     QToolBar* mainToolbar_ = nullptr;
-    QToolBar* layoutToolbar_ = nullptr;
-    QToolBar* viewToolbar_ = nullptr;
-    QToolBar* navigationToolbar_ = nullptr;
+    QToolBar* headerToolbar_ = nullptr;
     QToolBar* workbookToolbar_ = nullptr;
     QTabBar* workbookTabs_ = nullptr;
+    QLabel* documentTitleLabel_ = nullptr;
+    QMenu* fileMenu_ = nullptr;
+    QMenu* editMenu_ = nullptr;
     QMenu* nodeOperationMenu_ = nullptr;
+    QMenu* viewMenu_ = nullptr;
+    QMenu* settingsMenu_ = nullptr;
+    QMenu* layoutMenu_ = nullptr;
     QMenu* commandCenterMenu_ = nullptr;
     QAction* commandCenterAction_ = nullptr;
     QAction* newWorkbookAction_ = nullptr;
     QAction* returnToParentAction_ = nullptr;
+    QAction* forwardToChildAction_ = nullptr;
+    QAction* runAction_ = nullptr;
+    QAction* exportWorkflowCopyAction_ = nullptr;
+    QAction* exportPreviewAction_ = nullptr;
+    QAction* settingsAction_ = nullptr;
+    QAction* previewToggleAction_ = nullptr;
+    QAction* bottomToggleAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
     QTimer* livePreviewTimer_ = nullptr;
     QTimer* runAnimationTimer_ = nullptr;
@@ -173,5 +192,6 @@ private:
     QMap<QString, NodeExecutionState> nodeRunStates_;
     QMap<QString, qint64> nodeElapsedMs_;
     int runAnimationPhase_ = 0;
+    QImage currentPreviewImage_;
     QVector<QGraphicsItem*> edgeItems_;
 };
