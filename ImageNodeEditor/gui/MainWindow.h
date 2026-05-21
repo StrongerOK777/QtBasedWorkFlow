@@ -12,7 +12,6 @@
 
 class QAction;
 class QCloseEvent;
-class QDockWidget;
 class QGraphicsItem;
 class QGraphicsScene;
 class QGraphicsView;
@@ -20,6 +19,7 @@ class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QMenu;
+class QSplitter;
 class QTabBar;
 class QTabWidget;
 class QToolButton;
@@ -97,7 +97,7 @@ private:
     QPointF findAvailableNodePosition(const QPointF& requested) const;
     void setPreviewImage(const QImage& image);
     void updatePreviewForSelection();
-    void resetDockLayout();
+    void resetWorkbenchLayout();
     void toggleFullScreenMode();
     void showSettingsDialog();
     void increaseUiScale();
@@ -157,8 +157,16 @@ private:
     QListWidget* problemLog_ = nullptr;
     QTabWidget* bottomTabs_ = nullptr;
     TerminalPanel* terminalPanel_ = nullptr;
-    GuiCompat::DockWidget* previewDock_ = nullptr;
-    GuiCompat::DockWidget* bottomDock_ = nullptr;
+    QWidget* primarySidebar_ = nullptr;
+    QWidget* previewSidebar_ = nullptr;
+    QWidget* bottomPanel_ = nullptr;
+    QWidget* activityBar_ = nullptr;
+    QWidget* nodeLibraryPage_ = nullptr;
+    QWidget* workflowPage_ = nullptr;
+    QListWidget* nodeLibraryList_ = nullptr;
+    QListWidget* workflowList_ = nullptr;
+    QSplitter* workbenchSplitter_ = nullptr;
+    QSplitter* editorSplitter_ = nullptr;
     QToolButton* canvasZoomInButton_ = nullptr;
     QToolButton* canvasZoomOutButton_ = nullptr;
     QWidget* canvasZoomOverlay_ = nullptr;

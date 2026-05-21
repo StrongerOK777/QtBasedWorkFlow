@@ -126,6 +126,47 @@ QString styleSheet(double uiScale)
             background: rgba(245, 245, 245, 232);
             color: #202020;
         }
+        QWidget#workbench, QWidget#sidebarStack, QWidget#nodeLibraryPage, QWidget#workflowPage {
+            background: rgba(245, 245, 245, 232);
+            color: #202020;
+        }
+        QWidget#activityBar {
+            background: rgba(236, 236, 236, 242);
+            border-right: %1px solid rgba(128, 128, 128, 86);
+        }
+        QWidget#primarySidebar, QWidget#previewSidebar, QWidget#bottomPanel, QWidget#bottomTabPage {
+            background: rgba(255, 255, 255, 174);
+            border: 0px;
+            color: #202020;
+        }
+        QWidget#primarySidebar {
+            border-right: %1px solid rgba(128, 128, 128, 86);
+        }
+        QWidget#previewSidebar {
+            border-left: %1px solid rgba(128, 128, 128, 86);
+        }
+        QWidget#bottomPanel {
+            border-top: %1px solid rgba(128, 128, 128, 86);
+        }
+        QLabel#workbenchPanelTitle {
+            font-weight: 600;
+            color: #202020;
+        }
+        QToolButton#activityButton {
+            min-width: %12px;
+            min-height: %12px;
+            padding: 0px;
+            border: 0px;
+            border-left: %1px solid transparent;
+            background: transparent;
+        }
+        QToolButton#activityButton:hover {
+            background: rgba(64, 64, 64, 28);
+        }
+        QToolButton#activityButton:checked {
+            border-left-color: rgba(32, 32, 32, 196);
+            background: rgba(64, 64, 64, 42);
+        }
         QAbstractScrollArea, QGraphicsView, QGraphicsView > QWidget {
             background: #f2f2f2;
             border: 0;
@@ -138,7 +179,7 @@ QString styleSheet(double uiScale)
             color: #202020;
         }
         QMenuBar::item {
-            border-radius: 0px;
+            border-radius: %4px;
             padding: %2px %5px;
             background: transparent;
         }
@@ -148,7 +189,7 @@ QString styleSheet(double uiScale)
         QMenu {
             background: rgba(255, 255, 255, 238);
             border: %1px solid rgba(128, 128, 128, 90);
-            border-radius: 0px;
+            border-radius: %11px;
             padding: %2px;
             color: #202020;
         }
@@ -167,7 +208,6 @@ QString styleSheet(double uiScale)
             border-bottom-color: rgba(128, 128, 128, 82);
             spacing: 0px;
             padding: 0px %13px;
-            movable: false;
         }
         QToolBar#headerToolbar QWidget#windowHeader {
             background: transparent;
@@ -379,6 +419,7 @@ QString styleSheet(double uiScale)
         sheet.replace("rgba(255, 255, 255, 174)", "rgba(25, 26, 27, 224)");
         sheet.replace("rgba(255, 255, 255, 188)", "rgba(25, 26, 27, 224)");
         sheet.replace("rgba(245, 245, 245, 232)", "rgba(18, 19, 20, 245)");
+        sheet.replace("rgba(236, 236, 236, 242)", "rgba(18, 19, 20, 250)");
         sheet.replace("rgba(255, 255, 255, 214)", "rgba(46, 46, 47, 238)");
         sheet.replace("rgba(255, 255, 255, 220)", "rgba(46, 46, 47, 235)");
         sheet.replace("rgba(255, 255, 255, 180)", "rgba(160, 160, 160, 86)");
@@ -402,6 +443,7 @@ QString styleSheet(double uiScale)
         sheet.replace("rgba(64, 64, 64, 118)", "rgba(238, 238, 238, 118)");
         sheet.replace("rgba(64, 64, 64, 148)", "rgba(238, 238, 238, 148)");
         sheet.replace("rgba(64, 64, 64, 170)", "rgba(238, 238, 238, 170)");
+        sheet.replace("rgba(32, 32, 32, 196)", "rgba(238, 238, 238, 196)");
     }
     return sheet;
 }

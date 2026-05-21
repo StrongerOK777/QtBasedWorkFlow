@@ -69,6 +69,7 @@
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStackedLayout>
+#include <QStackedWidget>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QTabBar>
@@ -338,6 +339,18 @@ QIcon lineIcon(const QString& name)
         painter.drawRect(QRectF(12, 12, 40, 40));
         painter.fillRect(QRectF(12, 39, 40, 13), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
         painter.drawLine(QPointF(12, 39), QPointF(52, 39));
+    } else if (name == "nodes") {
+        painter.drawRect(QRectF(11, 12, 17, 15));
+        painter.drawRect(QRectF(36, 12, 17, 15));
+        painter.drawRect(QRectF(23, 38, 18, 15));
+        painter.drawLine(QPointF(20, 27), QPointF(29, 38));
+        painter.drawLine(QPointF(45, 27), QPointF(35, 38));
+    } else if (name == "workflow") {
+        painter.drawRect(QRectF(13, 12, 16, 13));
+        painter.drawRect(QRectF(35, 26, 16, 13));
+        painter.drawRect(QRectF(13, 41, 16, 13));
+        painter.drawLine(QPointF(29, 18), QPointF(35, 31));
+        painter.drawLine(QPointF(35, 35), QPointF(29, 47));
     } else if (name == "layoutReset") {
         painter.drawRect(QRectF(12, 12, 40, 40));
         painter.drawLine(QPointF(25, 12), QPointF(25, 52));
@@ -2018,6 +2031,16 @@ void MainWindow::createLayout()
                 break;
             }
         }
+        if (workflowList_) {
+            workflowList_->clearSelection();
+            for (int row = 0; row < workflowList_->count(); ++row) {
+                auto* outlineItem = workflowList_->item(row);
+                if (outlineItem && outlineItem->data(Qt::UserRole).toString() == selectedNodeId_) {
+                    workflowList_->setCurrentItem(outlineItem);
+                    break;
+                }
+            }
+        }
         rebuildProperties();
         updatePreviewForSelection();
     });
@@ -2116,49 +2139,18 @@ void MainWindow::createLayout()
     bottomTabs_->addTab(makeLogPage(problemLog_, "问题"), "问题");
     bottomTabs_->addTab(makeLogPage(log_, "输出"), "输出");
 
-    setDockOptions(QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AnimatedDocks | QMainWindow::GroupedDragging);
-    GuiCompat::setMainContent(this, viewContainer);
-
-    auto makeDock = [this](const QString& title, const QString& objectName, QWidget* widget) {
-        auto* dock = new GuiCompat::DockWidget(title, this);
-        dock->setObjectName(objectName);
-        dock->setWidget(widget);
-        dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-        return dock;
-    };
-
-    previewDock_ = makeDock("预览", "previewDock", preview_);
-    bottomDock_ = makeDock("终端 / 问题 / 输出", "bottomDock", bottomTabs_);
-    previewDock_->setGraphicsEffect(AppTheme::makeShadow(previewDock_, uiScale_));
-    bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
-
-    addDockWidget(Qt::RightDockWidgetArea, previewDock_);
-    addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
-    splitDockWidget(previewDock_, bottomDock_, Qt::Vertical);
-    resizeDocks({previewDock_, bottomDock_}, {260, 340}, Qt::Vertical);
-
     layoutMenu_ = menuBar()->addMenu("布局");
-    previewToggleAction_ = previewDock_->toggleViewAction();
-    bottomToggleAction_ = bottomDock_->toggleViewAction();
+    previewToggleAction_ = new QAction(lineIcon("dockRight"), "显示预览", this);
+    previewToggleAction_->setCheckable(true);
+    previewToggleAction_->setChecked(true);
+    bottomToggleAction_ = new QAction(lineIcon("dockBottom"), "显示底部面板", this);
+    bottomToggleAction_->setCheckable(true);
+    bottomToggleAction_->setChecked(true);
     layoutMenu_->addAction(previewToggleAction_);
     layoutMenu_->addAction(bottomToggleAction_);
     layoutMenu_->addSeparator();
-
-    auto addDockMoveAction = [&](const QString& text, QDockWidget* dock, Qt::DockWidgetArea area) {
-        auto* action = layoutMenu_->addAction(text);
-        connect(action, &QAction::triggered, this, [this, dock, area] {
-            addDockWidget(area, dock);
-            dock->show();
-        });
-        return action;
-    };
-    addDockMoveAction("预览在右侧", previewDock_, Qt::RightDockWidgetArea);
-    addDockMoveAction("预览在左侧", previewDock_, Qt::LeftDockWidgetArea);
-    addDockMoveAction("底部面板在底部", bottomDock_, Qt::BottomDockWidgetArea);
-    addDockMoveAction("底部面板在右侧", bottomDock_, Qt::RightDockWidgetArea);
-    layoutMenu_->addSeparator();
     auto* resetAction = layoutMenu_->addAction("重置布局");
-    connect(resetAction, &QAction::triggered, this, [this] { resetDockLayout(); });
+    connect(resetAction, &QAction::triggered, this, [this] { resetWorkbenchLayout(); });
     auto* autoLayoutAction = layoutMenu_->addAction("自动布局");
     connect(autoLayoutAction, &QAction::triggered, this, [this] { autoLayoutWorkflow(); });
     auto* fullScreenAction = layoutMenu_->addAction("全屏切换");
@@ -2178,6 +2170,174 @@ void MainWindow::createLayout()
     fullScreenAction->setIcon(lineIcon("fullscreen"));
     fullScreenAction->setData("fullscreen");
     fullScreenAction->setToolTip("全屏切换");
+
+    auto* nodeSearch = new GuiCompat::LineEdit;
+    nodeSearch->setObjectName("nodeLibrarySearch");
+    nodeSearch->setPlaceholderText("搜索节点");
+    nodeLibraryList_ = new QListWidget;
+    nodeLibraryList_->setObjectName("nodeLibraryList");
+    nodeLibraryList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    nodeLibraryList_->setSelectionMode(QAbstractItemView::SingleSelection);
+    const QVector<NodeDescriptor> descriptors = NodeFactory::instance().descriptors();
+    auto refreshNodeLibrary = [this, descriptors, nodeSearch] {
+        if (!nodeLibraryList_) {
+            return;
+        }
+        nodeLibraryList_->clear();
+        const QStringList terms = nodeSearch->text().trimmed().toLower().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+        for (const auto& descriptor : descriptors) {
+            const QString text = QString("%1 %2 %3")
+                                     .arg(descriptor.displayName, descriptor.category, descriptor.typeName)
+                                     .toLower();
+            bool matches = true;
+            for (const QString& term : terms) {
+                if (!text.contains(term)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (!matches) {
+                continue;
+            }
+            auto* item = new QListWidgetItem(QString("%1\n%2").arg(descriptor.displayName, descriptor.category));
+            item->setData(Qt::UserRole, descriptor.typeName);
+            item->setToolTip(QString("%1 / %2").arg(descriptor.category, descriptor.typeName));
+            nodeLibraryList_->addItem(item);
+        }
+    };
+    refreshNodeLibrary();
+    connect(nodeSearch, &QLineEdit::textChanged, this, refreshNodeLibrary);
+    connect(nodeLibraryList_, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
+        if (item) {
+            addNodeFromMenu(item->data(Qt::UserRole).toString());
+        }
+    });
+    connect(nodeLibraryList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        if (item) {
+            addNodeFromMenu(item->data(Qt::UserRole).toString());
+        }
+    });
+
+    nodeLibraryPage_ = new QWidget;
+    nodeLibraryPage_->setObjectName("nodeLibraryPage");
+    auto* nodeLibraryLayout = new QVBoxLayout(nodeLibraryPage_);
+    nodeLibraryLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
+                                          AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
+    nodeLibraryLayout->setSpacing(AppTheme::px(8, uiScale_));
+    auto* nodeLibraryTitle = new QLabel("节点");
+    nodeLibraryTitle->setObjectName("workbenchPanelTitle");
+    nodeLibraryLayout->addWidget(nodeLibraryTitle);
+    nodeLibraryLayout->addWidget(nodeSearch);
+    nodeLibraryLayout->addWidget(nodeLibraryList_, 1);
+
+    workflowList_ = new QListWidget;
+    workflowList_->setObjectName("workflowOutlineList");
+    workflowList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    connect(workflowList_, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
+        if (item) {
+            selectNode(item->data(Qt::UserRole).toString());
+        }
+    });
+    connect(workflowList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        if (item) {
+            selectNode(item->data(Qt::UserRole).toString());
+        }
+    });
+    workflowPage_ = new QWidget;
+    workflowPage_->setObjectName("workflowPage");
+    auto* workflowLayout = new QVBoxLayout(workflowPage_);
+    workflowLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
+                                       AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
+    workflowLayout->setSpacing(AppTheme::px(8, uiScale_));
+    auto* workflowTitle = new QLabel("工作流");
+    workflowTitle->setObjectName("workbenchPanelTitle");
+    workflowLayout->addWidget(workflowTitle);
+    workflowLayout->addWidget(workflowList_, 1);
+
+    auto* sidebarStack = new QStackedWidget;
+    sidebarStack->setObjectName("sidebarStack");
+    sidebarStack->addWidget(nodeLibraryPage_);
+    sidebarStack->addWidget(workflowPage_);
+    primarySidebar_ = new QWidget;
+    primarySidebar_->setObjectName("primarySidebar");
+    primarySidebar_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* primaryLayout = new QVBoxLayout(primarySidebar_);
+    primaryLayout->setContentsMargins(0, 0, 0, 0);
+    primaryLayout->addWidget(sidebarStack);
+
+    activityBar_ = new QWidget;
+    activityBar_->setObjectName("activityBar");
+    activityBar_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* activityLayout = new QVBoxLayout(activityBar_);
+    activityLayout->setContentsMargins(0, AppTheme::px(6, uiScale_), 0, AppTheme::px(6, uiScale_));
+    activityLayout->setSpacing(0);
+    auto makeActivityButton = [activityLayout](const QString& iconName, const QString& tooltip) {
+        auto* button = new QToolButton;
+        button->setObjectName("activityButton");
+        button->setCheckable(true);
+        button->setAutoExclusive(true);
+        button->setIcon(lineIcon(iconName));
+        button->setToolTip(tooltip);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        activityLayout->addWidget(button);
+        return button;
+    };
+    auto* nodesActivity = makeActivityButton("nodes", "节点");
+    auto* workflowActivity = makeActivityButton("workflow", "工作流");
+    nodesActivity->setChecked(true);
+    connect(nodesActivity, &QToolButton::clicked, sidebarStack, [sidebarStack] { sidebarStack->setCurrentIndex(0); });
+    connect(workflowActivity, &QToolButton::clicked, sidebarStack, [sidebarStack] { sidebarStack->setCurrentIndex(1); });
+    activityLayout->addStretch(1);
+
+    bottomPanel_ = new QWidget;
+    bottomPanel_->setObjectName("bottomPanel");
+    bottomPanel_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* bottomLayout = new QVBoxLayout(bottomPanel_);
+    bottomLayout->setContentsMargins(0, 0, 0, 0);
+    bottomLayout->addWidget(bottomTabs_);
+
+    editorSplitter_ = new QSplitter(Qt::Vertical);
+    editorSplitter_->setObjectName("editorSplitter");
+    editorSplitter_->setChildrenCollapsible(false);
+    editorSplitter_->addWidget(viewContainer);
+    editorSplitter_->addWidget(bottomPanel_);
+    editorSplitter_->setStretchFactor(0, 5);
+    editorSplitter_->setStretchFactor(1, 2);
+
+    previewSidebar_ = new QWidget;
+    previewSidebar_->setObjectName("previewSidebar");
+    previewSidebar_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* previewLayout = new QVBoxLayout(previewSidebar_);
+    previewLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
+                                      AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
+    previewLayout->setSpacing(AppTheme::px(8, uiScale_));
+    auto* previewTitle = new QLabel("预览");
+    previewTitle->setObjectName("workbenchPanelTitle");
+    previewLayout->addWidget(previewTitle);
+    previewLayout->addWidget(preview_, 1);
+
+    workbenchSplitter_ = new QSplitter(Qt::Horizontal);
+    workbenchSplitter_->setObjectName("workbenchSplitter");
+    workbenchSplitter_->setChildrenCollapsible(false);
+    workbenchSplitter_->addWidget(primarySidebar_);
+    workbenchSplitter_->addWidget(editorSplitter_);
+    workbenchSplitter_->addWidget(previewSidebar_);
+    workbenchSplitter_->setStretchFactor(0, 0);
+    workbenchSplitter_->setStretchFactor(1, 1);
+    workbenchSplitter_->setStretchFactor(2, 0);
+
+    auto* workbench = new QWidget;
+    workbench->setObjectName("workbench");
+    workbench->setAttribute(Qt::WA_StyledBackground, true);
+    auto* workbenchLayout = new QHBoxLayout(workbench);
+    workbenchLayout->setContentsMargins(0, 0, 0, 0);
+    workbenchLayout->setSpacing(0);
+    workbenchLayout->addWidget(activityBar_);
+    workbenchLayout->addWidget(workbenchSplitter_, 1);
+    GuiCompat::setMainContent(this, workbench);
+
+    connect(previewToggleAction_, &QAction::toggled, previewSidebar_, &QWidget::setVisible);
+    connect(bottomToggleAction_, &QAction::toggled, bottomPanel_, &QWidget::setVisible);
 
     headerToolbar_ = addToolBar("窗口标题层");
     headerToolbar_->setObjectName("headerToolbar");
@@ -2300,10 +2460,11 @@ void MainWindow::createLayout()
 
     QSettings settings;
     restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
-    if (settings.value("mainWindow/layoutVersion", 0).toInt() >= 5) {
-        restoreState(settings.value("mainWindow/state").toByteArray());
-    } else {
-        resetDockLayout();
+    const QByteArray workbenchState = settings.value("mainWindow/workbenchSplitter").toByteArray();
+    const QByteArray editorState = settings.value("mainWindow/editorSplitter").toByteArray();
+    if (workbenchState.isEmpty() || editorState.isEmpty() ||
+        !workbenchSplitter_->restoreState(workbenchState) || !editorSplitter_->restoreState(editorState)) {
+        resetWorkbenchLayout();
     }
 }
 
@@ -2945,6 +3106,9 @@ void MainWindow::rebuildScene()
     scene_->clear();
     nodeItems_.clear();
     edgeItems_.clear();
+    if (workflowList_) {
+        workflowList_->clear();
+    }
     for (const auto& record : graph_.nodes()) {
         auto* item = new NodeItem(this, record.id, record.node, uiScale_,
                                   nodeRunStates_.value(record.id, NodeExecutionState::NotExecuted));
@@ -2952,6 +3116,13 @@ void MainWindow::rebuildScene()
         item->setPos(record.position);
         scene_->addItem(item);
         nodeItems_.insert(record.id, item);
+        if (workflowList_) {
+            const QString displayName = record.node ? record.node->displayName() : QString("未知节点");
+            auto* outlineItem = new QListWidgetItem(QString("%1\n%2").arg(displayName, record.id));
+            outlineItem->setData(Qt::UserRole, record.id);
+            outlineItem->setToolTip(record.node ? record.node->typeName() : record.id);
+            workflowList_->addItem(outlineItem);
+        }
     }
     rebuildEdges();
     updateMiniMap();
@@ -3857,25 +4028,36 @@ void MainWindow::updatePreviewForSelection()
     setPreviewImage({});
 }
 
-void MainWindow::resetDockLayout()
+void MainWindow::resetWorkbenchLayout()
 {
-    if (!previewDock_ || !bottomDock_) {
+    if (!workbenchSplitter_ || !editorSplitter_) {
         return;
     }
-    previewDock_->setFloating(false);
-    bottomDock_->setFloating(false);
-    addDockWidget(Qt::RightDockWidgetArea, previewDock_);
-    addDockWidget(Qt::RightDockWidgetArea, bottomDock_);
-    splitDockWidget(previewDock_, bottomDock_, Qt::Vertical);
-    previewDock_->show();
-    bottomDock_->show();
+    const auto metrics = AppTheme::metrics(uiScale_);
+    const int sidebarWidth = std::max(metrics.paletteMinWidth, AppTheme::px(240, uiScale_));
+    const int previewWidth = std::max(metrics.propertyMinWidth, AppTheme::px(320, uiScale_));
+    workbenchSplitter_->setSizes({sidebarWidth, AppTheme::px(760, uiScale_), previewWidth});
+    editorSplitter_->setSizes({AppTheme::px(560, uiScale_), std::max(metrics.logMaxHeight, AppTheme::px(220, uiScale_))});
+    if (primarySidebar_) {
+        primarySidebar_->show();
+    }
+    if (previewSidebar_) {
+        previewSidebar_->show();
+    }
+    if (bottomPanel_) {
+        bottomPanel_->show();
+    }
+    if (previewToggleAction_) {
+        previewToggleAction_->setChecked(true);
+    }
+    if (bottomToggleAction_) {
+        bottomToggleAction_->setChecked(true);
+    }
     if (miniMap_) {
         miniMap_->show();
         QSettings settings;
         settings.setValue("mainWindow/showMiniMap", true);
     }
-    const auto metrics = AppTheme::metrics(uiScale_);
-    resizeDocks({previewDock_, bottomDock_}, {metrics.previewMinHeight, metrics.logMaxHeight + metrics.previewMinHeight}, Qt::Vertical);
 }
 
 void MainWindow::toggleFullScreenMode()
@@ -3943,10 +4125,10 @@ void MainWindow::showSettingsDialog()
     form->addRow("画布缩放", canvasRow);
 
     auto* previewVisible = new GuiCompat::CheckBox;
-    previewVisible->setChecked(!previewDock_ || previewDock_->isVisible());
+    previewVisible->setChecked(!previewSidebar_ || previewSidebar_->isVisible());
     form->addRow("显示预览", previewVisible);
     auto* bottomVisible = new GuiCompat::CheckBox;
-    bottomVisible->setChecked(!bottomDock_ || bottomDock_->isVisible());
+    bottomVisible->setChecked(!bottomPanel_ || bottomPanel_->isVisible());
     form->addRow("显示底部面板", bottomVisible);
     auto* miniMapVisible = new GuiCompat::CheckBox;
     miniMapVisible->setChecked(!miniMap_ || miniMap_->isVisible());
@@ -3968,7 +4150,7 @@ void MainWindow::showSettingsDialog()
         uiScaleSpin->setValue(100.0);
     });
     connect(resetLayoutButton, &QPushButton::clicked, this, [this, previewVisible, bottomVisible, miniMapVisible] {
-        resetDockLayout();
+        resetWorkbenchLayout();
         previewVisible->setChecked(true);
         bottomVisible->setChecked(true);
         miniMapVisible->setChecked(true);
@@ -3987,8 +4169,12 @@ void MainWindow::showSettingsDialog()
         if (!qFuzzyCompare(requestedZoom, zoomScale_)) {
             applyZoomFactor(requestedZoom / zoomScale_);
         }
-        if (previewDock_) previewDock_->setVisible(previewVisible->isChecked());
-        if (bottomDock_) bottomDock_->setVisible(bottomVisible->isChecked());
+        if (previewToggleAction_) {
+            previewToggleAction_->setChecked(previewVisible->isChecked());
+        }
+        if (bottomToggleAction_) {
+            bottomToggleAction_->setChecked(bottomVisible->isChecked());
+        }
         if (miniMap_) miniMap_->setVisible(miniMapVisible->isChecked());
         settings.setValue("mainWindow/showMiniMap", miniMapVisible->isChecked());
     };
@@ -4134,11 +4320,21 @@ void MainWindow::applyUiScale()
     if (problemLog_) {
         problemLog_->setMinimumHeight(metrics.logMaxHeight);
     }
-    if (previewDock_) {
-        previewDock_->setGraphicsEffect(AppTheme::makeShadow(previewDock_, uiScale_));
+    if (activityBar_) {
+        activityBar_->setFixedWidth(AppTheme::px(50, uiScale_));
+        const auto buttons = activityBar_->findChildren<QToolButton*>();
+        for (auto* button : buttons) {
+            button->setFixedSize(AppTheme::px(50, uiScale_), AppTheme::px(50, uiScale_));
+            button->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
+            const QString tooltip = button->toolTip();
+            button->setIcon(lineIcon(tooltip == "工作流" ? "workflow" : "nodes"));
+        }
     }
-    if (bottomDock_) {
-        bottomDock_->setGraphicsEffect(AppTheme::makeShadow(bottomDock_, uiScale_));
+    if (primarySidebar_) {
+        primarySidebar_->setMinimumWidth(metrics.paletteMinWidth);
+    }
+    if (previewSidebar_) {
+        previewSidebar_->setMinimumWidth(metrics.propertyMinWidth);
     }
 
     if (scene_) {
@@ -4161,9 +4357,14 @@ void MainWindow::closeEvent(QCloseEvent* event)
     }
     QSettings settings;
     settings.setValue("mainWindow/geometry", saveGeometry());
-    settings.setValue("mainWindow/state", saveState());
+    if (workbenchSplitter_) {
+        settings.setValue("mainWindow/workbenchSplitter", workbenchSplitter_->saveState());
+    }
+    if (editorSplitter_) {
+        settings.setValue("mainWindow/editorSplitter", editorSplitter_->saveState());
+    }
     settings.setValue("mainWindow/uiScale", uiScale_);
     settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
-    settings.setValue("mainWindow/layoutVersion", 5);
+    settings.setValue("mainWindow/layoutVersion", 6);
     QMainWindow::closeEvent(event);
 }
