@@ -10,10 +10,6 @@
 #include <algorithm>
 #include <cmath>
 
-#if defined(IMAGENODEEDITOR_USE_ELA)
-#include "ElaTheme.h"
-#endif
-
 namespace {
 
 AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::System;
@@ -502,9 +498,6 @@ bool isDarkTheme()
 void apply(QApplication& app, double uiScale)
 {
     app.setFont(appFont(uiScale));
-#if defined(IMAGENODEEDITOR_USE_ELA)
-    eTheme->setThemeMode(isDarkTheme() ? ElaThemeType::Dark : ElaThemeType::Light);
-#endif
     app.setStyleSheet(styleSheet(uiScale));
 
     QPalette palette = app.palette();

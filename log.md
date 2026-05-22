@@ -20,6 +20,27 @@
 
 ## 记录条目
 
+### 2026-05-21 / Qt GUI 候选原型验证阶段
+
+类型：修改
+
+概述：
+新增隔离的 Qt/C++ GUI 候选实验层，分别用 Qlementine、Qt Nodes 和 Qt Advanced Docking System 验证现代控件壳、节点画布和专业停靠工作台方向；同时落库候选来源、许可证记录、构建命令、截图和决策报告。
+
+影响范围：
+`CMakeLists.txt`、`experiments/gui_prototypes/`、`third_party/Qlementine/`、`third_party/QtNodes/`、`third_party/QtAdvancedDockingSystem/`、`third_party/GUI_PROTOTYPE_SOURCES.md`
+
+处理方式：
+主目标新增默认关闭的 `IMAGENODEEDITOR_BUILD_GUI_PROTOTYPES` 开关，实验目标复用最小工作台占位数据而不接入现有 workflow JSON 与执行引擎；第三方源码使用固定 vendored 快照，原始许可证文件保留在各目录根部。
+
+当前状态：
+已解决
+
+后续注意：
+正式 UI 路线建议先落视觉壳与布局质量改进，再决定是否承担 Qt Nodes 适配层或新 docking 系统的迁移成本；将任何候选链接进主程序前需要再次核对 Windows 构建和许可证影响。
+
+---
+
 ### 2026-05-11 / 文档规划阶段
 
 类型：修改
@@ -794,3 +815,45 @@ macOS 顶部系统菜单是 Qt 的平台原生行为，不作为缺陷处理；W
 
 后续注意：
 本轮只做可证明安全的清理；`qt-mvvm` 等未链接第三方目录若要移除，应单独确认子模块和参考代码用途后再执行。
+
+---
+
+### 2026-05-22 / Qt Nodes 主画布迁移与依赖收敛阶段
+
+类型：修改
+
+概述：
+将主程序画布迁移到 Qt Nodes，保留 `WorkflowGraph`、执行引擎、缓存、宏节点和 workflow JSON 作为业务内核；同时移除旧自绘画布路径和未选中的 GUI 第三方路线。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/gui/MainWindow.*`、`ImageNodeEditor/gui/WorkflowCanvas.*`、`ImageNodeEditor/gui/WorkflowNodeDelegate.*`、`ImageNodeEditor/gui/WorkflowNodePainter.*`、`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/main.cpp`、`struct.md`、`third_party/QtNodes/`
+
+处理方式：
+新增 Qt Nodes 画布桥接层，把节点、端口、连线、选中、移动、参数控件和执行状态映射到 Qt Nodes，而连线合法性、撤销快照和持久化仍回写现有图模型。节点 painter 按输入输出、几何、色彩、滤波、合成和高级功能类别绘制不同轮廓与分类色。主入口退回标准 Qt Widgets，删除 Ela 兼容层和旧 `NodeItem` / `PortItem` / `EdgeItem` / 旧拖线场景实现；清理 ElaWidgetTools、Qlementine、ADS、`qt-mvvm`、未选原型及 Qt Nodes 未构建的 examples/tests/docs。
+
+当前状态：
+已解决
+
+后续注意：
+Qt Nodes 只负责 GUI 承载，不替代 `WorkflowSerializer`。后续若升级 vendored Qt Nodes，需要同步来源记录并重新验证宏节点导航、节点内参数和连接校验回写。
+
+---
+
+### 2026-05-23 / Qt Quick 混合工作台骨架阶段
+
+类型：修改
+
+概述：
+在保留现有 C++ workflow 内核和 Qt Nodes 画布的前提下，为主窗口接入 Qt Quick 工作台壳层。新界面以 QML 承载 Activity Bar、主侧栏、状态栏和 Quick Access，中央画布、右侧预览和底部终端/问题/输出 Panel 仍复用现有 QWidget。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/main.cpp`、`ImageNodeEditor/gui/MainWindow.*`、`ImageNodeEditor/gui/WorkbenchHostWidget.*`、`ImageNodeEditor/gui/WorkbenchModels.*`、`ImageNodeEditor/qml/`、`struct.md`
+
+处理方式：
+主目标新增 Qt QML、Quick、Quick Controls 2 和 Quick Widgets 模块，并固定 Qt Quick Controls 为可定制的 `Basic` 样式。`WorkbenchHostWidget` 用 `QQuickWidget` 嵌入工作台表面，用 splitter 继续承载 Qt Nodes 编辑器、预览和底部 Panel。命令面板复用现有 `QAction`；节点目录、大纲、问题列表和最近 workflow 通过 C++ 列表模型暴露给 QML，QML 只把节点创建、节点定位、区域显示切换和最近 workflow 打开请求回传到 `MainWindow`。
+
+当前状态：
+已解决
+
+后续注意：
+这是混合迁移的第一阶段。底部 Panel、预览内容和工作簿标签仍由 Widgets 实现；后续迁移应继续沿 `WorkbenchBridge` 边界接入，不要把 `WorkflowGraph` 修改逻辑搬到 QML。

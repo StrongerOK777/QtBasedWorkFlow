@@ -23,7 +23,6 @@ lib/
 build/
 out/
 .qt/
-/ElaWidgetTools/
 
 # --- Python ---
 __pycache__/

@@ -1,6 +1,9 @@
 #include "gui/MainWindow.h"
 
 #include "gui/AppTheme.h"
+#include "gui/WorkbenchHostWidget.h"
+#include "gui/WorkbenchModels.h"
+#include "gui/WorkflowCanvas.h"
 #include "gui/WorkflowCommands.h"
 #include "nodes/ImageNode.h"
 #include "nodes/MacroNode.h"
@@ -21,21 +24,14 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
-#include <QElapsedTimer>
 #include <QEvent>
 #include <QEventLoop>
+#include <QFileInfo>
 #include <QFileDialog>
 #include <QFormLayout>
-#include <QGraphicsEllipseItem>
 #include <QGraphicsDropShadowEffect>
-#include <QGraphicsLineItem>
-#include <QGraphicsPathItem>
-#include <QGraphicsProxyWidget>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
-#include <QGraphicsSceneContextMenuEvent>
-#include <QGraphicsSceneMouseEvent>
-#include <QGraphicsTextItem>
 #include <QGraphicsView>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -52,7 +48,6 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
-#include <QPainterPathStroker>
 #include <QPalette>
 #include <QPixmap>
 #include <QPlainTextEdit>
@@ -81,147 +76,12 @@
 #include <QToolTip>
 #include <QUndoStack>
 #include <QVBoxLayout>
-#include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
 #include <functional>
 #include <limits>
 
 namespace {
-
-enum class PortConnectionFeedback {
-    None,
-    Connectable,
-    Blocked,
-    Snapped
-};
-
-QColor portColor(PortType type)
-{
-    switch (type) {
-    case PortType::ImageRGBA:
-    case PortType::ImageGray:
-        return QColor("#404040");
-    case PortType::Number:
-        return QColor("#606060");
-    case PortType::Text:
-        return QColor("#808080");
-    case PortType::Mask:
-        return QColor("#a0a0a0");
-    case PortType::ImageList:
-        return QColor("#505050");
-    }
-    return QColor("#707070");
-}
-
-QString portDirectionName(PortDirection direction)
-{
-    return direction == PortDirection::Input ? "输入" : "输出";
-}
-
-QPainterPath rectPath(const QRectF& rect)
-{
-    QPainterPath path;
-    path.addRect(rect);
-    return path;
-}
-
-void paintCanvasBackground(QPainter* painter, const QRectF& rect, double uiScale)
-{
-    const auto colors = AppTheme::colors();
-    QLinearGradient gradient(rect.topLeft(), rect.bottomRight());
-    gradient.setColorAt(0, colors.canvasTop);
-    gradient.setColorAt(1, colors.canvasBottom);
-    painter->fillRect(rect, gradient);
-
-    const qreal step = 26.0 * uiScale;
-    const qreal dotRadius = std::max<qreal>(1.0, 1.15 * uiScale);
-    const qreal left = std::floor(rect.left() / step) * step;
-    const qreal top = std::floor(rect.top() / step) * step;
-    painter->setRenderHint(QPainter::Antialiasing);
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(colors.canvasDot);
-    for (qreal x = left; x < rect.right(); x += step) {
-        for (qreal y = top; y < rect.bottom(); y += step) {
-            painter->drawEllipse(QPointF(x, y), dotRadius, dotRadius);
-        }
-    }
-}
-
-QImage boxBlurred(const QImage& source, int radius, int passes = 3)
-{
-    if (source.isNull() || radius <= 0) {
-        return source;
-    }
-    QImage current = source.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    QImage temp(current.size(), current.format());
-    const int w = current.width();
-    const int h = current.height();
-
-    for (int pass = 0; pass < passes; ++pass) {
-        for (int y = 0; y < h; ++y) {
-            auto* out = reinterpret_cast<QRgb*>(temp.scanLine(y));
-            for (int x = 0; x < w; ++x) {
-                int a = 0;
-                int r = 0;
-                int g = 0;
-                int b = 0;
-                int count = 0;
-                const int x0 = std::max(0, x - radius);
-                const int x1 = std::min(w - 1, x + radius);
-                for (int sx = x0; sx <= x1; ++sx) {
-                    const QRgb pixel = current.pixel(sx, y);
-                    a += qAlpha(pixel);
-                    r += qRed(pixel);
-                    g += qGreen(pixel);
-                    b += qBlue(pixel);
-                    ++count;
-                }
-                out[x] = qRgba(r / count, g / count, b / count, a / count);
-            }
-        }
-        for (int y = 0; y < h; ++y) {
-            auto* out = reinterpret_cast<QRgb*>(current.scanLine(y));
-            for (int x = 0; x < w; ++x) {
-                int a = 0;
-                int r = 0;
-                int g = 0;
-                int b = 0;
-                int count = 0;
-                const int y0 = std::max(0, y - radius);
-                const int y1 = std::min(h - 1, y + radius);
-                for (int sy = y0; sy <= y1; ++sy) {
-                    const QRgb pixel = temp.pixel(x, sy);
-                    a += qAlpha(pixel);
-                    r += qRed(pixel);
-                    g += qGreen(pixel);
-                    b += qBlue(pixel);
-                    ++count;
-                }
-                out[x] = qRgba(r / count, g / count, b / count, a / count);
-            }
-        }
-    }
-    return current;
-}
-
-QPixmap sampledCanvasGlass(const QRectF& sceneRect, double uiScale, const QSize& targetSize)
-{
-    if (targetSize.isEmpty()) {
-        return {};
-    }
-    QImage sample(targetSize.expandedTo(QSize(1, 1)), QImage::Format_ARGB32_Premultiplied);
-    sample.fill(Qt::transparent);
-
-    QPainter painter(&sample);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.translate(-sceneRect.topLeft());
-    paintCanvasBackground(&painter, sceneRect, uiScale);
-    painter.end();
-
-    QImage blurred = boxBlurred(sample, std::max(2, AppTheme::px(4, uiScale)), 3);
-    return QPixmap::fromImage(blurred);
-}
 
 QIcon lineIcon(const QString& name)
 {
@@ -449,562 +309,6 @@ void installDelayedTooltips(QToolBar* toolbar)
         button->installEventFilter(filter);
     }
 }
-
-class PortItem final : public QGraphicsEllipseItem {
-public:
-    PortItem(QString nodeId, PortInfo port, double uiScale, QGraphicsItem* parent)
-        : QGraphicsEllipseItem(parent), nodeId_(std::move(nodeId)), port_(std::move(port)), uiScale_(uiScale)
-    {
-        const auto metrics = AppTheme::nodeMetrics(uiScale_);
-        setRect(-metrics.portRadius, -metrics.portRadius, metrics.portRadius * 2, metrics.portRadius * 2);
-        setAcceptHoverEvents(true);
-        setToolTip(QString("%1\n方向：%2\n类型：%3")
-                       .arg(port_.displayName, portDirectionName(port_.direction), portTypeName(port_.type)));
-    }
-
-    QString nodeId() const { return nodeId_; }
-    PortInfo port() const { return port_; }
-    void setConnectionFeedback(PortConnectionFeedback feedback)
-    {
-        if (feedback_ == feedback) {
-            return;
-        }
-        feedback_ = feedback;
-        update();
-    }
-
-protected:
-    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override
-    {
-        hovered_ = true;
-        update();
-        QGraphicsEllipseItem::hoverEnterEvent(event);
-    }
-
-    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override
-    {
-        hovered_ = false;
-        update();
-        QGraphicsEllipseItem::hoverLeaveEvent(event);
-    }
-
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
-    {
-        Q_UNUSED(option);
-        Q_UNUSED(widget);
-        QColor base = portColor(port_.type);
-        if (feedback_ == PortConnectionFeedback::Blocked) {
-            base = AppTheme::isDarkTheme() ? QColor("#707070") : QColor("#404040");
-        } else if (feedback_ == PortConnectionFeedback::Snapped) {
-            base = AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020");
-        } else if (feedback_ == PortConnectionFeedback::Connectable) {
-            base = AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#808080");
-        }
-        const QRectF r = rect();
-        const qreal halo = feedback_ == PortConnectionFeedback::Snapped ? 5.5 * uiScale_ :
-                           feedback_ == PortConnectionFeedback::None ? 3.0 * uiScale_ : 4.0 * uiScale_;
-
-        painter->setRenderHint(QPainter::Antialiasing);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(base.red(), base.green(), base.blue(),
-                                 feedback_ == PortConnectionFeedback::None ? (hovered_ ? 62 : 34) : 78));
-        painter->drawEllipse(r.adjusted(-halo, -halo, halo, halo));
-
-        QRadialGradient gradient(r.center() - QPointF(r.width() * 0.22, r.height() * 0.22), r.width());
-        gradient.setColorAt(0, base.lighter(165));
-        gradient.setColorAt(0.62, base);
-        gradient.setColorAt(1, base.darker(125));
-        painter->setBrush(gradient);
-        painter->setPen(QPen(QColor(255, 255, 255, hovered_ || feedback_ != PortConnectionFeedback::None ? 245 : 210),
-                             std::max(1.0, (feedback_ == PortConnectionFeedback::Snapped ? 1.8 : 1.2) * uiScale_)));
-        const qreal grow = feedback_ == PortConnectionFeedback::Snapped ? 1.5 * uiScale_ : 0.0;
-        painter->drawEllipse(r.adjusted(-grow, -grow, grow, grow));
-    }
-
-private:
-    QString nodeId_;
-    PortInfo port_;
-    double uiScale_ = 1.0;
-    PortConnectionFeedback feedback_ = PortConnectionFeedback::None;
-    bool hovered_ = false;
-};
-
-class NodeItem final : public QGraphicsRectItem {
-public:
-    NodeItem(MainWindow* window, QString nodeId, QSharedPointer<ImageNode> node, double uiScale, NodeExecutionState runState)
-        : QGraphicsRectItem(), window_(window), nodeId_(std::move(nodeId)), node_(std::move(node)), uiScale_(uiScale), runState_(runState)
-    {
-        const auto metrics = AppTheme::nodeMetrics(uiScale_);
-        const int rowCount = std::max(node_->inputPorts().size(), node_->outputPorts().size());
-        compactHeight_ = metrics.topPadding + rowCount * metrics.rowHeight + metrics.bottomPadding;
-        setRect(0, 0, metrics.width, compactHeight_);
-        setAcceptHoverEvents(true);
-        setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemSendsGeometryChanges);
-
-        auto* title = new QGraphicsTextItem(node_->displayName(), this);
-        QFont titleFont;
-        titleFont.setPointSizeF(metrics.titleSize);
-        titleFont.setBold(true);
-        title->setFont(titleFont);
-        title->setDefaultTextColor(AppTheme::colors().textPrimary);
-        title->setPos(14 * uiScale_, 8 * uiScale_);
-
-        qreal y = metrics.topPadding;
-        for (const auto& port : node_->inputPorts()) {
-            auto* item = new PortItem(nodeId_, port, uiScale_, this);
-            item->setPos(0, y);
-            ports_.append(item);
-            auto* label = new QGraphicsTextItem(port.displayName, this);
-            QFont labelFont;
-            labelFont.setPointSizeF(metrics.labelSize);
-            label->setFont(labelFont);
-            label->setDefaultTextColor(AppTheme::colors().textSecondary);
-            label->setPos(15 * uiScale_, y - 12 * uiScale_);
-            y += metrics.rowHeight;
-        }
-        y = metrics.topPadding;
-        for (const auto& port : node_->outputPorts()) {
-            auto* item = new PortItem(nodeId_, port, uiScale_, this);
-            item->setPos(rect().width(), y);
-            ports_.append(item);
-            auto* label = new QGraphicsTextItem(port.displayName, this);
-            QFont labelFont;
-            labelFont.setPointSizeF(metrics.labelSize);
-            label->setFont(labelFont);
-            label->setDefaultTextColor(AppTheme::colors().textSecondary);
-            const qreal labelWidth = label->boundingRect().width();
-            label->setPos(rect().width() - labelWidth - 15 * uiScale_, y - 12 * uiScale_);
-            y += metrics.rowHeight;
-        }
-
-        buildParameterPanel();
-        updateParameterExpansion(false);
-    }
-
-    QString nodeId() const { return nodeId_; }
-    QVector<PortItem*> ports() const { return ports_; }
-    void setRunState(NodeExecutionState state)
-    {
-        if (runState_ == state) {
-            return;
-        }
-        runState_ = state;
-        update();
-    }
-    void setElapsedMs(qint64 elapsedMs)
-    {
-        if (elapsedMs_ == elapsedMs) {
-            return;
-        }
-        elapsedMs_ = elapsedMs;
-        update();
-    }
-    void setAnimationPhase(int phase)
-    {
-        animationPhase_ = phase;
-        if (runState_ == NodeExecutionState::Running) {
-            update();
-        }
-    }
-
-protected:
-    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override
-    {
-        hovered_ = true;
-        update();
-        QGraphicsRectItem::hoverEnterEvent(event);
-    }
-
-    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override
-    {
-        hovered_ = false;
-        update();
-        QGraphicsRectItem::hoverLeaveEvent(event);
-    }
-
-    void mousePressEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        pressed_ = true;
-        dragStartPos_ = pos();
-        update();
-        QGraphicsRectItem::mousePressEvent(event);
-    }
-
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        pressed_ = false;
-        const QPointF dragEndPos = pos();
-        if (window_ && (!qFuzzyCompare(dragStartPos_.x(), dragEndPos.x()) || !qFuzzyCompare(dragStartPos_.y(), dragEndPos.y()))) {
-            window_->commitNodeMove(nodeId_, dragStartPos_, dragEndPos);
-        }
-        update();
-        QGraphicsRectItem::mouseReleaseEvent(event);
-    }
-
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        if (window_) {
-            window_->enterMacroNode(nodeId_);
-            event->accept();
-            return;
-        }
-        QGraphicsRectItem::mouseDoubleClickEvent(event);
-    }
-
-    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override
-    {
-        if (change == ItemPositionHasChanged && window_) {
-            window_->updateNodePosition(nodeId_, value.toPointF());
-        } else if (change == ItemSelectedHasChanged) {
-            const bool selected = value.toBool();
-            setZValue(selected ? 20.0 : 0.0);
-            updateParameterExpansion(selected);
-        }
-        return QGraphicsRectItem::itemChange(change, value);
-    }
-
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
-    {
-        Q_UNUSED(option);
-        Q_UNUSED(widget);
-        const auto metrics = AppTheme::nodeMetrics(uiScale_);
-        const auto colors = AppTheme::colors();
-        const QRectF body = rect();
-        const QRectF shadowRect = body.translated(0, pressed_ ? 2 * uiScale_ : 5 * uiScale_);
-        const QColor stateColor = [&] {
-            const bool dark = AppTheme::isDarkTheme();
-            switch (runState_) {
-            case NodeExecutionState::Running: return dark ? QColor("#d0d0d0") : QColor("#707070");
-            case NodeExecutionState::Succeeded: return dark ? QColor("#b8b8b8") : QColor("#505050");
-            case NodeExecutionState::Failed: return QColor("#ff453a");
-            case NodeExecutionState::CacheHit: return QColor("#909090");
-            case NodeExecutionState::NotExecuted: return colors.nodeBorder;
-            }
-            return colors.nodeBorder;
-        }();
-
-        painter->setRenderHint(QPainter::Antialiasing);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(colors.nodeShadow);
-        painter->drawPath(rectPath(shadowRect.adjusted(3 * uiScale_, 3 * uiScale_, -3 * uiScale_, -1 * uiScale_)));
-
-        painter->save();
-        painter->setClipPath(rectPath(body));
-        const QRectF sampleSceneRect = mapRectToScene(body).adjusted(-12 * uiScale_, -12 * uiScale_, 12 * uiScale_, 12 * uiScale_);
-        const QSize backdropSize = body.size().toSize() + QSize(AppTheme::px(24, uiScale_), AppTheme::px(24, uiScale_));
-        const bool dark = AppTheme::isDarkTheme();
-        if (cachedBackdrop_.isNull() || cachedBackdropSize_ != backdropSize || cachedSampleSceneRect_ != sampleSceneRect ||
-            std::abs(cachedUiScale_ - uiScale_) > 0.0001 || cachedDark_ != dark) {
-            cachedBackdrop_ = sampledCanvasGlass(sampleSceneRect, uiScale_, backdropSize);
-            cachedBackdropSize_ = backdropSize;
-            cachedSampleSceneRect_ = sampleSceneRect;
-            cachedUiScale_ = uiScale_;
-            cachedDark_ = dark;
-        }
-        if (!cachedBackdrop_.isNull()) {
-            painter->drawPixmap(body.adjusted(-12 * uiScale_, -12 * uiScale_, 12 * uiScale_, 12 * uiScale_),
-                                cachedBackdrop_,
-                                QRectF(QPointF(0, 0), cachedBackdrop_.deviceIndependentSize()));
-        }
-        painter->restore();
-
-        QLinearGradient glass(body.topLeft(), body.bottomLeft());
-        if (AppTheme::isDarkTheme()) {
-            glass.setColorAt(0, QColor(46, 46, 47, hovered_ ? 150 : 132));
-            glass.setColorAt(0.56, QColor(25, 26, 27, hovered_ ? 116 : 96));
-            glass.setColorAt(1, QColor(18, 19, 20, hovered_ ? 150 : 132));
-        } else {
-            glass.setColorAt(0, QColor(255, 255, 255, hovered_ ? 150 : 128));
-            glass.setColorAt(0.55, QColor(238, 238, 238, hovered_ ? 100 : 82));
-            glass.setColorAt(1, QColor(214, 214, 214, hovered_ ? 126 : 104));
-        }
-        painter->setBrush(glass);
-        painter->setPen(QPen(isSelected() ? colors.nodeSelected : stateColor,
-                             (isSelected() || runState_ != NodeExecutionState::NotExecuted) ? 2.3 * uiScale_ : 1.1 * uiScale_));
-        painter->drawPath(rectPath(body));
-
-        QRectF header = body;
-        header.setHeight(metrics.headerHeight);
-        QLinearGradient highlight(header.topLeft(), header.bottomLeft());
-        highlight.setColorAt(0, QColor(255, 255, 255, AppTheme::isDarkTheme() ? 70 : 130));
-        highlight.setColorAt(1, QColor(255, 255, 255, AppTheme::isDarkTheme() ? 16 : 34));
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(highlight);
-        painter->drawPath(rectPath(header));
-
-        painter->setPen(QPen(QColor(255, 255, 255, 150), 1));
-        painter->drawLine(body.left(), body.top() + 1, body.right(), body.top() + 1);
-
-        if (runState_ != NodeExecutionState::NotExecuted) {
-            const QRectF strip(body.left() + 8 * uiScale_, body.bottom() - 6 * uiScale_,
-                               body.width() - 16 * uiScale_, 3 * uiScale_);
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(QColor(stateColor.red(), stateColor.green(), stateColor.blue(), 110));
-            painter->drawRect(strip);
-            if (runState_ == NodeExecutionState::Running) {
-                const qreal segmentWidth = std::max<qreal>(18.0 * uiScale_, strip.width() * 0.22);
-                const qreal travel = strip.width() + segmentWidth;
-                const qreal offset = std::fmod(animationPhase_ * 8.0 * uiScale_, travel) - segmentWidth;
-                QRectF segment(strip.left() + offset, strip.top(), segmentWidth, strip.height());
-                segment = segment.intersected(strip);
-                painter->setBrush(stateColor.lighter(135));
-                painter->drawRect(segment);
-            } else {
-                painter->setBrush(stateColor);
-                painter->drawRect(strip);
-            }
-        }
-
-        if (elapsedMs_ >= 0 || runState_ == NodeExecutionState::CacheHit) {
-            const QString text = runState_ == NodeExecutionState::CacheHit ? "缓存" : QString("%1 ms").arg(elapsedMs_);
-            QFont font = painter->font();
-            font.setPointSizeF(std::max<qreal>(7.5, metrics.labelSize - 1.0));
-            font.setBold(true);
-            painter->setFont(font);
-            QFontMetricsF fm(font);
-            const QRectF badge(body.right() - fm.horizontalAdvance(text) - 22 * uiScale_,
-                               body.top() + 9 * uiScale_,
-                               fm.horizontalAdvance(text) + 12 * uiScale_,
-                               17 * uiScale_);
-            painter->setPen(Qt::NoPen);
-            painter->setBrush(QColor(stateColor.red(), stateColor.green(), stateColor.blue(), AppTheme::isDarkTheme() ? 88 : 54));
-            painter->drawRect(badge);
-            painter->setPen(stateColor.darker(AppTheme::isDarkTheme() ? 80 : 120));
-            painter->drawText(badge, Qt::AlignCenter, text);
-        }
-    }
-
-private:
-    QWidget* makeParameterEditor(const NodeParameter& parameter)
-    {
-        const QVariant value = node_->parameterValue(parameter.name);
-        if (parameter.type == ParameterType::Integer) {
-            auto* editor = new GuiCompat::SpinBox;
-            editor->setRange(int(parameter.min), int(parameter.max));
-            editor->setValue(value.toInt());
-            QObject::connect(editor, &QSpinBox::valueChanged, editor, [this, name = parameter.name](int next) {
-                if (window_) {
-                    window_->setNodeParameterForNode(nodeId_, name, next);
-                }
-            });
-            return editor;
-        }
-        if (parameter.type == ParameterType::Double) {
-            auto* editor = new GuiCompat::DoubleSpinBox;
-            editor->setRange(parameter.min, parameter.max);
-            editor->setSingleStep(0.05);
-            editor->setValue(value.toDouble());
-            QObject::connect(editor, &QDoubleSpinBox::valueChanged, editor, [this, name = parameter.name](double next) {
-                if (window_) {
-                    window_->setNodeParameterForNode(nodeId_, name, next);
-                }
-            });
-            return editor;
-        }
-        if (parameter.type == ParameterType::Boolean) {
-            auto* editor = new GuiCompat::CheckBox;
-            editor->setChecked(value.toBool());
-            QObject::connect(editor, &QCheckBox::toggled, editor, [this, name = parameter.name](bool next) {
-                if (window_) {
-                    window_->setNodeParameterForNode(nodeId_, name, next);
-                }
-            });
-            return editor;
-        }
-        if (parameter.type == ParameterType::Choice) {
-            auto* editor = new GuiCompat::ComboBox;
-            editor->addItems(parameter.options);
-            editor->setCurrentText(value.toString());
-            QObject::connect(editor, &QComboBox::currentTextChanged, editor, [this, name = parameter.name](const QString& next) {
-                if (window_) {
-                    window_->setNodeParameterForNode(nodeId_, name, next);
-                }
-            });
-            return editor;
-        }
-
-        auto* container = new QWidget;
-        auto* layout = new QHBoxLayout(container);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(AppTheme::px(6, uiScale_));
-        auto* edit = new GuiCompat::LineEdit;
-        edit->setText(value.toString());
-        layout->addWidget(edit);
-        if (parameter.type == ParameterType::FileOpen || parameter.type == ParameterType::FileSave || parameter.type == ParameterType::Color) {
-            auto* button = new GuiCompat::PushButton("...");
-            button->setFixedWidth(AppTheme::px(34, uiScale_));
-            layout->addWidget(button);
-            QObject::connect(button, &QPushButton::clicked, button, [this, edit, parameter] {
-                if (!window_) {
-                    return;
-                }
-                QString next;
-                if (parameter.type == ParameterType::FileOpen) {
-                    next = QFileDialog::getOpenFileName(window_, "选择图片", {}, "Images (*.png *.jpg *.jpeg *.bmp *.webp);;All files (*)");
-                } else if (parameter.type == ParameterType::FileSave) {
-                    next = QFileDialog::getSaveFileName(window_, "选择导出路径", edit->text(), "PNG (*.png);;JPEG (*.jpg);;All files (*)");
-                } else {
-                    QColor color = QColorDialog::getColor(QColor(edit->text()), window_);
-                    if (color.isValid()) {
-                        next = color.name();
-                    }
-                }
-                if (!next.isEmpty()) {
-                    edit->setText(next);
-                    window_->setNodeParameterForNode(nodeId_, parameter.name, next);
-                }
-            });
-        }
-        QObject::connect(edit, &QLineEdit::editingFinished, edit, [this, edit, name = parameter.name] {
-            if (window_) {
-                window_->setNodeParameterForNode(nodeId_, name, edit->text());
-            }
-        });
-        return container;
-    }
-
-    void buildParameterPanel()
-    {
-        const QVector<NodeParameter> parameters = node_->parameterDefinitions();
-        if (parameters.isEmpty()) {
-            return;
-        }
-        const auto metrics = AppTheme::nodeMetrics(uiScale_);
-        auto* panel = new QWidget;
-        panel->setObjectName("nodeInlineParameters");
-        panel->setStyleSheet(QString(R"(
-            QWidget#nodeInlineParameters {
-                background: rgba(0, 0, 0, 68);
-                border: 1px solid rgba(255, 255, 255, 42);
-                border-radius: 0px;
-            }
-            QLabel {
-                color: %2;
-                font-weight: 600;
-            }
-        )").arg(AppTheme::px(8, uiScale_)).arg(AppTheme::colors().textSecondary.name()));
-        auto* form = new QFormLayout(panel);
-        form->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(8, uiScale_),
-                                  AppTheme::px(10, uiScale_), AppTheme::px(8, uiScale_));
-        form->setHorizontalSpacing(AppTheme::px(8, uiScale_));
-        form->setVerticalSpacing(AppTheme::px(6, uiScale_));
-        for (const auto& parameter : parameters) {
-            auto* label = new QLabel(parameter.displayName);
-            label->setMinimumWidth(AppTheme::px(54, uiScale_));
-            form->addRow(label, makeParameterEditor(parameter));
-        }
-        panel->setFixedWidth(int(metrics.width - 24 * uiScale_));
-        panel->adjustSize();
-        const qreal panelHeight = panel->sizeHint().height();
-        expandedHeight_ = compactHeight_ + panelHeight + 18 * uiScale_;
-
-        parameterProxy_ = new QGraphicsProxyWidget(this);
-        parameterProxy_->setWidget(panel);
-        parameterProxy_->setZValue(2);
-        parameterProxy_->setPos(12 * uiScale_, compactHeight_ + 4 * uiScale_);
-        parameterProxy_->setVisible(false);
-    }
-
-    void updateParameterExpansion(bool expanded)
-    {
-        if (expanded_ == expanded) {
-            return;
-        }
-        expanded_ = expanded;
-        const qreal targetHeight = expanded_ && parameterProxy_ ? expandedHeight_ : compactHeight_;
-        prepareGeometryChange();
-        setRect(0, 0, rect().width(), targetHeight);
-        if (parameterProxy_) {
-            parameterProxy_->setVisible(expanded_);
-        }
-        update();
-    }
-
-    MainWindow* window_ = nullptr;
-    QString nodeId_;
-    QSharedPointer<ImageNode> node_;
-    double uiScale_ = 1.0;
-    QVector<PortItem*> ports_;
-    QGraphicsProxyWidget* parameterProxy_ = nullptr;
-    QPixmap cachedBackdrop_;
-    QRectF cachedSampleSceneRect_;
-    QSize cachedBackdropSize_;
-    qreal compactHeight_ = 0.0;
-    qreal expandedHeight_ = 0.0;
-    double cachedUiScale_ = 0.0;
-    NodeExecutionState runState_ = NodeExecutionState::NotExecuted;
-    qint64 elapsedMs_ = -1;
-    int animationPhase_ = 0;
-    QPointF dragStartPos_;
-    bool hovered_ = false;
-    bool pressed_ = false;
-    bool expanded_ = false;
-    bool cachedDark_ = false;
-};
-
-class EdgeItem final : public QGraphicsPathItem {
-public:
-    EdgeItem(int edgeIndex, const QPointF& start, const QPointF& end, double uiScale)
-        : QGraphicsPathItem(), edgeIndex_(edgeIndex), uiScale_(uiScale)
-    {
-        setFlags(QGraphicsItem::ItemIsSelectable);
-        setAcceptHoverEvents(true);
-        setToolTip("连线");
-        setPath(makePath(start, end));
-    }
-
-    int edgeIndex() const { return edgeIndex_; }
-    void setFailureRelated(bool failureRelated)
-    {
-        failureRelated_ = failureRelated;
-        update();
-    }
-
-    QPainterPath shape() const override
-    {
-        QPainterPathStroker stroker;
-        stroker.setWidth(14.0 * uiScale_);
-        stroker.setCapStyle(Qt::RoundCap);
-        return stroker.createStroke(path());
-    }
-
-    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override
-    {
-        Q_UNUSED(option);
-        Q_UNUSED(widget);
-        const auto colors = AppTheme::colors();
-        const QColor lineColor = failureRelated_ ? QColor("#ff453a") : (isSelected() ? colors.edgeSelected : colors.edge);
-        const QColor glowColor = failureRelated_ ? QColor(255, 69, 58, isSelected() ? 72 : 42)
-                                                 : AppTheme::isDarkTheme() ? QColor(238, 238, 238, isSelected() ? 42 : 14)
-                                                                           : QColor(64, 64, 64, isSelected() ? 54 : 18);
-        QPen glow(glowColor, isSelected() ? 8 * uiScale_ : 5 * uiScale_);
-        glow.setCapStyle(Qt::RoundCap);
-        glow.setJoinStyle(Qt::RoundJoin);
-        QPen currentPen(lineColor, isSelected() ? 3.2 * uiScale_ : 2.1 * uiScale_);
-        currentPen.setCapStyle(Qt::RoundCap);
-        currentPen.setJoinStyle(Qt::RoundJoin);
-        painter->setRenderHint(QPainter::Antialiasing);
-        painter->setPen(glow);
-        painter->drawPath(path());
-        painter->setPen(currentPen);
-        painter->drawPath(path());
-    }
-
-private:
-    QPainterPath makePath(const QPointF& start, const QPointF& end) const
-    {
-        QPainterPath path(start);
-        const qreal dx = std::max<qreal>(80 * uiScale_, std::abs(end.x() - start.x()) * 0.5);
-        const QPointF c1(start.x() + dx, start.y());
-        const QPointF c2(end.x() - dx, end.y());
-        path.cubicTo(c1, c2, end);
-        return path;
-    }
-
-    int edgeIndex_ = -1;
-    double uiScale_ = 1.0;
-    bool failureRelated_ = false;
-};
 
 class ImagePopupWindow final : public QWidget {
 public:
@@ -1252,7 +556,7 @@ public:
                                  AppTheme::px(12, uiScale), AppTheme::px(12, uiScale));
         root->setSpacing(AppTheme::px(8, uiScale));
 
-        search_ = new GuiCompat::LineEdit;
+        search_ = new QLineEdit;
         search_->setPlaceholderText("搜索节点名称、类型或分类");
         search_->installEventFilter(this);
         root->addWidget(search_);
@@ -1357,27 +661,11 @@ private:
         accept();
     }
 
-    GuiCompat::LineEdit* search_ = nullptr;
+    QLineEdit* search_ = nullptr;
     QListWidget* list_ = nullptr;
     QVector<NodeDescriptor> descriptors_;
     QString selectedType_;
 };
-
-NodeItem* nodeItemFrom(QGraphicsItem* item)
-{
-    while (item) {
-        if (auto* node = dynamic_cast<NodeItem*>(item)) {
-            return node;
-        }
-        item = item->parentItem();
-    }
-    return nullptr;
-}
-
-EdgeItem* edgeItemFrom(QGraphicsItem* item)
-{
-    return dynamic_cast<EdgeItem*>(item);
-}
 
 bool findPortInfo(const QSharedPointer<ImageNode>& node, const QString& portName, PortDirection direction, PortInfo* out)
 {
@@ -1395,358 +683,6 @@ bool findPortInfo(const QSharedPointer<ImageNode>& node, const QString& portName
     }
     return false;
 }
-
-class WorkflowScene final : public QGraphicsScene {
-public:
-    explicit WorkflowScene(MainWindow* window) : window_(window) {}
-
-protected:
-    void mousePressEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        QGraphicsItem* hit = itemAt(event->scenePos(), QTransform());
-        if (auto* port = dynamic_cast<PortItem*>(hit)) {
-            if (port->port().direction == PortDirection::Output) {
-                startPendingLine(port, event->scenePos());
-            } else if (!pendingNode_.isEmpty()) {
-                window_->requestConnect(pendingNode_, pendingPort_, port->nodeId(), port->port().name);
-                clearPendingLine();
-            }
-            event->accept();
-            return;
-        }
-        if (!pendingNode_.isEmpty() && event->button() == Qt::LeftButton) {
-            if (snappedPort_ && snappedConnectable_) {
-                window_->requestConnect(pendingNode_, pendingPort_, snappedPort_->nodeId(), snappedPort_->port().name);
-            }
-            clearPendingLine();
-            event->accept();
-            return;
-        }
-        QGraphicsScene::mousePressEvent(event);
-    }
-
-    void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        if (pendingLine_) {
-            updatePendingLine(event->scenePos());
-        }
-        QGraphicsScene::mouseMoveEvent(event);
-    }
-
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override
-    {
-        if (!pendingNode_.isEmpty() && event->button() == Qt::LeftButton && snappedPort_ && snappedConnectable_) {
-            window_->requestConnect(pendingNode_, pendingPort_, snappedPort_->nodeId(), snappedPort_->port().name);
-            clearPendingLine();
-            event->accept();
-            return;
-        }
-        QGraphicsScene::mouseReleaseEvent(event);
-    }
-
-    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override
-    {
-        if (!pendingNode_.isEmpty()) {
-            clearPendingLine();
-        }
-        QGraphicsItem* hit = itemAt(event->scenePos(), QTransform());
-        if (auto* node = nodeItemFrom(hit)) {
-            if (!node->isSelected()) {
-                clearSelection();
-                node->setSelected(true);
-            }
-            window_->showNodeContextMenu(node->nodeId(), event->screenPos());
-            event->accept();
-            return;
-        }
-        if (auto* edge = edgeItemFrom(hit)) {
-            clearSelection();
-            edge->setSelected(true);
-            window_->showEdgeContextMenu(edge->edgeIndex(), event->screenPos());
-            event->accept();
-            return;
-        }
-        QMenu menu;
-        QAction* addNodeAction = menu.addAction("快捷添加节点...");
-        QAction* chosen = menu.exec(event->screenPos());
-        if (chosen == addNodeAction) {
-            window_->showQuickNodePaletteAt(event->scenePos());
-            event->accept();
-            return;
-        }
-        QGraphicsScene::contextMenuEvent(event);
-    }
-
-    void keyPressEvent(QKeyEvent* event) override
-    {
-        if (event->key() == Qt::Key_Escape && !pendingNode_.isEmpty()) {
-            clearPendingLine();
-            event->accept();
-            return;
-        }
-        if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-            window_->removeSelectedItems();
-            event->accept();
-            return;
-        }
-        if (event->matches(QKeySequence::Copy)) {
-            window_->copySelectedNode();
-            event->accept();
-            return;
-        }
-        if (event->key() == Qt::Key_Tab && event->modifiers() == Qt::NoModifier) {
-            window_->showQuickNodePalette();
-            event->accept();
-            return;
-        }
-        QGraphicsScene::keyPressEvent(event);
-    }
-
-private:
-    void startPendingLine(PortItem* port, const QPointF& cursorPosition)
-    {
-        clearPendingLine();
-        pendingNode_ = port->nodeId();
-        pendingPort_ = port->port().name;
-        pendingStart_ = port->mapToScene(port->rect().center());
-
-        auto* line = new QGraphicsPathItem(pendingPath(pendingStart_, cursorPosition));
-        QPen pen(AppTheme::colors().pendingEdge, 2.4, Qt::DashLine);
-        pen.setCapStyle(Qt::RoundCap);
-        pen.setJoinStyle(Qt::RoundJoin);
-        line->setPen(pen);
-        line->setZValue(-0.5);
-        addItem(line);
-        pendingLine_ = line;
-        updatePendingLine(cursorPosition);
-    }
-
-    void updatePendingLine(const QPointF& cursorPosition)
-    {
-        updateSnapTarget(cursorPosition);
-        const QPointF end = snappedPort_ && snappedConnectable_
-                                ? snappedPort_->mapToScene(snappedPort_->rect().center())
-                                : cursorPosition;
-        pendingLine_->setPath(pendingPath(pendingStart_, end));
-        QPen pen(snappedPort_ && snappedConnectable_ ? (AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020")) :
-                     blockedNearPort_ ? (AppTheme::isDarkTheme() ? QColor("#707070") : QColor("#404040")) : AppTheme::colors().pendingEdge,
-                 2.4, Qt::DashLine);
-        pen.setCapStyle(Qt::RoundCap);
-        pen.setJoinStyle(Qt::RoundJoin);
-        pendingLine_->setPen(pen);
-    }
-
-    void updateSnapTarget(const QPointF& cursorPosition)
-    {
-        clearPortFeedback();
-        if (pendingNode_.isEmpty()) {
-            return;
-        }
-
-        WorkflowValidator validator;
-        PortItem* nearestConnectable = nullptr;
-        PortItem* nearestBlocked = nullptr;
-        qreal nearestConnectableDistance = std::numeric_limits<qreal>::max();
-        qreal nearestBlockedDistance = std::numeric_limits<qreal>::max();
-        const qreal snapDistance = 20.0 * (window_ ? window_->uiScale() : 1.0);
-
-        for (auto* item : items()) {
-            auto* port = dynamic_cast<PortItem*>(item);
-            if (!port || port->port().direction != PortDirection::Input) {
-                continue;
-            }
-
-            const QPointF center = port->mapToScene(port->rect().center());
-            const qreal distance = QLineF(cursorPosition, center).length();
-            const Edge candidate{pendingNode_, pendingPort_, port->nodeId(), port->port().name};
-            const bool connectable = validator.validateEdge(window_->graph(), candidate).isOk();
-            if (connectable) {
-                port->setConnectionFeedback(PortConnectionFeedback::Connectable);
-                highlightedPorts_.append(port);
-                if (distance <= snapDistance && distance < nearestConnectableDistance) {
-                    nearestConnectableDistance = distance;
-                    nearestConnectable = port;
-                }
-            } else if (distance <= snapDistance && distance < nearestBlockedDistance) {
-                nearestBlockedDistance = distance;
-                nearestBlocked = port;
-            }
-        }
-
-        if (nearestConnectable) {
-            nearestConnectable->setConnectionFeedback(PortConnectionFeedback::Snapped);
-            snappedPort_ = nearestConnectable;
-            snappedConnectable_ = true;
-            return;
-        }
-
-        if (nearestBlocked) {
-            nearestBlocked->setConnectionFeedback(PortConnectionFeedback::Blocked);
-            highlightedPorts_.append(nearestBlocked);
-            blockedNearPort_ = nearestBlocked;
-        }
-    }
-
-    QPainterPath pendingPath(const QPointF& start, const QPointF& end) const
-    {
-        QPainterPath path(start);
-        const qreal dx = std::max<qreal>(80.0, std::abs(end.x() - start.x()) * 0.5);
-        path.cubicTo(QPointF(start.x() + dx, start.y()), QPointF(end.x() - dx, end.y()), end);
-        return path;
-    }
-
-    void clearPendingLine()
-    {
-        clearPortFeedback();
-        if (pendingLine_) {
-            removeItem(pendingLine_);
-            delete pendingLine_;
-            pendingLine_ = nullptr;
-        }
-        pendingNode_.clear();
-        pendingPort_.clear();
-        pendingStart_ = {};
-    }
-
-    void clearPortFeedback()
-    {
-        for (auto* port : highlightedPorts_) {
-            if (port) {
-                port->setConnectionFeedback(PortConnectionFeedback::None);
-            }
-        }
-        highlightedPorts_.clear();
-        snappedPort_ = nullptr;
-        blockedNearPort_ = nullptr;
-        snappedConnectable_ = false;
-    }
-
-    MainWindow* window_ = nullptr;
-    QString pendingNode_;
-    QString pendingPort_;
-    QPointF pendingStart_;
-    QGraphicsPathItem* pendingLine_ = nullptr;
-    QVector<PortItem*> highlightedPorts_;
-    PortItem* snappedPort_ = nullptr;
-    PortItem* blockedNearPort_ = nullptr;
-    bool snappedConnectable_ = false;
-};
-
-class ZoomGraphicsView final : public QGraphicsView {
-public:
-    ZoomGraphicsView(QGraphicsScene* scene, MainWindow* window)
-        : QGraphicsView(scene), window_(window)
-    {
-    }
-
-protected:
-    bool event(QEvent* event) override
-    {
-        if (event->type() == QEvent::KeyPress) {
-            auto* key = static_cast<QKeyEvent*>(event);
-            if (key->key() == Qt::Key_Tab && key->modifiers() == Qt::NoModifier) {
-                window_->showQuickNodePalette();
-                return true;
-            }
-        }
-        return QGraphicsView::event(event);
-    }
-
-    void drawBackground(QPainter* painter, const QRectF& rect) override
-    {
-        const double scale = window_ ? window_->uiScale() : 1.0;
-        paintCanvasBackground(painter, rect, scale);
-    }
-
-    void wheelEvent(QWheelEvent* event) override
-    {
-        const int delta = event->angleDelta().y();
-        if (delta == 0) {
-            event->ignore();
-            return;
-        }
-        const double steps = static_cast<double>(delta) / 120.0;
-        window_->applyZoomFactor(std::pow(1.05, steps));
-        event->accept();
-    }
-
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        if (event->button() == Qt::LeftButton &&
-            event->modifiers().testFlag(Qt::ShiftModifier) &&
-            !itemAt(event->position().toPoint())) {
-            panCandidate_ = false;
-            panning_ = false;
-            setDragMode(QGraphicsView::RubberBandDrag);
-            QGraphicsView::mousePressEvent(event);
-            return;
-        }
-        if (event->button() == Qt::LeftButton && !itemAt(event->position().toPoint())) {
-            panCandidate_ = true;
-            panning_ = false;
-            lastPanPoint_ = event->position().toPoint();
-            pressTimer_.start();
-            setCursor(Qt::OpenHandCursor);
-            event->accept();
-            return;
-        }
-        QGraphicsView::mousePressEvent(event);
-    }
-
-    void mouseMoveEvent(QMouseEvent* event) override
-    {
-        if (panCandidate_ || panning_) {
-            const QPoint current = event->position().toPoint();
-            const QPoint delta = current - lastPanPoint_;
-            if (!panning_ && (pressTimer_.elapsed() >= 160 || delta.manhattanLength() >= QApplication::startDragDistance())) {
-                panning_ = true;
-                setCursor(Qt::ClosedHandCursor);
-            }
-            if (panning_) {
-                horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
-                verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
-                lastPanPoint_ = current;
-            }
-            event->accept();
-            return;
-        }
-        QGraphicsView::mouseMoveEvent(event);
-    }
-
-    void mouseReleaseEvent(QMouseEvent* event) override
-    {
-        if (dragMode() == QGraphicsView::RubberBandDrag) {
-            QGraphicsView::mouseReleaseEvent(event);
-            setDragMode(QGraphicsView::NoDrag);
-            window_->updateMiniMap();
-            return;
-        }
-        if (event->button() == Qt::LeftButton && (panCandidate_ || panning_)) {
-            panCandidate_ = false;
-            panning_ = false;
-            unsetCursor();
-            window_->updateMiniMap();
-            event->accept();
-            return;
-        }
-        QGraphicsView::mouseReleaseEvent(event);
-    }
-
-    void scrollContentsBy(int dx, int dy) override
-    {
-        QGraphicsView::scrollContentsBy(dx, dy);
-        if (window_) {
-            window_->updateMiniMap();
-        }
-    }
-
-private:
-    MainWindow* window_ = nullptr;
-    bool panCandidate_ = false;
-    bool panning_ = false;
-    QPoint lastPanPoint_;
-    QElapsedTimer pressTimer_;
-};
 
 }
 
@@ -1775,11 +711,11 @@ public:
         auto* controlsLayout = new QHBoxLayout(controls);
         controlsLayout->setContentsMargins(0, 0, 0, 0);
         controlsLayout->setSpacing(AppTheme::px(6, uiScale));
-        input_ = new GuiCompat::LineEdit;
+        input_ = new QLineEdit;
         input_->setPlaceholderText("输入命令后按 Enter");
-        auto* runButton = new GuiCompat::PushButton("运行");
-        auto* clearButton = new GuiCompat::PushButton("清空");
-        auto* restartButton = new GuiCompat::PushButton("重启");
+        auto* runButton = new QPushButton("运行");
+        auto* clearButton = new QPushButton("清空");
+        auto* restartButton = new QPushButton("重启");
         controlsLayout->addWidget(input_, 1);
         controlsLayout->addWidget(runButton);
         controlsLayout->addWidget(clearButton);
@@ -1870,10 +806,9 @@ private:
 };
 
 MainWindow::MainWindow(QWidget* parent)
-    : GuiCompat::MainWindowBase(parent)
+    : QMainWindow(parent)
 {
     NodeFactory::instance().registerBuiltins();
-    GuiCompat::configureMainWindow(this);
     undoStack_ = new QUndoStack(this);
     connect(undoStack_, &QUndoStack::cleanChanged, this, [this] { updateWindowTitle(); });
     connect(undoStack_, &QUndoStack::indexChanged, this, [this] { updateWindowTitle(); });
@@ -1899,12 +834,15 @@ MainWindow::MainWindow(QWidget* parent)
     applyUiScale();
 }
 
+MainWindow::~MainWindow() = default;
+
 void MainWindow::createActions()
 {
     // QMenuBar is intentionally kept: macOS renders it in the system menu bar,
     // while Windows/Linux render it inside the window. The same QAction objects
     // are also exposed through the custom in-window header and toolbars.
     fileMenu_ = menuBar()->addMenu("文件");
+    workbenchCommands_ = new WorkbenchCommandRegistry(this);
     mainToolbar_ = addToolBar("主工具栏");
     mainToolbar_->setObjectName("mainToolbar");
     mainToolbar_->setMovable(false);
@@ -1941,6 +879,14 @@ void MainWindow::createActions()
     fileMenu_->addAction(exportCanvasAction);
     fileMenu_->addSeparator();
     fileMenu_->addAction(runAction_);
+    workbenchCommands_->addAction("file.new", "文件", newAction);
+    workbenchCommands_->addAction("file.open", "文件", openAction);
+    workbenchCommands_->addAction("file.save", "文件", saveAction);
+    workbenchCommands_->addAction("file.saveAs", "文件", saveAsAction);
+    workbenchCommands_->addAction("file.exportWorkflow", "文件", exportWorkflowCopyAction_);
+    workbenchCommands_->addAction("file.exportPreview", "文件", exportPreviewAction_);
+    workbenchCommands_->addAction("file.exportCanvas", "文件", exportCanvasAction);
+    workbenchCommands_->addAction("workflow.run", "执行", runAction_);
 
     mainToolbar_->addAction(newAction);
     mainToolbar_->addAction(saveAction);
@@ -1961,6 +907,8 @@ void MainWindow::createActions()
     forwardToChildAction_->setStatusTip("按导航历史前进");
     connect(forwardToChildAction_, &QAction::triggered, this, [this] { navigateForwardMacroNode(); });
     forwardToChildAction_->setEnabled(false);
+    workbenchCommands_->addAction("macro.back", "导航", returnToParentAction_);
+    workbenchCommands_->addAction("macro.forward", "导航", forwardToChildAction_);
 
     editMenu_ = menuBar()->addMenu("编辑");
     auto* undoAction = undoStack_->createUndoAction(this, "撤销");
@@ -1969,9 +917,12 @@ void MainWindow::createActions()
     redoAction->setShortcuts(QKeySequence::Redo);
     editMenu_->addAction(undoAction);
     editMenu_->addAction(redoAction);
+    workbenchCommands_->addAction("edit.undo", "编辑", undoAction);
+    workbenchCommands_->addAction("edit.redo", "编辑", redoAction);
     editMenu_->addSeparator();
     auto* macroAction = editMenu_->addAction("封装为宏节点");
     connect(macroAction, &QAction::triggered, this, [this] { encapsulateSelectionAsMacro(); });
+    workbenchCommands_->addAction("macro.encapsulate", "节点", macroAction);
     auto* quickNodeAction = new QAction("快捷添加节点", this);
     const QKeySequence quickNodeShortcut(Qt::CTRL | Qt::Key_K);
     quickNodeAction->setShortcut(quickNodeShortcut);
@@ -1979,6 +930,7 @@ void MainWindow::createActions()
     quickNodeAction->setStatusTip("搜索并在当前画布位置添加节点");
     connect(quickNodeAction, &QAction::triggered, this, [this] { showQuickNodePalette(); });
     editMenu_->addAction(quickNodeAction);
+    workbenchCommands_->addAction("node.quickAdd", "节点", quickNodeAction);
 
     nodeOperationMenu_ = menuBar()->addMenu("节点操作");
     commandCenterMenu_ = new QMenu("更多操作", this);
@@ -2001,6 +953,15 @@ void MainWindow::createActions()
     auto* zoomInAction = addViewAction("放大视图", "zoomIn", {QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)}, [this] { increaseUiScale(); });
     auto* zoomOutAction = addViewAction("缩小视图", "zoomOut", {QKeySequence::ZoomOut}, [this] { decreaseUiScale(); });
     auto* resetScaleAction = addViewAction("恢复默认视图", "scaleReset", {QKeySequence(Qt::CTRL | Qt::Key_0)}, [this] { resetUiScale(); });
+    auto* commandPaletteAction = addViewAction("命令面板", "more", {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P)}, [this] {
+        if (workbenchBridge_) {
+            workbenchBridge_->showQuickAccess();
+        }
+    });
+    workbenchCommands_->addAction("view.zoomIn", "视图", zoomInAction);
+    workbenchCommands_->addAction("view.zoomOut", "视图", zoomOutAction);
+    workbenchCommands_->addAction("view.resetScale", "视图", resetScaleAction);
+    workbenchCommands_->addAction("workbench.quickAccess", "视图", commandPaletteAction);
     auto* mainSpacer = new QWidget;
     mainSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     mainToolbar_->addWidget(mainSpacer);
@@ -2015,22 +976,22 @@ void MainWindow::createActions()
     settingsAction_->setStatusTip("打开设置");
     connect(settingsAction_, &QAction::triggered, this, [this] { showSettingsDialog(); });
     settingsMenu_->addAction(settingsAction_);
+    workbenchCommands_->addAction("settings.open", "设置", settingsAction_);
 
     installDelayedTooltips(mainToolbar_);
 }
 
 void MainWindow::createLayout()
 {
-    scene_ = new WorkflowScene(this);
-    scene_->setSceneRect(-2000, -2000, 4000, 4000);
-    connect(scene_, &QGraphicsScene::selectionChanged, this, [this] {
-        selectedNodeId_.clear();
-        for (auto* item : scene_->selectedItems()) {
-            if (auto* node = dynamic_cast<NodeItem*>(item)) {
-                selectedNodeId_ = node->nodeId();
-                break;
-            }
-        }
+    WorkflowCanvas::Callbacks canvasCallbacks;
+    canvasCallbacks.edgeAdded = [this](const Edge& edge) { return acceptCanvasEdge(edge); };
+    canvasCallbacks.edgeRemoved = [this](const Edge& edge) { removeCanvasEdge(edge); };
+    canvasCallbacks.nodeMoved = [this](const QString& nodeId, const QPointF& before, const QPointF& after) {
+        commitNodeMove(nodeId, before, after);
+        updateMiniMap();
+    };
+    canvasCallbacks.selectionChanged = [this](const QString& nodeId) {
+        selectedNodeId_ = nodeId;
         if (workflowList_) {
             workflowList_->clearSelection();
             for (int row = 0; row < workflowList_->count(); ++row) {
@@ -2043,15 +1004,28 @@ void MainWindow::createLayout()
         }
         rebuildProperties();
         updatePreviewForSelection();
-    });
-    view_ = new ZoomGraphicsView(scene_, this);
-    view_->setObjectName("workflowView");
-    view_->viewport()->setObjectName("workflowViewport");
+        if (workbenchBridge_) {
+            const auto node = graph_.node(selectedNodeId_);
+            workbenchBridge_->setSelectedNodeText(node ? node->displayName() : QString("未选择节点"));
+        }
+    };
+    canvasCallbacks.nodeContextMenu = [this](const QString& nodeId, const QPoint& screenPos) {
+        if (!nodeId.isEmpty()) {
+            showNodeContextMenu(nodeId, screenPos);
+        }
+    };
+    canvasCallbacks.nodeDoubleClicked = [this](const QString& nodeId) { enterMacroNode(nodeId); };
+    canvasCallbacks.deleteSelection = [this] { removeSelectedItems(); };
+    canvasCallbacks.copySelection = [this] { copySelectedNode(); };
+    canvasCallbacks.quickPalette = [this](const QPointF& pos) { showQuickNodePaletteAt(pos); };
+    canvasCallbacks.parameterChanged = [this](const QString& nodeId, const QString& name, const QVariant& value) {
+        setNodeParameterForNode(nodeId, name, value);
+    };
+    canvas_ = std::make_unique<WorkflowCanvas>(this, uiScale_, std::move(canvasCallbacks));
+    view_ = canvas_->view();
     view_->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing);
-    view_->setDragMode(QGraphicsView::NoDrag);
     view_->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     view_->setResizeAnchor(QGraphicsView::AnchorViewCenter);
-    view_->setFrameShape(QFrame::NoFrame);
 
     auto* viewContainer = new QWidget;
     viewContainer->setObjectName("canvasContainer");
@@ -2123,7 +1097,12 @@ void MainWindow::createLayout()
         clearButton->setIcon(lineIcon("clearLog"));
         clearButton->setToolTip(QString("清空%1").arg(titleText));
         clearButton->setAutoRaise(true);
-        connect(clearButton, &QToolButton::clicked, list, &QListWidget::clear);
+        connect(clearButton, &QToolButton::clicked, this, [this, list] {
+            list->clear();
+            if (list == problemLog_ && problemModel_) {
+                problemModel_->clear();
+            }
+        });
         headerLayout->addWidget(title);
         headerLayout->addStretch(1);
         headerLayout->addWidget(clearButton);
@@ -2170,124 +1149,11 @@ void MainWindow::createLayout()
     fullScreenAction->setIcon(lineIcon("fullscreen"));
     fullScreenAction->setData("fullscreen");
     fullScreenAction->setToolTip("全屏切换");
-
-    auto* nodeSearch = new GuiCompat::LineEdit;
-    nodeSearch->setObjectName("nodeLibrarySearch");
-    nodeSearch->setPlaceholderText("搜索节点");
-    nodeLibraryList_ = new QListWidget;
-    nodeLibraryList_->setObjectName("nodeLibraryList");
-    nodeLibraryList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    nodeLibraryList_->setSelectionMode(QAbstractItemView::SingleSelection);
-    const QVector<NodeDescriptor> descriptors = NodeFactory::instance().descriptors();
-    auto refreshNodeLibrary = [this, descriptors, nodeSearch] {
-        if (!nodeLibraryList_) {
-            return;
-        }
-        nodeLibraryList_->clear();
-        const QStringList terms = nodeSearch->text().trimmed().toLower().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-        for (const auto& descriptor : descriptors) {
-            const QString text = QString("%1 %2 %3")
-                                     .arg(descriptor.displayName, descriptor.category, descriptor.typeName)
-                                     .toLower();
-            bool matches = true;
-            for (const QString& term : terms) {
-                if (!text.contains(term)) {
-                    matches = false;
-                    break;
-                }
-            }
-            if (!matches) {
-                continue;
-            }
-            auto* item = new QListWidgetItem(QString("%1\n%2").arg(descriptor.displayName, descriptor.category));
-            item->setData(Qt::UserRole, descriptor.typeName);
-            item->setToolTip(QString("%1 / %2").arg(descriptor.category, descriptor.typeName));
-            nodeLibraryList_->addItem(item);
-        }
-    };
-    refreshNodeLibrary();
-    connect(nodeSearch, &QLineEdit::textChanged, this, refreshNodeLibrary);
-    connect(nodeLibraryList_, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
-        if (item) {
-            addNodeFromMenu(item->data(Qt::UserRole).toString());
-        }
-    });
-    connect(nodeLibraryList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (item) {
-            addNodeFromMenu(item->data(Qt::UserRole).toString());
-        }
-    });
-
-    nodeLibraryPage_ = new QWidget;
-    nodeLibraryPage_->setObjectName("nodeLibraryPage");
-    auto* nodeLibraryLayout = new QVBoxLayout(nodeLibraryPage_);
-    nodeLibraryLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
-                                          AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
-    nodeLibraryLayout->setSpacing(AppTheme::px(8, uiScale_));
-    auto* nodeLibraryTitle = new QLabel("节点");
-    nodeLibraryTitle->setObjectName("workbenchPanelTitle");
-    nodeLibraryLayout->addWidget(nodeLibraryTitle);
-    nodeLibraryLayout->addWidget(nodeSearch);
-    nodeLibraryLayout->addWidget(nodeLibraryList_, 1);
-
-    workflowList_ = new QListWidget;
-    workflowList_->setObjectName("workflowOutlineList");
-    workflowList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    connect(workflowList_, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
-        if (item) {
-            selectNode(item->data(Qt::UserRole).toString());
-        }
-    });
-    connect(workflowList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (item) {
-            selectNode(item->data(Qt::UserRole).toString());
-        }
-    });
-    workflowPage_ = new QWidget;
-    workflowPage_->setObjectName("workflowPage");
-    auto* workflowLayout = new QVBoxLayout(workflowPage_);
-    workflowLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
-                                       AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
-    workflowLayout->setSpacing(AppTheme::px(8, uiScale_));
-    auto* workflowTitle = new QLabel("工作流");
-    workflowTitle->setObjectName("workbenchPanelTitle");
-    workflowLayout->addWidget(workflowTitle);
-    workflowLayout->addWidget(workflowList_, 1);
-
-    auto* sidebarStack = new QStackedWidget;
-    sidebarStack->setObjectName("sidebarStack");
-    sidebarStack->addWidget(nodeLibraryPage_);
-    sidebarStack->addWidget(workflowPage_);
-    primarySidebar_ = new QWidget;
-    primarySidebar_->setObjectName("primarySidebar");
-    primarySidebar_->setAttribute(Qt::WA_StyledBackground, true);
-    auto* primaryLayout = new QVBoxLayout(primarySidebar_);
-    primaryLayout->setContentsMargins(0, 0, 0, 0);
-    primaryLayout->addWidget(sidebarStack);
-
-    activityBar_ = new QWidget;
-    activityBar_->setObjectName("activityBar");
-    activityBar_->setAttribute(Qt::WA_StyledBackground, true);
-    auto* activityLayout = new QVBoxLayout(activityBar_);
-    activityLayout->setContentsMargins(0, AppTheme::px(6, uiScale_), 0, AppTheme::px(6, uiScale_));
-    activityLayout->setSpacing(0);
-    auto makeActivityButton = [activityLayout](const QString& iconName, const QString& tooltip) {
-        auto* button = new QToolButton;
-        button->setObjectName("activityButton");
-        button->setCheckable(true);
-        button->setAutoExclusive(true);
-        button->setIcon(lineIcon(iconName));
-        button->setToolTip(tooltip);
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        activityLayout->addWidget(button);
-        return button;
-    };
-    auto* nodesActivity = makeActivityButton("nodes", "节点");
-    auto* workflowActivity = makeActivityButton("workflow", "工作流");
-    nodesActivity->setChecked(true);
-    connect(nodesActivity, &QToolButton::clicked, sidebarStack, [sidebarStack] { sidebarStack->setCurrentIndex(0); });
-    connect(workflowActivity, &QToolButton::clicked, sidebarStack, [sidebarStack] { sidebarStack->setCurrentIndex(1); });
-    activityLayout->addStretch(1);
+    workbenchCommands_->addAction("workbench.preview", "布局", previewToggleAction_);
+    workbenchCommands_->addAction("workbench.panel", "布局", bottomToggleAction_);
+    workbenchCommands_->addAction("workbench.resetLayout", "布局", resetAction);
+    workbenchCommands_->addAction("workflow.autoLayout", "布局", autoLayoutAction);
+    workbenchCommands_->addAction("view.fullscreen", "布局", fullScreenAction);
 
     bottomPanel_ = new QWidget;
     bottomPanel_->setObjectName("bottomPanel");
@@ -2296,48 +1162,47 @@ void MainWindow::createLayout()
     bottomLayout->setContentsMargins(0, 0, 0, 0);
     bottomLayout->addWidget(bottomTabs_);
 
-    editorSplitter_ = new QSplitter(Qt::Vertical);
-    editorSplitter_->setObjectName("editorSplitter");
-    editorSplitter_->setChildrenCollapsible(false);
-    editorSplitter_->addWidget(viewContainer);
-    editorSplitter_->addWidget(bottomPanel_);
-    editorSplitter_->setStretchFactor(0, 5);
-    editorSplitter_->setStretchFactor(1, 2);
-
-    previewSidebar_ = new QWidget;
-    previewSidebar_->setObjectName("previewSidebar");
-    previewSidebar_->setAttribute(Qt::WA_StyledBackground, true);
-    auto* previewLayout = new QVBoxLayout(previewSidebar_);
-    previewLayout->setContentsMargins(AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_),
-                                      AppTheme::px(10, uiScale_), AppTheme::px(10, uiScale_));
-    previewLayout->setSpacing(AppTheme::px(8, uiScale_));
-    auto* previewTitle = new QLabel("预览");
-    previewTitle->setObjectName("workbenchPanelTitle");
-    previewLayout->addWidget(previewTitle);
-    previewLayout->addWidget(preview_, 1);
-
-    workbenchSplitter_ = new QSplitter(Qt::Horizontal);
-    workbenchSplitter_->setObjectName("workbenchSplitter");
-    workbenchSplitter_->setChildrenCollapsible(false);
-    workbenchSplitter_->addWidget(primarySidebar_);
-    workbenchSplitter_->addWidget(editorSplitter_);
-    workbenchSplitter_->addWidget(previewSidebar_);
-    workbenchSplitter_->setStretchFactor(0, 0);
-    workbenchSplitter_->setStretchFactor(1, 1);
-    workbenchSplitter_->setStretchFactor(2, 0);
-
-    auto* workbench = new QWidget;
-    workbench->setObjectName("workbench");
-    workbench->setAttribute(Qt::WA_StyledBackground, true);
-    auto* workbenchLayout = new QHBoxLayout(workbench);
-    workbenchLayout->setContentsMargins(0, 0, 0, 0);
-    workbenchLayout->setSpacing(0);
-    workbenchLayout->addWidget(activityBar_);
-    workbenchLayout->addWidget(workbenchSplitter_, 1);
-    GuiCompat::setMainContent(this, workbench);
+    nodeCatalogModel_ = new NodeCatalogModel(this);
+    workflowOutlineModel_ = new WorkflowOutlineModel(this);
+    problemModel_ = new ProblemModel(this);
+    quickAccessModel_ = new QuickAccessModel(workbenchCommands_, nodeCatalogModel_, workflowOutlineModel_, problemModel_, this);
+    workbenchBridge_ = new WorkbenchBridge(workbenchCommands_, quickAccessModel_, this);
+    workbenchBridge_->setPreviewVisible(previewToggleAction_->isChecked());
+    workbenchBridge_->setPanelVisible(bottomToggleAction_->isChecked());
+    workbenchHost_ = new WorkbenchHostWidget(workbenchBridge_,
+                                             workbenchCommands_,
+                                             nodeCatalogModel_,
+                                             workflowOutlineModel_,
+                                             problemModel_,
+                                             quickAccessModel_,
+                                             viewContainer,
+                                             preview_,
+                                             bottomPanel_,
+                                             uiScale_,
+                                             this);
+    setCentralWidget(workbenchHost_);
+    primarySidebar_ = workbenchHost_->primarySidebar();
+    previewSidebar_ = workbenchHost_->previewSidebar();
+    workbenchSplitter_ = workbenchHost_->workbenchSplitter();
+    editorSplitter_ = workbenchHost_->editorSplitter();
 
     connect(previewToggleAction_, &QAction::toggled, previewSidebar_, &QWidget::setVisible);
     connect(bottomToggleAction_, &QAction::toggled, bottomPanel_, &QWidget::setVisible);
+    connect(previewToggleAction_, &QAction::toggled, workbenchBridge_, &WorkbenchBridge::setPreviewVisible);
+    connect(bottomToggleAction_, &QAction::toggled, workbenchBridge_, &WorkbenchBridge::setPanelVisible);
+    connect(workbenchBridge_, &WorkbenchBridge::previewVisibilityRequested, previewToggleAction_, &QAction::setChecked);
+    connect(workbenchBridge_, &WorkbenchBridge::panelVisibilityRequested, bottomToggleAction_, &QAction::setChecked);
+    connect(workbenchBridge_, &WorkbenchBridge::nodeCreationRequested, this, [this](const QString& typeName) {
+        addNodeFromMenu(typeName);
+    });
+    connect(workbenchBridge_, &WorkbenchBridge::nodeFocusRequested, this, [this](const QString& nodeId) {
+        selectNode(nodeId);
+        highlightNodeBriefly(nodeId);
+    });
+    connect(workbenchBridge_, &WorkbenchBridge::recentWorkflowRequested, this, [this](const QString& path) {
+        openWorkflowPath(path, true);
+    });
+    refreshRecentWorkflowModel();
 
     headerToolbar_ = addToolBar("窗口标题层");
     headerToolbar_->setObjectName("headerToolbar");
@@ -2551,6 +1416,13 @@ void MainWindow::addNodeFromType(const QString& typeName, const QPointF& positio
 void MainWindow::selectNode(const QString& nodeId)
 {
     selectedNodeId_ = nodeId;
+    if (canvas_) {
+        canvas_->selectNode(nodeId);
+    }
+    if (workbenchBridge_) {
+        const auto node = graph_.node(selectedNodeId_);
+        workbenchBridge_->setSelectedNodeText(node ? node->displayName() : QString("未选择节点"));
+    }
     rebuildProperties();
 }
 
@@ -2608,12 +1480,7 @@ void MainWindow::copySelectedNode()
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
 
-    QStringList sourceIds;
-    for (auto* item : scene_->selectedItems()) {
-        if (auto* node = dynamic_cast<NodeItem*>(item)) {
-            sourceIds.append(node->nodeId());
-        }
-    }
+    QStringList sourceIds = canvas_ ? canvas_->selectedNodeIds() : QStringList{};
     sourceIds.removeDuplicates();
     if (sourceIds.isEmpty() && !selectedNodeId_.isEmpty()) {
         sourceIds.append(selectedNodeId_);
@@ -2669,12 +1536,7 @@ void MainWindow::copySelectedNode()
 
 void MainWindow::encapsulateSelectionAsMacro()
 {
-    QStringList selectedIds;
-    for (auto* item : scene_->selectedItems()) {
-        if (auto* node = dynamic_cast<NodeItem*>(item)) {
-            selectedIds.append(node->nodeId());
-        }
-    }
+    QStringList selectedIds = canvas_ ? canvas_->selectedNodeIds() : QStringList{};
     selectedIds.removeDuplicates();
     if (selectedIds.isEmpty()) {
         appendLog("请先选择要封装的节点");
@@ -3072,26 +1934,46 @@ void MainWindow::applyZoomFactor(double factor)
     }
     zoomScale_ = nextScale;
     view_->scale(actualFactor, actualFactor);
+    if (workbenchBridge_) {
+        workbenchBridge_->setZoomText(QString("%1%").arg(int(std::lround(zoomScale_ * 100.0))));
+    }
     updateMiniMap();
 }
 
 void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort, const QString& toNode, const QString& toPort)
 {
+    acceptCanvasEdge(Edge{fromNode, fromPort, toNode, toPort});
+}
+
+bool MainWindow::acceptCanvasEdge(const Edge& edge)
+{
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
-    Edge edge{fromNode, fromPort, toNode, toPort};
     WorkflowValidator validator;
     auto valid = validator.validateEdge(graph_, edge);
     if (valid.isFail()) {
         appendLog(valid.error());
-        appendProblem(valid.error(), toNode);
-        return;
+        appendProblem(valid.error(), edge.toNode);
+        return false;
     }
     graph_.addEdge(edge);
     resetNodeRunStates();
-    appendLog(QString("连接：%1.%2 -> %3.%4").arg(fromNode, fromPort, toNode, toPort), toNode);
+    appendLog(QString("连接：%1.%2 -> %3.%4").arg(edge.fromNode, edge.fromPort, edge.toNode, edge.toPort), edge.toNode);
     rebuildEdges();
     pushGraphEditCommand("添加连线", before, selectedBefore, WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
+    return true;
+}
+
+void MainWindow::removeCanvasEdge(const Edge& edge)
+{
+    for (int index = 0; index < graph_.edges().size(); ++index) {
+        const Edge current = graph_.edges().at(index);
+        if (current.fromNode == edge.fromNode && current.fromPort == edge.fromPort &&
+            current.toNode == edge.toNode && current.toPort == edge.toPort) {
+            removeEdgeByIndex(index);
+            return;
+        }
+    }
 }
 
 void MainWindow::updateNodePosition(const QString& nodeId, const QPointF& position)
@@ -3103,19 +1985,17 @@ void MainWindow::updateNodePosition(const QString& nodeId, const QPointF& positi
 
 void MainWindow::rebuildScene()
 {
-    scene_->clear();
     nodeItems_.clear();
-    edgeItems_.clear();
     if (workflowList_) {
         workflowList_->clear();
     }
+    if (canvas_) {
+        canvas_->setUiScale(uiScale_);
+        canvas_->rebuild(graph_, nodeRunStates_, nodeElapsedMs_);
+        scene_ = canvas_->scene();
+        nodeItems_ = canvas_->nodeItems();
+    }
     for (const auto& record : graph_.nodes()) {
-        auto* item = new NodeItem(this, record.id, record.node, uiScale_,
-                                  nodeRunStates_.value(record.id, NodeExecutionState::NotExecuted));
-        item->setElapsedMs(nodeElapsedMs_.value(record.id, -1));
-        item->setPos(record.position);
-        scene_->addItem(item);
-        nodeItems_.insert(record.id, item);
         if (workflowList_) {
             const QString displayName = record.node ? record.node->displayName() : QString("未知节点");
             auto* outlineItem = new QListWidgetItem(QString("%1\n%2").arg(displayName, record.id));
@@ -3124,67 +2004,25 @@ void MainWindow::rebuildScene()
             workflowList_->addItem(outlineItem);
         }
     }
+    if (workflowOutlineModel_) {
+        workflowOutlineModel_->setGraph(graph_);
+    }
     rebuildEdges();
     updateMiniMap();
 }
 
 void MainWindow::rebuildEdges()
 {
-    for (auto* item : edgeItems_) {
-        scene_->removeItem(item);
-        delete item;
+    if (scene_) {
+        scene_->update();
     }
-    edgeItems_.clear();
-
-    auto portPosition = [&](const QString& nodeId, const QString& portName, PortDirection direction) -> QPointF {
-        auto* item = dynamic_cast<NodeItem*>(nodeItems_.value(nodeId));
-        if (!item) return {};
-        for (auto* port : item->ports()) {
-            if (port->port().name == portName && port->port().direction == direction) {
-                return port->mapToScene(port->rect().center());
-            }
-        }
-        return item->scenePos();
-    };
-
-    QSet<QString> failedChainNodes;
-    if (!lastResult_.failedNodeId.isEmpty()) {
-        failedChainNodes.insert(lastResult_.failedNodeId);
-        bool changed = true;
-        while (changed) {
-            changed = false;
-            for (const auto& edge : graph_.edges()) {
-                if (failedChainNodes.contains(edge.toNode) && !failedChainNodes.contains(edge.fromNode)) {
-                    failedChainNodes.insert(edge.fromNode);
-                    changed = true;
-                }
-            }
-        }
-    }
-
-    for (int i = 0; i < graph_.edges().size(); ++i) {
-        const auto& edge = graph_.edges().at(i);
-        const QPointF a = portPosition(edge.fromNode, edge.fromPort, PortDirection::Output);
-        const QPointF b = portPosition(edge.toNode, edge.toPort, PortDirection::Input);
-        auto* line = new EdgeItem(i, a, b, uiScale_);
-        line->setFailureRelated(failedChainNodes.contains(edge.fromNode) && failedChainNodes.contains(edge.toNode));
-        scene_->addItem(line);
-        line->setZValue(-1);
-        edgeItems_.append(line);
-    }
+    updateMiniMap();
 }
 
 void MainWindow::removeSelectedItems()
 {
-    QVector<int> edgeIndexes;
-    QStringList nodeIds;
-    for (auto* item : scene_->selectedItems()) {
-        if (auto* node = dynamic_cast<NodeItem*>(item)) {
-            nodeIds.append(node->nodeId());
-        } else if (auto* edge = dynamic_cast<EdgeItem*>(item)) {
-            edgeIndexes.append(edge->edgeIndex());
-        }
-    }
+    QVector<int> edgeIndexes = canvas_ ? canvas_->selectedEdgeIndexes(graph_) : QVector<int>{};
+    QStringList nodeIds = canvas_ ? canvas_->selectedNodeIds() : QStringList{};
     if (edgeIndexes.isEmpty() && nodeIds.isEmpty()) {
         return;
     }
@@ -3233,6 +2071,9 @@ void MainWindow::appendLog(const QString& message, const QString& nodeId)
     }
     log_->addItem(item);
     log_->scrollToBottom();
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(message);
+    }
 }
 
 void MainWindow::appendProblem(const QString& message, const QString& nodeId)
@@ -3248,6 +2089,12 @@ void MainWindow::appendProblem(const QString& message, const QString& nodeId)
     }
     problemLog_->addItem(item);
     problemLog_->scrollToBottom();
+    if (problemModel_) {
+        problemModel_->append(message, nodeId);
+    }
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(message);
+    }
     if (bottomTabs_) {
         bottomTabs_->setCurrentIndex(1);
     }
@@ -3301,10 +2148,10 @@ void MainWindow::resetNodeRunStates()
         nodeRunStates_.insert(record.id, NodeExecutionState::NotExecuted);
     }
     for (auto it = nodeItems_.begin(); it != nodeItems_.end(); ++it) {
-        if (auto* nodeItem = dynamic_cast<NodeItem*>(it.value())) {
-            nodeItem->setRunState(NodeExecutionState::NotExecuted);
-            nodeItem->setElapsedMs(-1);
-            nodeItem->setAnimationPhase(0);
+        if (canvas_) {
+            canvas_->setExecutionState(it.key(), NodeExecutionState::NotExecuted);
+            canvas_->setElapsedMs(it.key(), -1);
+            canvas_->setAnimationPhase(it.key(), 0);
         }
     }
 }
@@ -3315,8 +2162,8 @@ void MainWindow::applyNodeRunState(const QString& nodeId, NodeExecutionState sta
         return;
     }
     nodeRunStates_.insert(nodeId, state);
-    if (auto* nodeItem = dynamic_cast<NodeItem*>(nodeItems_.value(nodeId))) {
-        nodeItem->setRunState(state);
+    if (canvas_) {
+        canvas_->setExecutionState(nodeId, state);
     }
 }
 
@@ -3325,8 +2172,8 @@ void MainWindow::handleNodeExecutionEvent(const NodeExecutionSummary& summary)
     applyNodeRunState(summary.nodeId, summary.state);
     if (!summary.nodeId.isEmpty() && summary.elapsedMs >= 0) {
         nodeElapsedMs_.insert(summary.nodeId, summary.elapsedMs);
-        if (auto* nodeItem = dynamic_cast<NodeItem*>(nodeItems_.value(summary.nodeId))) {
-            nodeItem->setElapsedMs(summary.elapsedMs);
+        if (canvas_) {
+            canvas_->setElapsedMs(summary.nodeId, summary.elapsedMs);
         }
     }
     if (summary.state == NodeExecutionState::Running && runAnimationTimer_) {
@@ -3354,8 +2201,8 @@ void MainWindow::updateRunAnimation()
     for (auto it = nodeItems_.begin(); it != nodeItems_.end(); ++it) {
         if (nodeRunStates_.value(it.key()) == NodeExecutionState::Running) {
             hasRunning = true;
-            if (auto* nodeItem = dynamic_cast<NodeItem*>(it.value())) {
-                nodeItem->setAnimationPhase(runAnimationPhase_);
+            if (canvas_) {
+                canvas_->setAnimationPhase(it.key(), runAnimationPhase_);
             }
         }
     }
@@ -3369,14 +2216,10 @@ void MainWindow::focusFailedNode(const QString& nodeId)
     if (nodeId.isEmpty()) {
         return;
     }
-    auto* item = nodeItems_.value(nodeId);
-    if (!item) {
+    if (!canvas_ || !canvas_->focusNode(nodeId)) {
         return;
     }
-    scene_->clearSelection();
-    item->setSelected(true);
     selectedNodeId_ = nodeId;
-    view_->centerOn(item);
     rebuildProperties();
 }
 
@@ -3386,14 +2229,10 @@ void MainWindow::focusLogNode(QListWidgetItem* item)
         return;
     }
     const QString nodeId = item->data(Qt::UserRole).toString();
-    if (nodeId.isEmpty() || !nodeItems_.contains(nodeId)) {
+    if (nodeId.isEmpty() || !canvas_ || !canvas_->focusNode(nodeId)) {
         return;
     }
-    scene_->clearSelection();
-    auto* nodeItem = nodeItems_.value(nodeId);
-    nodeItem->setSelected(true);
     selectedNodeId_ = nodeId;
-    view_->centerOn(nodeItem);
     rebuildProperties();
     updatePreviewForSelection();
     highlightNodeBriefly(nodeId);
@@ -3426,6 +2265,9 @@ void MainWindow::runWorkflow()
         livePreviewTimer_->stop();
     }
     resetNodeRunStates();
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText("正在执行 workflow");
+    }
     auto result = engine_.execute(graph_, [this](const NodeExecutionSummary& summary) {
         handleNodeExecutionEvent(summary);
     });
@@ -3466,6 +2308,9 @@ void MainWindow::runLivePreview()
 
     const QString previewNodeId = selectedNodeId_;
     resetNodeRunStates();
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(QString("实时预览 %1").arg(previewNodeId));
+    }
     auto result = engine_.executeForNode(graph_, previewNodeId, [this](const NodeExecutionSummary& summary) {
         handleNodeExecutionEvent(summary);
     });
@@ -3598,6 +2443,9 @@ void MainWindow::newWorkflow()
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
     selectedNodeId_.clear();
+    if (problemModel_) {
+        problemModel_->clear();
+    }
     updateNavigationActions();
     undoStack_->clear();
     rebuildScene();
@@ -3619,11 +2467,24 @@ void MainWindow::openWorkflow()
     if (!confirmSaveIfNeeded()) {
         return;
     }
+    const QString path = QFileDialog::getOpenFileName(this, "打开 workflow", {}, "Workflow (*.json);;All files (*)");
+    if (path.isEmpty()) {
+        return;
+    }
+    openWorkflowPath(path, false);
+}
+
+void MainWindow::openWorkflowPath(const QString& path, bool confirmCurrentWorkflow)
+{
+    if (path.trimmed().isEmpty()) {
+        return;
+    }
+    if (confirmCurrentWorkflow && !confirmSaveIfNeeded()) {
+        return;
+    }
     if (livePreviewTimer_) {
         livePreviewTimer_->stop();
     }
-    const QString path = QFileDialog::getOpenFileName(this, "打开 workflow", {}, "Workflow (*.json);;All files (*)");
-    if (path.isEmpty()) return;
     WorkflowSerializer serializer;
     auto loaded = serializer.loadFile(path);
     if (loaded.isFail()) {
@@ -3641,6 +2502,9 @@ void MainWindow::openWorkflow()
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
     selectedNodeId_.clear();
+    if (problemModel_) {
+        problemModel_->clear();
+    }
     updateNavigationActions();
     undoStack_->clear();
     rebuildScene();
@@ -3654,6 +2518,7 @@ void MainWindow::openWorkflow()
         refreshWorkbookTabs();
     }
     updateWindowTitle();
+    rememberRecentWorkflow(path);
     appendLog(QString("已打开：%1").arg(path));
 }
 
@@ -3748,6 +2613,7 @@ bool MainWindow::saveWorkflow()
         refreshWorkbookTabs();
     }
     updateWindowTitle();
+    rememberRecentWorkflow(currentFile_);
     appendLog(QString("已保存：%1").arg(currentFile_));
     return true;
 }
@@ -3760,6 +2626,34 @@ void MainWindow::saveWorkflowAs()
         currentFile_ = previousFile;
         updateWindowTitle();
     }
+}
+
+void MainWindow::rememberRecentWorkflow(const QString& path)
+{
+    if (path.trimmed().isEmpty()) {
+        return;
+    }
+    const QString absolutePath = QFileInfo(path).absoluteFilePath();
+    QSettings settings;
+    QStringList recent = settings.value("mainWindow/recentWorkflows").toStringList();
+    recent.removeAll(absolutePath);
+    recent.prepend(absolutePath);
+    while (recent.size() > 12) {
+        recent.removeLast();
+    }
+    settings.setValue("mainWindow/recentWorkflows", recent);
+    if (quickAccessModel_) {
+        quickAccessModel_->setRecentWorkflowPaths(recent);
+    }
+}
+
+void MainWindow::refreshRecentWorkflowModel()
+{
+    if (!quickAccessModel_) {
+        return;
+    }
+    QSettings settings;
+    quickAccessModel_->setRecentWorkflowPaths(settings.value("mainWindow/recentWorkflows").toStringList());
 }
 
 void MainWindow::restoreGraphFromUndo(const WorkflowGraph& graph, const QString& selectedNodeId)
@@ -3979,6 +2873,9 @@ void MainWindow::updateWindowTitle()
     if (documentTitleLabel_) {
         documentTitleLabel_->setText(title);
     }
+    if (workbenchBridge_) {
+        workbenchBridge_->setDocumentTitle(title);
+    }
     if (!switchingWorkbook_) {
         syncCurrentWorkbookPage();
         refreshWorkbookTabs();
@@ -4093,7 +2990,7 @@ void MainWindow::showSettingsDialog()
     form->setHorizontalSpacing(AppTheme::px(14, uiScale_));
     form->setVerticalSpacing(AppTheme::px(10, uiScale_));
 
-    auto* uiScaleSpin = new GuiCompat::DoubleSpinBox;
+    auto* uiScaleSpin = new QDoubleSpinBox;
     uiScaleSpin->setRange(AppTheme::kMinUiScale * 100.0, AppTheme::kMaxUiScale * 100.0);
     uiScaleSpin->setSingleStep(AppTheme::kUiScaleStep * 100.0);
     uiScaleSpin->setDecimals(0);
@@ -4101,7 +2998,7 @@ void MainWindow::showSettingsDialog()
     uiScaleSpin->setValue(uiScale_ * 100.0);
     form->addRow("界面大小", uiScaleSpin);
 
-    auto* themeCombo = new GuiCompat::ComboBox;
+    auto* themeCombo = new QComboBox;
     themeCombo->addItem("跟随系统", "system");
     themeCombo->addItem("浅色", "light");
     themeCombo->addItem("深色", "dark");
@@ -4124,13 +3021,13 @@ void MainWindow::showSettingsDialog()
     });
     form->addRow("画布缩放", canvasRow);
 
-    auto* previewVisible = new GuiCompat::CheckBox;
+    auto* previewVisible = new QCheckBox;
     previewVisible->setChecked(!previewSidebar_ || previewSidebar_->isVisible());
     form->addRow("显示预览", previewVisible);
-    auto* bottomVisible = new GuiCompat::CheckBox;
+    auto* bottomVisible = new QCheckBox;
     bottomVisible->setChecked(!bottomPanel_ || bottomPanel_->isVisible());
     form->addRow("显示底部面板", bottomVisible);
-    auto* miniMapVisible = new GuiCompat::CheckBox;
+    auto* miniMapVisible = new QCheckBox;
     miniMapVisible->setChecked(!miniMap_ || miniMap_->isVisible());
     form->addRow("显示小地图", miniMapVisible);
 
@@ -4139,8 +3036,8 @@ void MainWindow::showSettingsDialog()
     auto* utilityRow = new QWidget;
     auto* utilityLayout = new QHBoxLayout(utilityRow);
     utilityLayout->setContentsMargins(0, 0, 0, 0);
-    auto* resetScaleButton = new GuiCompat::PushButton("重置界面大小");
-    auto* resetLayoutButton = new GuiCompat::PushButton("重置布局");
+    auto* resetScaleButton = new QPushButton("重置界面大小");
+    auto* resetLayoutButton = new QPushButton("重置布局");
     utilityLayout->addWidget(resetScaleButton);
     utilityLayout->addWidget(resetLayoutButton);
     utilityLayout->addStretch();
@@ -4335,6 +3232,12 @@ void MainWindow::applyUiScale()
     }
     if (previewSidebar_) {
         previewSidebar_->setMinimumWidth(metrics.propertyMinWidth);
+    }
+    if (workbenchHost_) {
+        workbenchHost_->setUiScale(uiScale_);
+    }
+    if (workbenchBridge_) {
+        workbenchBridge_->setZoomText(QString("%1%").arg(int(std::lround(zoomScale_ * 100.0))));
     }
 
     if (scene_) {

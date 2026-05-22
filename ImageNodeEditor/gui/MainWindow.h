@@ -1,14 +1,15 @@
 #pragma once
 
-#include "gui/ElaCompat.h"
 #include "workflow/ExecutionEngine.h"
 #include "workflow/WorkflowGraph.h"
 
 #include <QImage>
+#include <QMainWindow>
 #include <QMap>
 #include <QStringList>
 #include <QVariant>
 #include <QVector>
+#include <memory>
 
 class QAction;
 class QCloseEvent;
@@ -28,10 +29,19 @@ class QTimer;
 class QUndoStack;
 class QWidget;
 class TerminalPanel;
+class WorkbenchBridge;
+class WorkbenchCommandRegistry;
+class WorkbenchHostWidget;
+class NodeCatalogModel;
+class ProblemModel;
+class QuickAccessModel;
+class WorkflowCanvas;
+class WorkflowOutlineModel;
 
-class MainWindow : public GuiCompat::MainWindowBase {
+class MainWindow : public QMainWindow {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
 
     WorkflowGraph& graph() { return graph_; }
     void addNodeFromType(const QString& typeName, const QPointF& position = {});
@@ -66,6 +76,8 @@ private:
     void rebuildNodeMenus();
     void addNodeFromMenu(const QString& typeName);
     void rebuildProperties();
+    bool acceptCanvasEdge(const Edge& edge);
+    void removeCanvasEdge(const Edge& edge);
     void appendLog(const QString& message, const QString& nodeId = {});
     void appendProblem(const QString& message, const QString& nodeId = {});
     void clearLog();
@@ -81,8 +93,11 @@ private:
     WorkflowGraph graphForPersistence() const;
     void newWorkflow();
     void openWorkflow();
+    void openWorkflowPath(const QString& path, bool confirmCurrentWorkflow);
     bool saveWorkflow();
     void saveWorkflowAs();
+    void rememberRecentWorkflow(const QString& path);
+    void refreshRecentWorkflowModel();
     bool confirmSaveIfNeeded();
     bool ensureSavePath();
     void updateWindowTitle();
@@ -152,18 +167,23 @@ private:
 
     QGraphicsScene* scene_ = nullptr;
     QGraphicsView* view_ = nullptr;
+    std::unique_ptr<WorkflowCanvas> canvas_;
     QLabel* preview_ = nullptr;
     QListWidget* log_ = nullptr;
     QListWidget* problemLog_ = nullptr;
     QTabWidget* bottomTabs_ = nullptr;
     TerminalPanel* terminalPanel_ = nullptr;
+    WorkbenchHostWidget* workbenchHost_ = nullptr;
+    WorkbenchCommandRegistry* workbenchCommands_ = nullptr;
+    NodeCatalogModel* nodeCatalogModel_ = nullptr;
+    WorkflowOutlineModel* workflowOutlineModel_ = nullptr;
+    ProblemModel* problemModel_ = nullptr;
+    QuickAccessModel* quickAccessModel_ = nullptr;
+    WorkbenchBridge* workbenchBridge_ = nullptr;
     QWidget* primarySidebar_ = nullptr;
     QWidget* previewSidebar_ = nullptr;
     QWidget* bottomPanel_ = nullptr;
     QWidget* activityBar_ = nullptr;
-    QWidget* nodeLibraryPage_ = nullptr;
-    QWidget* workflowPage_ = nullptr;
-    QListWidget* nodeLibraryList_ = nullptr;
     QListWidget* workflowList_ = nullptr;
     QSplitter* workbenchSplitter_ = nullptr;
     QSplitter* editorSplitter_ = nullptr;
@@ -201,5 +221,4 @@ private:
     QMap<QString, qint64> nodeElapsedMs_;
     int runAnimationPhase_ = 0;
     QImage currentPreviewImage_;
-    QVector<QGraphicsItem*> edgeItems_;
 };

@@ -10,11 +10,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL Qml Quick QuickControls2 QuickWidgets)
 
 qt_standard_project_setup()
 
-option(IMAGENODEEDITOR_USE_ELA "Use ElaWidgetTools for the widget shell when available." ON)
+set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(USE_QT6 ON CACHE BOOL "" FORCE)
+add_subdirectory(third_party/QtNodes)
 
 qt_add_executable(ImageNodeEditor
     WIN32
@@ -31,8 +37,18 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/gui/AppTheme.cpp
     ImageNodeEditor/gui/MainWindow.h
     ImageNodeEditor/gui/MainWindow.cpp
+    ImageNodeEditor/gui/WorkbenchHostWidget.h
+    ImageNodeEditor/gui/WorkbenchHostWidget.cpp
+    ImageNodeEditor/gui/WorkbenchModels.h
+    ImageNodeEditor/gui/WorkbenchModels.cpp
+    ImageNodeEditor/gui/WorkflowCanvas.h
+    ImageNodeEditor/gui/WorkflowCanvas.cpp
     ImageNodeEditor/gui/WorkflowCommands.h
     ImageNodeEditor/gui/WorkflowCommands.cpp
+    ImageNodeEditor/gui/WorkflowNodeDelegate.h
+    ImageNodeEditor/gui/WorkflowNodeDelegate.cpp
+    ImageNodeEditor/gui/WorkflowNodePainter.h
+    ImageNodeEditor/gui/WorkflowNodePainter.cpp
     ImageNodeEditor/nodes/ImageNode.h
     ImageNodeEditor/nodes/ImageNode.cpp
     ImageNodeEditor/nodes/NodeFactory.h
@@ -61,40 +77,22 @@ target_link_libraries(ImageNodeEditor PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::QuickControls2
+    Qt6::QuickWidgets
+    QtNodes::QtNodes
 )
 
-if(IMAGENODEEDITOR_USE_ELA)
-    set(ELA_WIDGET_TOOLS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ElaWidgetTools/ElaWidgetTools")
-    if(EXISTS "${ELA_WIDGET_TOOLS_DIR}/CMakeLists.txt")
-        find_package(Qt6 COMPONENTS WidgetsPrivate QUIET)
-        if(TARGET Qt6::WidgetsPrivate)
-            set(CMAKE_AUTOMOC ON)
-            set(CMAKE_AUTORCC ON)
-            set(CMAKE_AUTOUIC ON)
-            add_subdirectory("${ELA_WIDGET_TOOLS_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/ElaWidgetTools")
-            target_link_libraries(ImageNodeEditor PRIVATE ElaWidgetTools)
-            target_compile_definitions(ImageNodeEditor PRIVATE IMAGENODEEDITOR_USE_ELA=1)
-            if(APPLE)
-                set_target_properties(ImageNodeEditor PROPERTIES
-                    BUILD_RPATH "@executable_path/../Frameworks;$<TARGET_FILE_DIR:ElaWidgetTools>"
-                    INSTALL_RPATH "@executable_path/../Frameworks"
-                )
-                add_custom_command(TARGET ImageNodeEditor POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:ImageNodeEditor>/Contents/Frameworks"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "$<TARGET_FILE:ElaWidgetTools>"
-                        "$<TARGET_BUNDLE_DIR:ImageNodeEditor>/Contents/Frameworks/$<TARGET_FILE_NAME:ElaWidgetTools>"
-                    VERBATIM
-                )
-            endif()
-            message(STATUS "ElaWidgetTools integration enabled.")
-        else()
-            message(WARNING "ElaWidgetTools was found, but Qt6::WidgetsPrivate is unavailable; building with the built-in Qt Widgets shell.")
-        endif()
-    else()
-        message(WARNING "ElaWidgetTools source not found at ${ELA_WIDGET_TOOLS_DIR}; building with the built-in Qt Widgets shell.")
-    endif()
-endif()
+qt_add_resources(ImageNodeEditor workbench_qml
+    PREFIX "/workbench"
+    BASE "ImageNodeEditor/qml"
+    FILES
+        ImageNodeEditor/qml/WorkbenchActivityBar.qml
+        ImageNodeEditor/qml/WorkbenchSidebar.qml
+        ImageNodeEditor/qml/WorkbenchStatusBar.qml
+        ImageNodeEditor/qml/WorkbenchQuickAccess.qml
+)
 
 set_target_properties(ImageNodeEditor PROPERTIES
     MACOSX_BUNDLE TRUE

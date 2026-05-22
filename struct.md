@@ -445,38 +445,40 @@ QMap<NodeId, QMap<QString, NodeData>> nodeOutputs;
 
 ## 8. `ImageNodeEditor/gui/`
 
-`gui/` 放 Qt Widgets 图形界面。
+`gui/` 放 Qt Widgets 图形界面、Qt Quick 工作台桥接和 Qt Nodes 画布适配。
 
 ```text
 ImageNodeEditor/gui/
+  AppTheme.h
+  AppTheme.cpp
   MainWindow.h
   MainWindow.cpp
-  NodeScene.h
-  NodeScene.cpp
-  NodeItem.h
-  NodeItem.cpp
-  PortItem.h
-  PortItem.cpp
-  EdgeItem.h
-  EdgeItem.cpp
-  PropertyPanel.h
-  PropertyPanel.cpp
-  PreviewPanel.h
-  PreviewPanel.cpp
-  NodePalette.h
-  NodePalette.cpp
-  LogPanel.h
-  LogPanel.cpp
+  WorkbenchHostWidget.h
+  WorkbenchHostWidget.cpp
+  WorkbenchModels.h
+  WorkbenchModels.cpp
+  WorkflowCanvas.h
+  WorkflowCanvas.cpp
+  WorkflowNodeDelegate.h
+  WorkflowNodeDelegate.cpp
+  WorkflowNodePainter.h
+  WorkflowNodePainter.cpp
+
+ImageNodeEditor/qml/
+  WorkbenchActivityBar.qml
+  WorkbenchSidebar.qml
+  WorkbenchStatusBar.qml
+  WorkbenchQuickAccess.qml
 ```
 
 ### `MainWindow`
 
 职责：
 
-- 搭建主界面布局。
-- 创建菜单栏和工具栏。
-- 管理 `NodePalette`、`NodeScene`、`PropertyPanel`、`PreviewPanel`、`LogPanel`。
-- 把用户操作转发给 `AppController` 或 `WorkflowGraph`。
+- 搭建主窗口、原生菜单、工具栏、工作簿标签和跨平台文件对话框入口。
+- 组织 `WorkbenchHostWidget`、Qt Nodes 画布、预览栏和底部诊断面板。
+- 创建跨平台命令入口并把命令交给工作台桥接层复用。
+- 把画布操作转发给 `WorkflowCanvas`，把业务修改落回 `WorkflowGraph`。
 
 不应该做：
 
@@ -484,48 +486,52 @@ ImageNodeEditor/gui/
 - 不直接解析 JSON。
 - 不直接做拓扑排序。
 
-### `NodeScene`
+### `WorkbenchHostWidget`
 
 职责：
 
-- 管理画布交互。
-- 添加、移动、删除 `NodeItem`。
-- 创建和删除 `EdgeItem`。
-- 处理端口拖拽连线。
-- 把连线请求交给 `WorkflowValidator` 或 `WorkflowGraph` 检查。
+- 在 Qt Widgets 主窗口中嵌入 QML 工作台表面。
+- 用 splitter 保留中央 QWidget 编辑器槽、右侧预览槽和底部 Panel 槽。
+- 负责 Activity Bar、主侧栏、状态栏和 Quick Access 弹层的 `QQuickWidget` 承载。
 
-### `NodeItem`
+### `WorkbenchModels` / `WorkbenchBridge`
 
 职责：
 
-- 显示一个节点矩形。
-- 显示节点标题、端口、执行状态。
-- 保存对应的 `nodeId`。
-- 节点位置变化时同步到 `WorkflowGraph`。
+- 把已有 `QAction` 注册为命令面板可执行命令，不在 QML 重写业务动作。
+- 暴露节点目录、当前图节点大纲、问题列表和最近 workflow 结果给 QML。
+- 把 QML 的创建节点、定位节点、区域显示切换和最近 workflow 打开请求转回 `MainWindow`。
 
-### `PortItem`
-
-职责：
-
-- 显示输入 / 输出端口。
-- 保存端口名、方向、类型。
-- 处理鼠标点击或拖拽开始连线。
-
-### `EdgeItem`
+### `ImageNodeEditor/qml/`
 
 职责：
 
-- 显示端口之间的连线。
-- 根据两端端口位置更新路径。
-- 只保存 UI 线条信息和对应 edge id，不保存业务数据。
+- 承载 VS Code 风格的 Activity Bar、主侧栏、状态栏和 Quick Access 视觉层。
+- 只做布局、筛选输入、键盘导航和轻交互；不直接修改 `WorkflowGraph`。
 
-### `PropertyPanel`
+### `WorkflowCanvas`
 
 职责：
 
-- 选中节点后显示参数控件。
-- 根据节点参数元数据生成输入框、下拉框、颜色选择、文件选择等控件。
-- 修改参数后更新 `WorkflowGraph` 并标记 dirty。
+- 用 Qt Nodes 承载主画布交互和节点图形对象。
+- 从 `WorkflowGraph` 重建节点、位置与连线映射。
+- 把节点移动、选中、删除、复制、参数变更和连线变更回调给 `MainWindow`。
+- 连线落图前继续复用 `WorkflowValidator`，不把业务校验交给 Qt Nodes。
+
+### `WorkflowNodeDelegate`
+
+职责：
+
+- 把 `ImageNode` 的标题、端口和参数元数据映射到 Qt Nodes 节点模型。
+- 在选中节点内嵌整数、浮点、布尔、选项、文本、文件、颜色等参数控件。
+- 保存节点执行状态、缓存状态和耗时，让画布 painter 读取诊断信息。
+
+### `WorkflowNodePainter`
+
+职责：
+
+- 按节点类别绘制 Qt Nodes 节点轮廓、分类色和状态条。
+- 保持端口与参数可读性优先，不接管 workflow 数据。
 
 ### `PreviewPanel`
 
@@ -696,10 +702,10 @@ GUI 按钮或菜单没反应
 → MainWindow / AppController
 
 节点显示、拖拽、连线问题
-→ NodeScene / NodeItem / PortItem / EdgeItem
+→ WorkflowCanvas / WorkflowNodeDelegate / WorkflowNodePainter / Qt Nodes
 
-参数面板不对
-→ PropertyPanel / NodeParameter / ImageNode parameterDefinitions
+节点内参数编辑不对
+→ WorkflowNodeDelegate / NodeParameter / ImageNode parameterDefinitions
 
 JSON 保存加载错误
 → WorkflowSerializer / JsonUtils / NodeFactory
