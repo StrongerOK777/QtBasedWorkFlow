@@ -76,6 +76,7 @@
 #include <QToolTip>
 #include <QUndoStack>
 #include <QVBoxLayout>
+#include <QWindow>
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -808,6 +809,7 @@ private:
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
+    setWindowFlag(Qt::FramelessWindowHint, true);
     NodeFactory::instance().registerBuiltins();
     undoStack_ = new QUndoStack(this);
     connect(undoStack_, &QUndoStack::cleanChanged, this, [this] { updateWindowTitle(); });
@@ -823,7 +825,8 @@ MainWindow::MainWindow(QWidget* parent)
     resize(1280, 820);
     QSettings settings;
     uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
-    AppTheme::setThemePreference(settings.value("mainWindow/theme", "system").toString());
+    AppTheme::setThemePreference(AppTheme::ThemePreference::Dark);
+    settings.setValue("mainWindow/theme", "dark");
     if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
         AppTheme::apply(*app, uiScale_);
     }
@@ -1018,6 +1021,9 @@ void MainWindow::createLayout()
     canvasCallbacks.deleteSelection = [this] { removeSelectedItems(); };
     canvasCallbacks.copySelection = [this] { copySelectedNode(); };
     canvasCallbacks.quickPalette = [this](const QPointF& pos) { showQuickNodePaletteAt(pos); };
+    canvasCallbacks.nodeDropped = [this](const QString& typeName, const QPointF& pos) {
+        addNodeFromType(typeName, pos);
+    };
     canvasCallbacks.parameterChanged = [this](const QString& nodeId, const QString& name, const QVariant& value) {
         setNodeParameterForNode(nodeId, name, value);
     };
@@ -1114,6 +1120,31 @@ void MainWindow::createLayout()
     bottomTabs_ = new QTabWidget;
     bottomTabs_->setObjectName("bottomTabs");
     bottomTabs_->setDocumentMode(true);
+    bottomTabs_->tabBar()->setDrawBase(false);
+    bottomTabs_->setStyleSheet(R"(
+        QTabWidget#bottomTabs::pane {
+            border: 0px;
+            background: #1e1e1e;
+        }
+        QTabWidget#bottomTabs QTabBar::tab {
+            min-height: 26px;
+            padding: 0px 10px;
+            margin: 0px;
+            border: 0px;
+            border-right: 1px solid #2d2d2d;
+            background: #1e1e1e;
+            color: #969696;
+        }
+        QTabWidget#bottomTabs QTabBar::tab:selected {
+            background: #252526;
+            color: #ffffff;
+            border-top: 1px solid #3794ff;
+        }
+        QTabWidget#bottomTabs QTabBar::tab:hover {
+            background: #2a2d2e;
+            color: #cccccc;
+        }
+    )");
     bottomTabs_->addTab(terminalPanel_, "终端");
     bottomTabs_->addTab(makeLogPage(problemLog_, "问题"), "问题");
     bottomTabs_->addTab(makeLogPage(log_, "输出"), "输出");
@@ -1202,6 +1233,16 @@ void MainWindow::createLayout()
     connect(workbenchBridge_, &WorkbenchBridge::recentWorkflowRequested, this, [this](const QString& path) {
         openWorkflowPath(path, true);
     });
+    connect(workbenchBridge_, &WorkbenchBridge::windowMoveRequested, this, [this] {
+        if (auto* handle = windowHandle()) {
+            handle->startSystemMove();
+        }
+    });
+    connect(workbenchBridge_, &WorkbenchBridge::windowMinimizeRequested, this, [this] { showMinimized(); });
+    connect(workbenchBridge_, &WorkbenchBridge::windowMaximizeToggleRequested, this, [this] {
+        isMaximized() ? showNormal() : showMaximized();
+    });
+    connect(workbenchBridge_, &WorkbenchBridge::windowCloseRequested, this, [this] { close(); });
     refreshRecentWorkflowModel();
 
     headerToolbar_ = addToolBar("窗口标题层");
@@ -1330,6 +1371,16 @@ void MainWindow::createLayout()
     if (workbenchState.isEmpty() || editorState.isEmpty() ||
         !workbenchSplitter_->restoreState(workbenchState) || !editorSplitter_->restoreState(editorState)) {
         resetWorkbenchLayout();
+    }
+    menuBar()->hide();
+    if (mainToolbar_) {
+        mainToolbar_->hide();
+    }
+    if (headerToolbar_) {
+        headerToolbar_->hide();
+    }
+    if (workbookToolbar_) {
+        workbookToolbar_->hide();
     }
 }
 
@@ -2998,14 +3049,6 @@ void MainWindow::showSettingsDialog()
     uiScaleSpin->setValue(uiScale_ * 100.0);
     form->addRow("界面大小", uiScaleSpin);
 
-    auto* themeCombo = new QComboBox;
-    themeCombo->addItem("跟随系统", "system");
-    themeCombo->addItem("浅色", "light");
-    themeCombo->addItem("深色", "dark");
-    const int themeIndex = themeCombo->findData(AppTheme::themePreferenceName());
-    themeCombo->setCurrentIndex(themeIndex >= 0 ? themeIndex : 0);
-    form->addRow("界面主题", themeCombo);
-
     auto* canvasRow = new QWidget;
     auto* canvasLayout = new QHBoxLayout(canvasRow);
     canvasLayout->setContentsMargins(0, 0, 0, 0);
@@ -3057,9 +3100,9 @@ void MainWindow::showSettingsDialog()
     root->addWidget(buttons);
 
     auto applySettings = [&] {
-        AppTheme::setThemePreference(themeCombo->currentData().toString());
         QSettings settings;
-        settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
+        AppTheme::setThemePreference(AppTheme::ThemePreference::Dark);
+        settings.setValue("mainWindow/theme", "dark");
         setUiScale(uiScaleSpin->value() / 100.0);
         applyUiScale();
         const double requestedZoom = canvasZoomSlider->value() / 100.0;

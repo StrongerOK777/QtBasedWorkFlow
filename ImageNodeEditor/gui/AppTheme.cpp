@@ -2,9 +2,7 @@
 
 #include <QApplication>
 #include <QGraphicsDropShadowEffect>
-#include <QGuiApplication>
 #include <QPalette>
-#include <QStyleHints>
 #include <QWidget>
 
 #include <algorithm>
@@ -12,7 +10,7 @@
 
 namespace {
 
-AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::System;
+AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::Dark;
 
 QString pxValue(double value, double scale)
 {
@@ -70,25 +68,22 @@ NodeMetrics nodeMetrics(double uiScale)
 
 Colors colors()
 {
-    if (!isDarkTheme()) {
-        return {};
-    }
     Colors c;
-    c.canvasTop = QColor("#191A1B");
-    c.canvasBottom = QColor("#121314");
-    c.canvasDot = QColor(220, 220, 220, 28);
-    c.nodeTop = QColor(46, 46, 47, 148);
-    c.nodeBottom = QColor(18, 19, 20, 132);
-    c.nodeBorder = QColor(214, 214, 214, 96);
-    c.nodeSelected = QColor("#f2f2f2");
-    c.nodeShadow = QColor(0, 0, 0, 90);
-    c.textPrimary = QColor("#e8e8e8");
-    c.textSecondary = QColor("#b8b8b8");
-    c.inputPort = QColor("#a0a0a0");
-    c.outputPort = QColor("#d2d2d2");
-    c.edge = QColor("#a8a8a8");
-    c.edgeSelected = QColor("#f2f2f2");
-    c.pendingEdge = QColor("#eeeeee");
+    c.canvasTop = QColor("#1e1e1e");
+    c.canvasBottom = QColor("#1e1e1e");
+    c.canvasDot = QColor(204, 204, 204, 24);
+    c.nodeTop = QColor("#252526");
+    c.nodeBottom = QColor("#1f1f1f");
+    c.nodeBorder = QColor("#3c3c3c");
+    c.nodeSelected = QColor("#3794ff");
+    c.nodeShadow = QColor(0, 0, 0, 120);
+    c.textPrimary = QColor("#cccccc");
+    c.textSecondary = QColor("#969696");
+    c.inputPort = QColor("#9cdcfe");
+    c.outputPort = QColor("#dcdcaa");
+    c.edge = QColor("#6a9955");
+    c.edgeSelected = QColor("#3794ff");
+    c.pendingEdge = QColor("#3794ff");
     return c;
 }
 
@@ -109,6 +104,156 @@ QString styleSheet(double uiScale)
     const int itemHeight = px(28, uiScale);
     const int titleHeight = px(34, uiScale);
     const int border = std::max(1, px(1, uiScale));
+
+    return QString(R"(
+        QMainWindow, QWidget#workbenchHost, QWidget#editorShell {
+            background: #1e1e1e;
+            color: #cccccc;
+        }
+        QMainWindow::separator, QSplitter::handle {
+            background: #2d2d2d;
+        }
+        QDialog, QFrame, QWidget#canvasContainer, QWidget#bottomPanel, QWidget#bottomTabPage {
+            background: #1e1e1e;
+            color: #cccccc;
+            border: 0px;
+        }
+        QWidget#previewSidebar {
+            background: #252526;
+            border-left: %1px solid #2d2d2d;
+            color: #cccccc;
+        }
+        QLabel#workbenchPanelTitle {
+            color: #cccccc;
+            font-weight: 600;
+        }
+        QAbstractScrollArea, QGraphicsView, QGraphicsView > QWidget {
+            background: #1e1e1e;
+            color: #cccccc;
+            border: 0px;
+        }
+        QMenuBar, QMenu {
+            background: #252526;
+            color: #cccccc;
+            border: %1px solid #454545;
+        }
+        QMenu::item {
+            min-height: %2px;
+            padding: %3px %4px;
+            background: transparent;
+        }
+        QMenu::item:selected {
+            background: #04395e;
+            color: #ffffff;
+        }
+        QToolBar {
+            background: #252526;
+            border: 0px;
+            border-bottom: %1px solid #2d2d2d;
+            spacing: 0px;
+            padding: 0px;
+        }
+        QToolButton, QPushButton {
+            min-height: %2px;
+            padding: %3px %4px;
+            border: %1px solid #454545;
+            border-radius: 0px;
+            background: #2d2d2d;
+            color: #cccccc;
+        }
+        QToolButton:hover, QPushButton:hover {
+            background: #3c3c3c;
+            border-color: #555555;
+        }
+        QToolButton:pressed, QPushButton:pressed {
+            background: #094771;
+            border-color: #3794ff;
+        }
+        QTabWidget::pane {
+            border-top: %1px solid #2d2d2d;
+            background: #1e1e1e;
+        }
+        QTabBar::tab {
+            min-height: %5px;
+            padding: 0px %4px;
+            margin: 0px;
+            border: 0px;
+            border-right: %1px solid #2d2d2d;
+            background: #2d2d2d;
+            color: #969696;
+        }
+        QTabBar::tab:selected {
+            background: #1e1e1e;
+            color: #ffffff;
+        }
+        QLabel#previewPanel {
+            background: #1e1e1e;
+            border: %1px solid #454545;
+            color: #969696;
+        }
+        QListWidget#logPanel, QListWidget#problemPanel, QPlainTextEdit#terminalOutput {
+            background: #1e1e1e;
+            border: 0px;
+            color: #cccccc;
+        }
+        QListWidget, QTextEdit, QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+            border: %1px solid #454545;
+            border-radius: 0px;
+            background: #3c3c3c;
+            selection-background-color: #04395e;
+            selection-color: #ffffff;
+            color: #cccccc;
+        }
+        QListWidget::item {
+            min-height: %2px;
+            padding: %1px %4px;
+        }
+        QListWidget::item:hover {
+            background: #2a2d2e;
+        }
+        QListWidget::item:selected {
+            background: #04395e;
+            color: #ffffff;
+        }
+        QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+            min-height: %2px;
+            padding: %3px %4px;
+        }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
+            border-color: #3794ff;
+            background: #3c3c3c;
+        }
+        QCheckBox, QLabel {
+            color: #cccccc;
+        }
+        QScrollBar:vertical, QScrollBar:horizontal {
+            background: #1e1e1e;
+            border: 0;
+            margin: 0px;
+        }
+        QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+            background: #424242;
+            border-radius: 0px;
+            min-height: %2px;
+            min-width: %2px;
+        }
+        QScrollBar::handle:hover {
+            background: #5a5a5a;
+        }
+        QScrollBar::add-line, QScrollBar::sub-line {
+            width: 0px;
+            height: 0px;
+        }
+        QWidget#canvasZoomOverlay {
+            background: rgba(37, 37, 38, 210);
+            border: %1px solid #454545;
+        }
+    )")
+        .arg(border)
+        .arg(itemHeight)
+        .arg(padV)
+        .arg(padH)
+        .arg(px(32, uiScale));
 
     QString sheet = QString(R"(
         QMainWindow {
@@ -451,48 +596,24 @@ ThemePreference themePreference()
 
 QString themePreferenceName()
 {
-    switch (g_themePreference) {
-    case ThemePreference::Light:
-        return "light";
-    case ThemePreference::Dark:
-        return "dark";
-    case ThemePreference::System:
-    default:
-        return "system";
-    }
+    return "dark";
 }
 
 void setThemePreference(const QString& preference)
 {
-    const QString normalized = preference.trimmed().toLower();
-    if (normalized == "light") {
-        setThemePreference(ThemePreference::Light);
-    } else if (normalized == "dark") {
-        setThemePreference(ThemePreference::Dark);
-    } else {
-        setThemePreference(ThemePreference::System);
-    }
+    Q_UNUSED(preference);
+    setThemePreference(ThemePreference::Dark);
 }
 
 void setThemePreference(ThemePreference preference)
 {
-    g_themePreference = preference;
+    Q_UNUSED(preference);
+    g_themePreference = ThemePreference::Dark;
 }
 
 bool isDarkTheme()
 {
-    if (g_themePreference == ThemePreference::Dark) {
-        return true;
-    }
-    if (g_themePreference == ThemePreference::Light) {
-        return false;
-    }
-#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    if (auto* hints = QGuiApplication::styleHints()) {
-        return hints->colorScheme() == Qt::ColorScheme::Dark;
-    }
-#endif
-    return false;
+    return true;
 }
 
 void apply(QApplication& app, double uiScale)
@@ -501,39 +622,21 @@ void apply(QApplication& app, double uiScale)
     app.setStyleSheet(styleSheet(uiScale));
 
     QPalette palette = app.palette();
-    if (isDarkTheme()) {
-        palette.setColor(QPalette::Window, QColor("#121314"));
-        palette.setColor(QPalette::WindowText, QColor("#eeeeee"));
-        palette.setColor(QPalette::Button, QColor("#2E2E2F"));
-        palette.setColor(QPalette::Base, QColor("#191A1B"));
-        palette.setColor(QPalette::AlternateBase, QColor("#2E2E2F"));
-        palette.setColor(QPalette::Text, QColor("#eeeeee"));
-        palette.setColor(QPalette::ButtonText, QColor("#eeeeee"));
-        palette.setColor(QPalette::BrightText, QColor("#ffffff"));
-        palette.setColor(QPalette::Highlight, QColor("#d6d6d6"));
-        palette.setColor(QPalette::HighlightedText, QColor("#121314"));
-        palette.setColor(QPalette::ToolTipBase, QColor("#2E2E2F"));
-        palette.setColor(QPalette::ToolTipText, QColor("#eeeeee"));
+    palette.setColor(QPalette::Window, QColor("#1e1e1e"));
+    palette.setColor(QPalette::WindowText, QColor("#cccccc"));
+    palette.setColor(QPalette::Button, QColor("#2d2d2d"));
+    palette.setColor(QPalette::Base, QColor("#1e1e1e"));
+    palette.setColor(QPalette::AlternateBase, QColor("#252526"));
+    palette.setColor(QPalette::Text, QColor("#cccccc"));
+    palette.setColor(QPalette::ButtonText, QColor("#cccccc"));
+    palette.setColor(QPalette::BrightText, QColor("#ffffff"));
+    palette.setColor(QPalette::Highlight, QColor("#04395e"));
+    palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
+    palette.setColor(QPalette::ToolTipBase, QColor("#252526"));
+    palette.setColor(QPalette::ToolTipText, QColor("#cccccc"));
 #if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
-        palette.setColor(QPalette::PlaceholderText, QColor("#a8a8a8"));
+    palette.setColor(QPalette::PlaceholderText, QColor("#969696"));
 #endif
-    } else {
-        palette.setColor(QPalette::Window, QColor("#f5f5f5"));
-        palette.setColor(QPalette::WindowText, QColor("#202020"));
-        palette.setColor(QPalette::Button, QColor("#ededed"));
-        palette.setColor(QPalette::Base, QColor("#ffffff"));
-        palette.setColor(QPalette::AlternateBase, QColor("#ededed"));
-        palette.setColor(QPalette::Text, QColor("#202020"));
-        palette.setColor(QPalette::ButtonText, QColor("#202020"));
-        palette.setColor(QPalette::BrightText, QColor("#111111"));
-        palette.setColor(QPalette::Highlight, QColor("#707070"));
-        palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
-        palette.setColor(QPalette::ToolTipBase, QColor("#ffffff"));
-        palette.setColor(QPalette::ToolTipText, QColor("#202020"));
-#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
-        palette.setColor(QPalette::PlaceholderText, QColor("#707070"));
-#endif
-    }
     app.setPalette(palette);
 }
 

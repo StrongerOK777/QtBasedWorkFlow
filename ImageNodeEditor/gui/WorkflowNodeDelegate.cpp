@@ -200,15 +200,52 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
     panel->setObjectName("nodeInlineParameters");
     panel->setStyleSheet(QString(R"(
         QWidget#nodeInlineParameters {
-            background: rgba(0, 0, 0, 54);
-            border: 1px solid rgba(255, 255, 255, 42);
+            background: #252526;
+            border: 1px solid #3c3c3c;
             border-radius: 0px;
         }
         QLabel {
-            color: %1;
+            color: #969696;
             font-weight: 600;
         }
-    )").arg(AppTheme::colors().textSecondary.name()));
+        QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+            min-height: 24px;
+            padding: 2px 6px;
+            color: #cccccc;
+            background: #3c3c3c;
+            border: 1px solid #454545;
+            selection-background-color: #04395e;
+            selection-color: #ffffff;
+        }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+            border-color: #3794ff;
+        }
+        QCheckBox {
+            color: #cccccc;
+            spacing: 6px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #6a6a6a;
+            background: #3c3c3c;
+        }
+        QCheckBox::indicator:checked {
+            background: #007acc;
+            border-color: #3794ff;
+        }
+        QPushButton {
+            min-height: 24px;
+            color: #cccccc;
+            background: #2d2d2d;
+            border: 1px solid #454545;
+            padding: 2px 8px;
+        }
+        QPushButton:hover {
+            background: #3c3c3c;
+            border-color: #555555;
+        }
+    )"));
 
     auto* form = new QFormLayout(panel);
     form->setContentsMargins(AppTheme::px(9, uiScale_), AppTheme::px(7, uiScale_),

@@ -15,6 +15,8 @@
 namespace {
 
 constexpr auto kActivitySource = "qrc:/workbench/WorkbenchActivityBar.qml";
+constexpr auto kTitleSource = "qrc:/workbench/WorkbenchTitleBar.qml";
+constexpr auto kEditorHeaderSource = "qrc:/workbench/WorkbenchEditorHeader.qml";
 constexpr auto kSidebarSource = "qrc:/workbench/WorkbenchSidebar.qml";
 constexpr auto kStatusSource = "qrc:/workbench/WorkbenchStatusBar.qml";
 constexpr auto kQuickAccessSource = "qrc:/workbench/WorkbenchQuickAccess.qml";
@@ -45,14 +47,25 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     setObjectName("workbenchHost");
     setAttribute(Qt::WA_StyledBackground, true);
 
+    titleSurface_ = makeQuickSurface(QUrl(kTitleSource), this);
     activitySurface_ = makeQuickSurface(QUrl(kActivitySource), this);
     sidebarSurface_ = makeQuickSurface(QUrl(kSidebarSource), this);
+    editorHeaderSurface_ = makeQuickSurface(QUrl(kEditorHeaderSource), this);
     statusSurface_ = makeQuickSurface(QUrl(kStatusSource), this);
+
+    auto* editorShell = new QWidget;
+    editorShell->setObjectName("editorShell");
+    editorShell->setAttribute(Qt::WA_StyledBackground, true);
+    auto* editorShellLayout = new QVBoxLayout(editorShell);
+    editorShellLayout->setContentsMargins(0, 0, 0, 0);
+    editorShellLayout->setSpacing(0);
+    editorShellLayout->addWidget(editorHeaderSurface_);
+    editorShellLayout->addWidget(editor, 1);
 
     editorSplitter_ = new QSplitter(Qt::Vertical);
     editorSplitter_->setObjectName("editorSplitter");
     editorSplitter_->setChildrenCollapsible(false);
-    editorSplitter_->addWidget(editor);
+    editorSplitter_->addWidget(editorShell);
     editorSplitter_->addWidget(bottomPanel_);
     editorSplitter_->setStretchFactor(0, 5);
     editorSplitter_->setStretchFactor(1, 2);
@@ -89,16 +102,18 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
+    root->addWidget(titleSurface_);
     root->addWidget(row, 1);
     root->addWidget(statusSurface_);
 
-    auto* popupFrame = new QFrame(this, Qt::Popup | Qt::FramelessWindowHint);
+    auto* popupFrame = new QFrame(this);
     popupFrame->setObjectName("quickAccessPopup");
     popupFrame->setAttribute(Qt::WA_StyledBackground, true);
     auto* popupLayout = new QVBoxLayout(popupFrame);
     popupLayout->setContentsMargins(0, 0, 0, 0);
     popupLayout->addWidget(makeQuickSurface(QUrl(kQuickAccessSource), popupFrame));
     quickAccessPopup_ = popupFrame;
+    quickAccessPopup_->hide();
 
     if (bridge_) {
         connect(bridge_, &WorkbenchBridge::quickAccessRequested, this, &WorkbenchHostWidget::showQuickAccess);
@@ -122,18 +137,26 @@ void WorkbenchHostWidget::showQuickAccess()
     }
     const int width = std::min(AppTheme::px(720, uiScale_), std::max(AppTheme::px(440, uiScale_), this->width() - AppTheme::px(80, uiScale_)));
     quickAccessPopup_->resize(width, AppTheme::px(430, uiScale_));
-    const QPoint topLeft = mapToGlobal(QPoint(std::max(0, (this->width() - width) / 2), AppTheme::px(32, uiScale_)));
+    const QPoint topLeft(std::max(0, (this->width() - width) / 2), AppTheme::px(32, uiScale_));
     quickAccessPopup_->move(topLeft);
     quickAccessPopup_->show();
     quickAccessPopup_->raise();
-    quickAccessPopup_->activateWindow();
+    if (auto* surface = quickAccessPopup_->findChild<QQuickWidget*>()) {
+        surface->setFocus(Qt::PopupFocusReason);
+    }
 }
 
 void WorkbenchHostWidget::setUiScale(double uiScale)
 {
     uiScale_ = uiScale;
     if (activitySurface_) {
-        activitySurface_->setFixedWidth(AppTheme::px(50, uiScale_));
+        activitySurface_->setFixedWidth(AppTheme::px(48, uiScale_));
+    }
+    if (titleSurface_) {
+        titleSurface_->setFixedHeight(AppTheme::px(35, uiScale_));
+    }
+    if (editorHeaderSurface_) {
+        editorHeaderSurface_->setFixedHeight(AppTheme::px(35, uiScale_));
     }
     if (sidebarSurface_) {
         sidebarSurface_->setMinimumWidth(AppTheme::px(236, uiScale_));

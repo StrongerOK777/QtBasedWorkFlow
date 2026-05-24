@@ -10,7 +10,7 @@ Rectangle {
     component ActivityButton: ToolButton {
         id: button
         required property string sidebar
-        required property string glyph
+        required property string iconName
         required property string hint
         width: parent ? parent.width : 48
         height: width
@@ -27,13 +27,15 @@ Rectangle {
                 color: "#3794ff"
             }
         }
-        contentItem: Text {
-            text: button.glyph
-            color: workbenchBridge.activeSidebar === button.sidebar ? "#f5f5f5" : "#a8a8a8"
-            font.pixelSize: 22
-            font.weight: Font.DemiBold
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+        contentItem: Item {
+            WorkbenchIcon {
+                anchors.centerIn: parent
+                width: 23
+                height: 23
+                name: button.iconName
+                strokeColor: workbenchBridge.activeSidebar === button.sidebar ? "#f5f5f5" : "#a8a8a8"
+                fillColor: "transparent"
+            }
         }
     }
 
@@ -43,18 +45,18 @@ Rectangle {
 
         ActivityButton {
             sidebar: "nodes"
-            glyph: "+"
-            hint: "节点库"
+            iconName: "nodes"
+            hint: "Node Library"
         }
         ActivityButton {
             sidebar: "workflow"
-            glyph: "W"
-            hint: "工作流"
+            iconName: "workflow"
+            hint: "Workflow"
         }
         ActivityButton {
             sidebar: "search"
-            glyph: "/"
-            hint: "搜索"
+            iconName: "search"
+            hint: "Search"
         }
 
         Item {
@@ -64,14 +66,14 @@ Rectangle {
 
         ActivityButton {
             sidebar: "search"
-            glyph: ">"
-            hint: "命令面板"
+            iconName: "command"
+            hint: "Command Palette"
             onClicked: workbenchBridge.showQuickAccess()
         }
         ActivityButton {
             sidebar: "nodes"
-            glyph: "P"
-            hint: workbenchBridge.previewVisible ? "隐藏预览" : "显示预览"
+            iconName: "preview"
+            hint: workbenchBridge.previewVisible ? "Hide Preview" : "Show Preview"
             onClicked: workbenchBridge.previewVisible = !workbenchBridge.previewVisible
         }
     }

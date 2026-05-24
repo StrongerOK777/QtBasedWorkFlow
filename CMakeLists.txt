@@ -89,6 +89,9 @@ qt_add_resources(ImageNodeEditor workbench_qml
     BASE "ImageNodeEditor/qml"
     FILES
         ImageNodeEditor/qml/WorkbenchActivityBar.qml
+        ImageNodeEditor/qml/WorkbenchIcon.qml
+        ImageNodeEditor/qml/WorkbenchTitleBar.qml
+        ImageNodeEditor/qml/WorkbenchEditorHeader.qml
         ImageNodeEditor/qml/WorkbenchSidebar.qml
         ImageNodeEditor/qml/WorkbenchStatusBar.qml
         ImageNodeEditor/qml/WorkbenchQuickAccess.qml

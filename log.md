@@ -857,3 +857,24 @@ Qt Nodes 只负责 GUI 承载，不替代 `WorkflowSerializer`。后续若升级
 
 后续注意：
 这是混合迁移的第一阶段。底部 Panel、预览内容和工作簿标签仍由 Widgets 实现；后续迁移应继续沿 `WorkbenchBridge` 边界接入，不要把 `WorkflowGraph` 修改逻辑搬到 QML。
+
+---
+
+### 2026-05-24 / VS Code Dark Qt Quick 工作台重写阶段
+
+类型：修改
+
+概述：
+将主界面收敛为只保留深色模式的 VS Code Dark 风格工作台：QML 自定义标题栏、Activity Bar、主侧栏、编辑区头部、右侧预览、底部 Panel、状态栏和 Quick Access 统一接入，旧工具栏和旧窗口标题层不再作为可见 UI。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/gui/AppTheme.*`、`ImageNodeEditor/gui/MainWindow.cpp`、`ImageNodeEditor/gui/WorkbenchHostWidget.*`、`ImageNodeEditor/gui/WorkbenchModels.*`、`ImageNodeEditor/gui/WorkflowCanvas.*`、`ImageNodeEditor/gui/WorkflowNodeDelegate.cpp`、`ImageNodeEditor/gui/WorkflowNodePainter.cpp`、`ImageNodeEditor/qml/`、`struct.md`、`third_party/THIRD_PARTY_SOURCES.md`
+
+处理方式：
+`MainWindow` 继续保留 QAction、文件对话框、执行和保存等业务协调职责，但窗口 chrome 改由 QML 表面承载，并强制迁移到 Dark 主题。`WorkbenchBridge` 增加节点库拖拽、窗口移动/最小化/最大化/关闭请求；`WorkflowCanvas` 接收 `application/x-imagenode-type` 拖放 payload，换算到 scene 坐标后走现有新增节点路径，并在拖拽悬停时绘制落点预览。Qt Nodes 样式、节点 painter、节点内参数控件和全局 QSS 改为 VS Code Dark token；QML 使用项目自绘矢量图标，未引入 VS Code/Microsoft 品牌资产或 Codicons 字体文件。
+
+当前状态：
+已解决
+
+后续注意：
+本阶段仍保留隐藏的原生菜单/工具栏对象作为 QAction 容器，方便快捷键和命令面板复用；后续若继续清理，应先确认所有 QAction 都已由命令注册表覆盖，再删除旧可视工具栏创建路径。

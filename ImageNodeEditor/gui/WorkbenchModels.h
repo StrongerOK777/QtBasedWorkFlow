@@ -51,7 +51,8 @@ public:
         TypeNameRole = Qt::UserRole + 1,
         TitleRole,
         CategoryRole,
-        ProviderRole
+        ProviderRole,
+        IconNameRole
     };
 
     explicit NodeCatalogModel(QObject* parent = nullptr);
@@ -233,6 +234,11 @@ public:
     Q_INVOKABLE void triggerCommand(const QString& id);
     Q_INVOKABLE void showQuickAccess();
     Q_INVOKABLE void activateQuickAccess(int row);
+    Q_INVOKABLE void startNodeDrag(const QString& typeName, const QString& title, const QString& category);
+    Q_INVOKABLE void requestWindowMove();
+    Q_INVOKABLE void requestWindowMinimize();
+    Q_INVOKABLE void requestWindowMaximizeToggle();
+    Q_INVOKABLE void requestWindowClose();
 
 signals:
     void documentTitleChanged();
@@ -249,6 +255,10 @@ signals:
     void panelVisibilityRequested(bool visible);
     void quickAccessRequested();
     void quickAccessFinished();
+    void windowMoveRequested();
+    void windowMinimizeRequested();
+    void windowMaximizeToggleRequested();
+    void windowCloseRequested();
 
 private:
     WorkbenchCommandRegistry* commands_ = nullptr;

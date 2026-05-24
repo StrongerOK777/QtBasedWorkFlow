@@ -44,6 +44,8 @@ private:
     ProblemModel* problems_ = nullptr;
     QuickAccessModel* quickAccess_ = nullptr;
     QQuickWidget* activitySurface_ = nullptr;
+    QQuickWidget* titleSurface_ = nullptr;
+    QQuickWidget* editorHeaderSurface_ = nullptr;
     QQuickWidget* sidebarSurface_ = nullptr;
     QQuickWidget* statusSurface_ = nullptr;
     QWidget* quickAccessPopup_ = nullptr;

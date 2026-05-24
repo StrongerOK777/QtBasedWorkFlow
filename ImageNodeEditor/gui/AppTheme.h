@@ -16,9 +16,7 @@ constexpr double kMaxUiScale = 1.8;
 constexpr double kUiScaleStep = 0.1;
 
 enum class ThemePreference {
-    Light,
-    Dark,
-    System
+    Dark
 };
 
 struct Metrics {

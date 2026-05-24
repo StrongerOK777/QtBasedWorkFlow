@@ -11,14 +11,21 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/Definitions>
 #include <QtNodes/GraphicsView>
+#include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeDelegateModelRegistry>
+#include <QtNodes/NodeStyle>
 #include <QtNodes/internal/ConnectionGraphicsObject.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
 
 #include <QGraphicsItem>
+#include <QGraphicsRectItem>
 #include <QGraphicsView>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDropEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QMimeData>
 #include <QPainter>
 #include <QScrollBar>
 #include <QVariant>
@@ -67,6 +74,51 @@ QString categoryForType(const QString& typeName)
     return QStringLiteral("高级功能");
 }
 
+void applyQtNodesDarkStyle()
+{
+    static bool applied = false;
+    if (applied) {
+        return;
+    }
+    applied = true;
+    QtNodes::NodeStyle::setNodeStyle(QStringLiteral(R"({
+        "NodeStyle": {
+            "NormalBoundaryColor": [60, 60, 60],
+            "SelectedBoundaryColor": [55, 148, 255],
+            "GradientColor0": [37, 37, 38],
+            "GradientColor1": [37, 37, 38],
+            "GradientColor2": [31, 31, 31],
+            "GradientColor3": [31, 31, 31],
+            "ShadowColor": [0, 0, 0],
+            "ShadowEnabled": false,
+            "FontColor": [204, 204, 204],
+            "FontColorFaded": [150, 150, 150],
+            "ConnectionPointColor": [156, 220, 254],
+            "FilledConnectionPointColor": [220, 220, 170],
+            "ErrorColor": [241, 76, 76],
+            "WarningColor": [220, 220, 170],
+            "ToolTipIconColor": [204, 204, 204],
+            "PenWidth": 1.0,
+            "HoveredPenWidth": 1.5,
+            "ConnectionPointDiameter": 8.0,
+            "Opacity": 1.0
+        }
+    })"));
+    QtNodes::ConnectionStyle::setConnectionStyle(QStringLiteral(R"({
+        "ConnectionStyle": {
+            "ConstructionColor": [55, 148, 255],
+            "NormalColor": [110, 110, 110],
+            "SelectedColor": [55, 148, 255],
+            "SelectedHaloColor": [55, 148, 255],
+            "HoveredColor": [117, 190, 255],
+            "LineWidth": 2.0,
+            "ConstructionLineWidth": 2.0,
+            "PointDiameter": 8.0,
+            "UseDataDefinedColors": false
+        }
+    })"));
+}
+
 void paintCanvasGrid(QPainter* painter, const QRectF& rect, double uiScale)
 {
     const auto colors = AppTheme::colors();
@@ -96,13 +148,16 @@ public:
                          std::function<void()> deleteSelection,
                          std::function<void()> copySelection,
                          std::function<void(const QPointF&)> quickPalette,
+                         std::function<void(const QString&, const QPointF&)> nodeDropped,
                          QWidget* parent)
         : QtNodes::GraphicsView(scene, parent),
           uiScale_(uiScale),
           deleteSelection_(std::move(deleteSelection)),
           copySelection_(std::move(copySelection)),
-          quickPalette_(std::move(quickPalette))
+          quickPalette_(std::move(quickPalette)),
+          nodeDropped_(std::move(nodeDropped))
     {
+        setAcceptDrops(true);
     }
 
     void onDeleteSelectedObjects() override
@@ -135,11 +190,75 @@ protected:
         QtNodes::GraphicsView::keyPressEvent(event);
     }
 
+    void dragEnterEvent(QDragEnterEvent* event) override
+    {
+        if (event->mimeData()->hasFormat("application/x-imagenode-type")) {
+            updateDropPreview(event->position().toPoint());
+            event->acceptProposedAction();
+            return;
+        }
+        QtNodes::GraphicsView::dragEnterEvent(event);
+    }
+
+    void dragMoveEvent(QDragMoveEvent* event) override
+    {
+        if (event->mimeData()->hasFormat("application/x-imagenode-type")) {
+            updateDropPreview(event->position().toPoint());
+            event->acceptProposedAction();
+            return;
+        }
+        QtNodes::GraphicsView::dragMoveEvent(event);
+    }
+
+    void dragLeaveEvent(QDragLeaveEvent* event) override
+    {
+        clearDropPreview();
+        QtNodes::GraphicsView::dragLeaveEvent(event);
+    }
+
+    void dropEvent(QDropEvent* event) override
+    {
+        if (event->mimeData()->hasFormat("application/x-imagenode-type") && nodeDropped_) {
+            const QString typeName = QString::fromUtf8(event->mimeData()->data("application/x-imagenode-type"));
+            nodeDropped_(typeName, mapToScene(event->position().toPoint()));
+            clearDropPreview();
+            event->acceptProposedAction();
+            return;
+        }
+        clearDropPreview();
+        QtNodes::GraphicsView::dropEvent(event);
+    }
+
 private:
+    void updateDropPreview(const QPoint& viewPos)
+    {
+        if (!scene()) {
+            return;
+        }
+        if (!dropPreview_) {
+            dropPreview_ = scene()->addRect(QRectF(-120, -42, 240, 84),
+                                            QPen(QColor("#3794ff"), 1, Qt::DashLine),
+                                            QBrush(QColor(55, 148, 255, 24)));
+            dropPreview_->setZValue(10000);
+        }
+        dropPreview_->setPos(mapToScene(viewPos));
+    }
+
+    void clearDropPreview()
+    {
+        if (!dropPreview_) {
+            return;
+        }
+        delete dropPreview_;
+        dropPreview_ = nullptr;
+    }
+
     double* uiScale_ = nullptr;
     std::function<void()> deleteSelection_;
     std::function<void()> copySelection_;
     std::function<void(const QPointF&)> quickPalette_;
+    std::function<void(const QString&, const QPointF&)> nodeDropped_;
+    QGraphicsRectItem* dropPreview_ = nullptr;
 };
 
 class WorkflowGraphicsScene final : public QtNodes::DataFlowGraphicsScene {
@@ -169,11 +288,13 @@ private:
 WorkflowCanvas::WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbacks)
     : owner_(owner), uiScale_(uiScale), callbacks_(std::move(callbacks))
 {
+    applyQtNodesDarkStyle();
     view_ = new WorkflowGraphicsView(nullptr,
                                      &uiScale_,
                                      callbacks_.deleteSelection,
                                      callbacks_.copySelection,
                                      callbacks_.quickPalette,
+                                     callbacks_.nodeDropped,
                                      owner_);
     view_->setObjectName("workflowView");
     view_->viewport()->setObjectName("workflowViewport");

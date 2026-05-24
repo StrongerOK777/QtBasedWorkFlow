@@ -48,11 +48,11 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "节点库"
+                    text: "NODE LIBRARY"
                     Layout.fillWidth: true
                 }
                 SearchField {
-                    placeholderText: "搜索并创建节点"
+                    placeholderText: "Search nodes"
                     text: nodeCatalogModel.filterText
                     onTextChanged: nodeCatalogModel.filterText = text
                     Layout.fillWidth: true
@@ -66,12 +66,16 @@ Rectangle {
                         required property string title
                         required property string category
                         required property string provider
+                        required property string iconName
                         width: ListView.view.width
                         height: 52
                         color: mouse.containsMouse ? "#2a2d2e" : "transparent"
+                        property real pressX: 0
+                        property real pressY: 0
+                        property bool dragStarted: false
                         Column {
                             anchors.left: parent.left
-                            anchors.leftMargin: 6
+                            anchors.leftMargin: 34
                             anchors.right: parent.right
                             anchors.rightMargin: 6
                             anchors.verticalCenter: parent.verticalCenter
@@ -91,10 +95,45 @@ Rectangle {
                                 width: parent.width
                             }
                         }
+                        Rectangle {
+                            x: 8
+                            width: 18
+                            height: 18
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: "#333333"
+                            border.color: "#555555"
+                            WorkbenchIcon {
+                                anchors.centerIn: parent
+                                width: 14
+                                height: 14
+                                name: iconName
+                                strokeColor: "#cccccc"
+                                strokeWidth: 1.4
+                            }
+                        }
                         MouseArea {
                             id: mouse
                             anchors.fill: parent
                             hoverEnabled: true
+                            onPressed: {
+                                parent.pressX = mouse.x
+                                parent.pressY = mouse.y
+                                parent.dragStarted = false
+                            }
+                            onPositionChanged: {
+                                if (!pressed || parent.dragStarted)
+                                    return
+                                var dx = mouse.x - parent.pressX
+                                var dy = mouse.y - parent.pressY
+                                if (Math.sqrt(dx * dx + dy * dy) > 8) {
+                                    parent.dragStarted = true
+                                    workbenchBridge.startNodeDrag(typeName, title, category)
+                                }
+                            }
+                            onClicked: {
+                                if (!parent.dragStarted)
+                                    workbenchBridge.createNode(typeName)
+                            }
                             onDoubleClicked: workbenchBridge.createNode(typeName)
                         }
                     }
@@ -109,11 +148,11 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "工作流浏览"
+                    text: "WORKFLOW"
                     Layout.fillWidth: true
                 }
                 SearchField {
-                    placeholderText: "定位节点"
+                    placeholderText: "Find node"
                     text: workflowOutlineModel.filterText
                     onTextChanged: workflowOutlineModel.filterText = text
                     Layout.fillWidth: true
@@ -170,7 +209,7 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "快速入口"
+                    text: "QUICK ACCESS"
                     Layout.fillWidth: true
                 }
                 Rectangle {
@@ -181,7 +220,7 @@ Rectangle {
                     Text {
                         anchors.fill: parent
                         anchors.leftMargin: 9
-                        text: "打开命令面板"
+                        text: "Open Command Palette"
                         color: "#dddddd"
                         font.pixelSize: 13
                         verticalAlignment: Text.AlignVCenter
@@ -194,7 +233,7 @@ Rectangle {
                     }
                 }
                 SidebarHeader {
-                    text: "问题"
+                    text: "PROBLEMS"
                     Layout.topMargin: 8
                     Layout.fillWidth: true
                 }

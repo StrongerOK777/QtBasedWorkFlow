@@ -4,9 +4,15 @@
 #include "workflow/WorkflowGraph.h"
 
 #include <QAction>
+#include <QApplication>
+#include <QDrag>
 #include <QFileInfo>
 #include <QKeySequence>
+#include <QMimeData>
+#include <QPainter>
+#include <QPixmap>
 #include <QRegularExpression>
+#include <QWidget>
 #include <algorithm>
 
 namespace {
@@ -31,6 +37,26 @@ QString categoryForType(const QString& typeName)
         }
     }
     return QStringLiteral("高级功能");
+}
+
+QString iconNameForCategory(const QString& category)
+{
+    if (category == QStringLiteral("输入输出")) {
+        return QStringLiteral("files");
+    }
+    if (category == QStringLiteral("几何变换")) {
+        return QStringLiteral("layout");
+    }
+    if (category == QStringLiteral("色彩处理")) {
+        return QStringLiteral("symbol-color");
+    }
+    if (category == QStringLiteral("滤波处理")) {
+        return QStringLiteral("filter");
+    }
+    if (category == QStringLiteral("合成处理")) {
+        return QStringLiteral("git-merge");
+    }
+    return QStringLiteral("symbol-misc");
 }
 
 QString kindName(QuickAccessModel::Kind kind)
@@ -153,6 +179,8 @@ QVariant NodeCatalogModel::data(const QModelIndex& index, int role) const
         return descriptor.category;
     case ProviderRole:
         return QStringLiteral("内置节点");
+    case IconNameRole:
+        return iconNameForCategory(descriptor.category);
     default:
         return {};
     }
@@ -163,7 +191,8 @@ QHash<int, QByteArray> NodeCatalogModel::roleNames() const
     return {{TypeNameRole, "typeName"},
             {TitleRole, "title"},
             {CategoryRole, "category"},
-            {ProviderRole, "provider"}};
+            {ProviderRole, "provider"},
+            {IconNameRole, "iconName"}};
 }
 
 void NodeCatalogModel::setFilterText(const QString& filterText)
@@ -595,4 +624,58 @@ void WorkbenchBridge::activateQuickAccess(int row)
         break;
     }
     Q_EMIT quickAccessFinished();
+}
+
+void WorkbenchBridge::startNodeDrag(const QString& typeName, const QString& title, const QString& category)
+{
+    if (typeName.trimmed().isEmpty()) {
+        return;
+    }
+    auto* drag = new QDrag(QApplication::activeWindow());
+    auto* mime = new QMimeData;
+    mime->setData("application/x-imagenode-type", typeName.toUtf8());
+    mime->setText(typeName);
+    drag->setMimeData(mime);
+
+    QPixmap pixmap(220, 44);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillRect(QRect(0, 0, pixmap.width(), pixmap.height()), QColor("#2a2d2e"));
+    painter.fillRect(QRect(0, 0, 3, pixmap.height()), QColor("#3794ff"));
+    painter.setPen(QColor("#cccccc"));
+    QFont titleFont = qApp ? qApp->font() : QFont();
+    titleFont.setPointSize(11);
+    titleFont.setWeight(QFont::DemiBold);
+    painter.setFont(titleFont);
+    painter.drawText(QRect(12, 5, 198, 18), Qt::AlignLeft | Qt::AlignVCenter, title.isEmpty() ? typeName : title);
+    painter.setPen(QColor("#969696"));
+    QFont detailFont = qApp ? qApp->font() : QFont();
+    detailFont.setPointSize(9);
+    painter.setFont(detailFont);
+    painter.drawText(QRect(12, 24, 198, 16), Qt::AlignLeft | Qt::AlignVCenter, category);
+    painter.end();
+    drag->setPixmap(pixmap);
+    drag->setHotSpot(QPoint(20, 20));
+    drag->exec(Qt::CopyAction);
+}
+
+void WorkbenchBridge::requestWindowMove()
+{
+    Q_EMIT windowMoveRequested();
+}
+
+void WorkbenchBridge::requestWindowMinimize()
+{
+    Q_EMIT windowMinimizeRequested();
+}
+
+void WorkbenchBridge::requestWindowMaximizeToggle()
+{
+    Q_EMIT windowMaximizeToggleRequested();
+}
+
+void WorkbenchBridge::requestWindowClose()
+{
+    Q_EMIT windowCloseRequested();
 }

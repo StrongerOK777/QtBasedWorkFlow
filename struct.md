@@ -465,7 +465,10 @@ ImageNodeEditor/gui/
   WorkflowNodePainter.cpp
 
 ImageNodeEditor/qml/
+  WorkbenchTitleBar.qml
   WorkbenchActivityBar.qml
+  WorkbenchIcon.qml
+  WorkbenchEditorHeader.qml
   WorkbenchSidebar.qml
   WorkbenchStatusBar.qml
   WorkbenchQuickAccess.qml
@@ -475,10 +478,11 @@ ImageNodeEditor/qml/
 
 职责：
 
-- 搭建主窗口、原生菜单、工具栏、工作簿标签和跨平台文件对话框入口。
+- 搭建主窗口、隐藏的原生 `QAction` / `QMenu` 命令源和跨平台文件对话框入口。
 - 组织 `WorkbenchHostWidget`、Qt Nodes 画布、预览栏和底部诊断面板。
 - 创建跨平台命令入口并把命令交给工作台桥接层复用。
 - 把画布操作转发给 `WorkflowCanvas`，把业务修改落回 `WorkflowGraph`。
+- 强制使用 VS Code Dark 风格深色工作台；不再提供浅色或系统主题入口。
 
 不应该做：
 
@@ -492,7 +496,7 @@ ImageNodeEditor/qml/
 
 - 在 Qt Widgets 主窗口中嵌入 QML 工作台表面。
 - 用 splitter 保留中央 QWidget 编辑器槽、右侧预览槽和底部 Panel 槽。
-- 负责 Activity Bar、主侧栏、状态栏和 Quick Access 弹层的 `QQuickWidget` 承载。
+- 负责自定义标题栏、Activity Bar、编辑区头部、主侧栏、状态栏和 Quick Access 弹层的 `QQuickWidget` 承载。
 
 ### `WorkbenchModels` / `WorkbenchBridge`
 
@@ -501,13 +505,15 @@ ImageNodeEditor/qml/
 - 把已有 `QAction` 注册为命令面板可执行命令，不在 QML 重写业务动作。
 - 暴露节点目录、当前图节点大纲、问题列表和最近 workflow 结果给 QML。
 - 把 QML 的创建节点、定位节点、区域显示切换和最近 workflow 打开请求转回 `MainWindow`。
+- 承载节点库拖拽 payload 和自定义标题栏窗口控制请求，保持 QML 不直接触碰窗口或图模型实现细节。
 
 ### `ImageNodeEditor/qml/`
 
 职责：
 
-- 承载 VS Code 风格的 Activity Bar、主侧栏、状态栏和 Quick Access 视觉层。
-- 只做布局、筛选输入、键盘导航和轻交互；不直接修改 `WorkflowGraph`。
+- 承载 VS Code Dark 风格的 Title Bar、Activity Bar、主侧栏、编辑区头部、状态栏和 Quick Access 视觉层。
+- 使用项目自绘矢量图标，避免引入 VS Code/Microsoft 品牌资产。
+- 只做布局、筛选输入、拖拽发起、键盘导航和轻交互；不直接修改 `WorkflowGraph`。
 
 ### `WorkflowCanvas`
 
@@ -516,6 +522,8 @@ ImageNodeEditor/qml/
 - 用 Qt Nodes 承载主画布交互和节点图形对象。
 - 从 `WorkflowGraph` 重建节点、位置与连线映射。
 - 把节点移动、选中、删除、复制、参数变更和连线变更回调给 `MainWindow`。
+- 接收左侧节点库拖拽创建请求，换算为 scene 坐标并走现有新增节点/撤销路径。
+- 在拖拽悬停时绘制落点预览，不直接修改业务图。
 - 连线落图前继续复用 `WorkflowValidator`，不把业务校验交给 Qt Nodes。
 
 ### `WorkflowNodeDelegate`
@@ -530,7 +538,7 @@ ImageNodeEditor/qml/
 
 职责：
 
-- 按节点类别绘制 Qt Nodes 节点轮廓、分类色和状态条。
+- 按 VS Code Dark 风格绘制 Qt Nodes 节点卡片、分类色条、选择态、错误态、缓存/运行状态条和耗时反馈。
 - 保持端口与参数可读性优先，不接管 workflow 数据。
 
 ### `PreviewPanel`
@@ -541,13 +549,13 @@ ImageNodeEditor/qml/
 - 支持适应窗口缩放。
 - 空结果时显示明确提示。
 
-### `NodePalette`
+### `Node Library`
 
 职责：
 
-- 显示可添加节点列表。
+- 在 QML 主侧栏显示可添加节点列表。
 - 从 `NodeFactory` 获取节点类型和分类。
-- 双击或拖拽添加节点到画布。
+- 支持搜索、单击创建和拖拽添加节点到画布。
 
 ### `LogPanel`
 
