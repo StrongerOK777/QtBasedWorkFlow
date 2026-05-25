@@ -9,7 +9,9 @@ class QuickAccessModel;
 class WorkbenchBridge;
 class WorkbenchCommandRegistry;
 class NodeCatalogModel;
+class WorkflowCheckpointModel;
 class WorkflowOutlineModel;
+class WorkflowTemplateModel;
 
 class WorkbenchHostWidget final : public QWidget {
     Q_OBJECT
@@ -19,6 +21,8 @@ public:
                         NodeCatalogModel* nodes,
                         WorkflowOutlineModel* outline,
                         ProblemModel* problems,
+                        WorkflowTemplateModel* templates,
+                        WorkflowCheckpointModel* checkpoints,
                         QuickAccessModel* quickAccess,
                         QWidget* editor,
                         QWidget* preview,
@@ -42,6 +46,8 @@ private:
     NodeCatalogModel* nodes_ = nullptr;
     WorkflowOutlineModel* outline_ = nullptr;
     ProblemModel* problems_ = nullptr;
+    WorkflowTemplateModel* templates_ = nullptr;
+    WorkflowCheckpointModel* checkpoints_ = nullptr;
     QuickAccessModel* quickAccess_ = nullptr;
     QQuickWidget* activitySurface_ = nullptr;
     QQuickWidget* titleSurface_ = nullptr;

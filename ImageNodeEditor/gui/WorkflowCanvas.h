@@ -37,6 +37,7 @@ public:
         std::function<void()> copySelection;
         std::function<void(const QPointF&)> quickPalette;
         std::function<void(const QString&, const QPointF&)> nodeDropped;
+        std::function<void(double)> wheelZoomRequested;
         std::function<void(const QString&, const QString&, const QVariant&)> parameterChanged;
     };
 

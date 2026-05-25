@@ -248,6 +248,12 @@ QString styleSheet(double uiScale)
             background: rgba(37, 37, 38, 210);
             border: %1px solid #454545;
         }
+        QToolTip {
+            background: #252526;
+            color: #cccccc;
+            border: %1px solid #454545;
+            padding: %3px %4px;
+        }
     )")
         .arg(border)
         .arg(itemHeight)

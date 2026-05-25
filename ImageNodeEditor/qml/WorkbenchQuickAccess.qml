@@ -19,7 +19,7 @@ Rectangle {
             id: query
             Layout.fillWidth: true
             height: 42
-            placeholderText: "键入命令、节点、问题或最近 workflow"
+            placeholderText: "键入命令、节点、问题或最近工作流"
             placeholderTextColor: "#999999"
             color: "#f2f2f2"
             selectByMouse: true

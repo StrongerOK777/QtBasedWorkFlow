@@ -28,6 +28,8 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
                                          NodeCatalogModel* nodes,
                                          WorkflowOutlineModel* outline,
                                          ProblemModel* problems,
+                                         WorkflowTemplateModel* templates,
+                                         WorkflowCheckpointModel* checkpoints,
                                          QuickAccessModel* quickAccess,
                                          QWidget* editor,
                                          QWidget* preview,
@@ -40,6 +42,8 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
       nodes_(nodes),
       outline_(outline),
       problems_(problems),
+      templates_(templates),
+      checkpoints_(checkpoints),
       quickAccess_(quickAccess),
       bottomPanel_(bottomPanel),
       uiScale_(uiScale)
@@ -180,6 +184,8 @@ QQuickWidget* WorkbenchHostWidget::makeQuickSurface(const QUrl& source, QWidget*
     surface->rootContext()->setContextProperty("nodeCatalogModel", nodes_);
     surface->rootContext()->setContextProperty("workflowOutlineModel", outline_);
     surface->rootContext()->setContextProperty("problemModel", problems_);
+    surface->rootContext()->setContextProperty("workflowTemplateModel", templates_);
+    surface->rootContext()->setContextProperty("workflowCheckpointModel", checkpoints_);
     surface->rootContext()->setContextProperty("quickAccessModel", quickAccess_);
     surface->setSource(source);
     return surface;

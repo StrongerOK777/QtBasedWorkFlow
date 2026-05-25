@@ -39,7 +39,11 @@ Rectangle {
     StackLayout {
         anchors.fill: parent
         currentIndex: workbenchBridge.activeSidebar === "workflow" ? 1
-                      : workbenchBridge.activeSidebar === "search" ? 2 : 0
+                      : workbenchBridge.activeSidebar === "templates" ? 2
+                      : workbenchBridge.activeSidebar === "history" ? 3
+                      : workbenchBridge.activeSidebar === "search" ? 4
+                      : workbenchBridge.activeSidebar === "problems" ? 5
+                      : workbenchBridge.activeSidebar === "diagnostics" ? 6 : 0
 
         Item {
             ColumnLayout {
@@ -48,11 +52,11 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "NODE LIBRARY"
+                    text: "节点库"
                     Layout.fillWidth: true
                 }
                 SearchField {
-                    placeholderText: "Search nodes"
+                    placeholderText: "搜索节点"
                     text: nodeCatalogModel.filterText
                     onTextChanged: nodeCatalogModel.filterText = text
                     Layout.fillWidth: true
@@ -68,7 +72,7 @@ Rectangle {
                         required property string provider
                         required property string iconName
                         width: ListView.view.width
-                        height: 52
+                        height: 46
                         color: mouse.containsMouse ? "#2a2d2e" : "transparent"
                         property real pressX: 0
                         property real pressY: 0
@@ -100,8 +104,8 @@ Rectangle {
                             width: 18
                             height: 18
                             anchors.verticalCenter: parent.verticalCenter
-                            color: "#333333"
-                            border.color: "#555555"
+                            color: "transparent"
+                            border.color: "transparent"
                             WorkbenchIcon {
                                 anchors.centerIn: parent
                                 width: 14
@@ -136,6 +140,12 @@ Rectangle {
                             }
                             onDoubleClicked: workbenchBridge.createNode(typeName)
                         }
+                        WorkbenchTooltip {
+                            sourceItem: mouse
+                            active: mouse.containsMouse
+                            tooltipText: "拖拽到画布创建：" + title
+                            placement: "right"
+                        }
                     }
                 }
             }
@@ -148,11 +158,245 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "WORKFLOW"
+                    text: "方案库"
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: "预设方案类似 VS Code 扩展入口，但只保存可直接套用的图像处理流程。"
+                    color: "#969696"
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 34
+                    color: templateSaveMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    border.color: "#3c3c3c"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "保存当前为模板"
+                        color: "#cccccc"
+                        font.pixelSize: 13
+                    }
+                    MouseArea {
+                        id: templateSaveMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: workbenchBridge.saveWorkflowTemplate()
+                    }
+                }
+                ResultList {
+                    model: workflowTemplateModel
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    delegate: Rectangle {
+                        required property string templateId
+                        required property string title
+                        required property string detail
+                        required property string source
+                        required property bool builtIn
+                        width: ListView.view.width
+                        height: 72
+                        color: templateMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        Rectangle {
+                            x: 0
+                            width: 2
+                            height: parent.height
+                            color: builtIn ? "#3794ff" : "#858585"
+                        }
+                        Column {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.right: applyTemplateButton.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+                            Text {
+                                text: title
+                                color: "#dddddd"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                            Text {
+                                text: detail
+                                color: "#a8a8a8"
+                                font.pixelSize: 11
+                                maximumLineCount: 2
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                            Text {
+                                text: source
+                                color: "#6f6f6f"
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                        }
+                        Rectangle {
+                            id: applyTemplateButton
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 44
+                            height: 26
+                            color: applyTemplateMouse.containsMouse ? "#0e639c" : "#313131"
+                            border.color: applyTemplateMouse.containsMouse ? "#3794ff" : "#454545"
+                            Text {
+                                anchors.centerIn: parent
+                                text: "套用"
+                                color: "#ffffff"
+                                font.pixelSize: 12
+                            }
+                            MouseArea {
+                                id: applyTemplateMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: workbenchBridge.applyWorkflowTemplate(templateId)
+                            }
+                        }
+                        MouseArea {
+                            id: templateMouse
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                        }
+                    }
+                }
+            }
+        }
+
+        Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                SidebarHeader {
+                    text: "进度记录"
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: "像轻量 Git 一样保存当前画布、恢复旧版本，或从旧保存点创建新分支。"
+                    color: "#969696"
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 34
+                    color: checkpointSaveMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    border.color: "#3c3c3c"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "保存当前进度"
+                        color: "#cccccc"
+                        font.pixelSize: 13
+                    }
+                    MouseArea {
+                        id: checkpointSaveMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: workbenchBridge.createCheckpoint()
+                    }
+                }
+                ResultList {
+                    model: workflowCheckpointModel
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    delegate: Rectangle {
+                        required property string checkpointId
+                        required property string title
+                        required property string detail
+                        required property string branch
+                        width: ListView.view.width
+                        height: 82
+                        color: checkpointMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        Column {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.top: parent.top
+                            anchors.topMargin: 7
+                            spacing: 3
+                            Text {
+                                text: title
+                                color: "#dddddd"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                            Text {
+                                text: branch + "  ·  " + detail
+                                color: "#969696"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                        }
+                        Row {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 6
+                            spacing: 6
+                            Rectangle {
+                                width: 52
+                                height: 24
+                                color: restoreMouse.containsMouse ? "#0e639c" : "#313131"
+                                border.color: restoreMouse.containsMouse ? "#3794ff" : "#454545"
+                                Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
+                                MouseArea {
+                                    id: restoreMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: workbenchBridge.restoreCheckpoint(checkpointId)
+                                }
+                            }
+                            Rectangle {
+                                width: 52
+                                height: 24
+                                color: branchMouse.containsMouse ? "#3a3d41" : "#252526"
+                                border.color: "#454545"
+                                Text { anchors.centerIn: parent; text: "分支"; color: "#cccccc"; font.pixelSize: 12 }
+                                MouseArea {
+                                    id: branchMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: workbenchBridge.branchFromCheckpoint(checkpointId)
+                                }
+                            }
+                        }
+                        MouseArea {
+                            id: checkpointMouse
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                        }
+                    }
+                }
+            }
+        }
+
+        Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                SidebarHeader {
+                    text: "工作流"
                     Layout.fillWidth: true
                 }
                 SearchField {
-                    placeholderText: "Find node"
+                    placeholderText: "查找节点"
                     text: workflowOutlineModel.filterText
                     onTextChanged: workflowOutlineModel.filterText = text
                     Layout.fillWidth: true
@@ -167,7 +411,7 @@ Rectangle {
                         required property string typeName
                         required property string category
                         width: ListView.view.width
-                        height: 52
+                        height: 46
                         color: outlineMouse.containsMouse ? "#2a2d2e" : "transparent"
                         Column {
                             anchors.left: parent.left
@@ -197,6 +441,12 @@ Rectangle {
                             hoverEnabled: true
                             onClicked: workbenchBridge.focusNode(nodeId)
                         }
+                        WorkbenchTooltip {
+                            sourceItem: outlineMouse
+                            active: outlineMouse.containsMouse
+                            tooltipText: "定位节点：" + title
+                            placement: "right"
+                        }
                     }
                 }
             }
@@ -209,7 +459,7 @@ Rectangle {
                 spacing: 8
 
                 SidebarHeader {
-                    text: "QUICK ACCESS"
+                    text: "快速访问"
                     Layout.fillWidth: true
                 }
                 Rectangle {
@@ -220,7 +470,7 @@ Rectangle {
                     Text {
                         anchors.fill: parent
                         anchors.leftMargin: 9
-                        text: "Open Command Palette"
+                        text: "打开命令面板"
                         color: "#dddddd"
                         font.pixelSize: 13
                         verticalAlignment: Text.AlignVCenter
@@ -233,8 +483,49 @@ Rectangle {
                     }
                 }
                 SidebarHeader {
-                    text: "PROBLEMS"
+                    text: "当前工作流"
                     Layout.topMargin: 8
+                    Layout.fillWidth: true
+                }
+                ResultList {
+                    model: workflowOutlineModel
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    delegate: Rectangle {
+                        required property string nodeId
+                        required property string title
+                        required property string category
+                        width: ListView.view.width
+                        height: 44
+                        color: searchMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        Text {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            text: title + "  ·  " + category
+                            color: "#dddddd"
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+                        MouseArea {
+                            id: searchMouse
+                            anchors.fill: parent
+                            enabled: nodeId.length > 0
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.focusNode(nodeId)
+                        }
+                    }
+                }
+            }
+        }
+
+        Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                SidebarHeader {
+                    text: "问题"
                     Layout.fillWidth: true
                 }
                 ResultList {
@@ -245,7 +536,7 @@ Rectangle {
                         required property string message
                         required property string nodeId
                         width: ListView.view.width
-                        height: 50
+                        height: 54
                         color: problemMouse.containsMouse ? "#2a2d2e" : "transparent"
                         Text {
                             anchors.fill: parent
@@ -259,6 +550,108 @@ Rectangle {
                         }
                         MouseArea {
                             id: problemMouse
+                            anchors.fill: parent
+                            enabled: nodeId.length > 0
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.focusNode(nodeId)
+                        }
+                    }
+                }
+            }
+        }
+
+        Item {
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                SidebarHeader {
+                    text: "运行诊断"
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 74
+                    color: "#252526"
+                    border.color: "#3c3c3c"
+                    Text {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: workbenchBridge.statusText + "\n" + workbenchBridge.selectedNodeText + "\n" + workbenchBridge.zoomText
+                        color: "#cccccc"
+                        font.pixelSize: 12
+                        lineHeight: 1.15
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 34
+                    color: runDiagMouse.containsMouse ? "#0e639c" : "#094771"
+                    border.color: "#3794ff"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "执行工作流"
+                        color: "#ffffff"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        id: runDiagMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: workbenchBridge.triggerCommand("workflow.run")
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 34
+                    color: layoutDiagMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    border.color: "#3c3c3c"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "整理画布"
+                        color: "#cccccc"
+                        font.pixelSize: 13
+                    }
+                    MouseArea {
+                        id: layoutDiagMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: workbenchBridge.triggerCommand("workflow.autoLayout")
+                    }
+                }
+
+                SidebarHeader {
+                    text: "最近问题"
+                    Layout.topMargin: 8
+                    Layout.fillWidth: true
+                }
+                ResultList {
+                    model: problemModel
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    delegate: Rectangle {
+                        required property string message
+                        required property string nodeId
+                        width: ListView.view.width
+                        height: 48
+                        color: diagProblemMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        Text {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            text: message
+                            color: "#f1b2ae"
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                        MouseArea {
+                            id: diagProblemMouse
                             anchors.fill: parent
                             enabled: nodeId.length > 0
                             hoverEnabled: true

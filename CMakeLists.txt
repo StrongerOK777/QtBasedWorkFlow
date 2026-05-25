@@ -6,6 +6,10 @@ endif()
 
 project(ImageNodeEditor VERSION 0.1.0 LANGUAGES CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -37,6 +41,10 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/gui/AppTheme.cpp
     ImageNodeEditor/gui/MainWindow.h
     ImageNodeEditor/gui/MainWindow.cpp
+    ImageNodeEditor/gui/AppIcon.h
+    ImageNodeEditor/gui/AppIcon.cpp
+    ImageNodeEditor/gui/NativeWindowChrome.h
+    ImageNodeEditor/gui/NativeWindowChrome.cpp
     ImageNodeEditor/gui/WorkbenchHostWidget.h
     ImageNodeEditor/gui/WorkbenchHostWidget.cpp
     ImageNodeEditor/gui/WorkbenchModels.h
@@ -95,6 +103,14 @@ qt_add_resources(ImageNodeEditor workbench_qml
         ImageNodeEditor/qml/WorkbenchSidebar.qml
         ImageNodeEditor/qml/WorkbenchStatusBar.qml
         ImageNodeEditor/qml/WorkbenchQuickAccess.qml
+        ImageNodeEditor/qml/WorkbenchTooltip.qml
+)
+
+qt_add_resources(ImageNodeEditor codicons_assets
+    PREFIX "/codicons"
+    BASE "third_party/codicons"
+    FILES
+        third_party/codicons/codicon.ttf
 )
 
 set_target_properties(ImageNodeEditor PROPERTIES
@@ -106,6 +122,11 @@ set_target_properties(ImageNodeEditor PROPERTIES
 
 if(MINGW)
     target_link_options(ImageNodeEditor PRIVATE -mwindows)
+endif()
+
+if(APPLE)
+    target_sources(ImageNodeEditor PRIVATE ImageNodeEditor/gui/NativeWindowChrome_mac.mm)
+    target_link_libraries(ImageNodeEditor PRIVATE "-framework AppKit")
 endif()
 
 if(MSVC)

@@ -451,6 +451,11 @@ QMap<NodeId, QMap<QString, NodeData>> nodeOutputs;
 ImageNodeEditor/gui/
   AppTheme.h
   AppTheme.cpp
+  AppIcon.h
+  AppIcon.cpp
+  NativeWindowChrome.h
+  NativeWindowChrome.cpp
+  NativeWindowChrome_mac.mm
   MainWindow.h
   MainWindow.cpp
   WorkbenchHostWidget.h
@@ -472,6 +477,7 @@ ImageNodeEditor/qml/
   WorkbenchSidebar.qml
   WorkbenchStatusBar.qml
   WorkbenchQuickAccess.qml
+  WorkbenchTooltip.qml
 ```
 
 ### `MainWindow`
@@ -479,16 +485,19 @@ ImageNodeEditor/qml/
 职责：
 
 - 搭建主窗口、隐藏的原生 `QAction` / `QMenu` 命令源和跨平台文件对话框入口。
+- 使用平台分叉窗口栏；macOS 通过原生 AppKit 透明标题栏融合工作台，Windows/Linux 保留系统原生标题栏。
 - 组织 `WorkbenchHostWidget`、Qt Nodes 画布、预览栏和底部诊断面板。
 - 创建跨平台命令入口并把命令交给工作台桥接层复用。
 - 把画布操作转发给 `WorkflowCanvas`，把业务修改落回 `WorkflowGraph`。
 - 强制使用 VS Code Dark 风格深色工作台；不再提供浅色或系统主题入口。
+- 提供 VS Code Dark 风格设置页，集中管理界面缩放、画布缩放、滚轮缩放速度、工作台区域开关和快捷键查询。
+- 实现“整理画布”命令的 UI 级布局协调：先复用 `WorkflowValidator` 校验图，再按 DAG 层级、同层重心排序和节点尺寸估算更新节点位置。
 
 不应该做：
 
 - 不实现图像处理算法。
 - 不直接解析 JSON。
-- 不直接做拓扑排序。
+- 不把执行引擎、节点算法或 workflow 持久化逻辑搬进界面层。
 
 ### `WorkbenchHostWidget`
 
@@ -496,7 +505,7 @@ ImageNodeEditor/qml/
 
 - 在 Qt Widgets 主窗口中嵌入 QML 工作台表面。
 - 用 splitter 保留中央 QWidget 编辑器槽、右侧预览槽和底部 Panel 槽。
-- 负责自定义标题栏、Activity Bar、编辑区头部、主侧栏、状态栏和 Quick Access 弹层的 `QQuickWidget` 承载。
+- 负责应用命令栏、Activity Bar、编辑区头部、主侧栏、状态栏和 Quick Access 弹层的 `QQuickWidget` 承载。
 
 ### `WorkbenchModels` / `WorkbenchBridge`
 
@@ -504,16 +513,21 @@ ImageNodeEditor/qml/
 
 - 把已有 `QAction` 注册为命令面板可执行命令，不在 QML 重写业务动作。
 - 暴露节点目录、当前图节点大纲、问题列表和最近 workflow 结果给 QML。
+- 暴露方案库模板和进度记录列表给 QML；模板/保存点都以 workflow JSON 快照形式保存在用户数据目录，不写入当前 workflow 文件。
 - 把 QML 的创建节点、定位节点、区域显示切换和最近 workflow 打开请求转回 `MainWindow`。
-- 承载节点库拖拽 payload 和自定义标题栏窗口控制请求，保持 QML 不直接触碰窗口或图模型实现细节。
+- 把 QML 的“保存当前为模板 / 套用模板 / 保存进度 / 恢复进度 / 从保存点创建分支”请求转回 `MainWindow`，由 C++ 侧弹窗确认并走现有图替换与撤销栈。
+- 承载节点库拖拽 payload，保持 QML 不直接触碰窗口或图模型实现细节。
 
 ### `ImageNodeEditor/qml/`
 
 职责：
 
-- 承载 VS Code Dark 风格的 Title Bar、Activity Bar、主侧栏、编辑区头部、状态栏和 Quick Access 视觉层。
-- 使用项目自绘矢量图标，避免引入 VS Code/Microsoft 品牌资产。
+- 承载 VS Code Dark 风格的命令栏、Activity Bar、主侧栏、编辑区头部、状态栏和 Quick Access 视觉层。
+- 使用 vendored Codicons 字体子集作为工作台图标源，避免引入 VS Code/Microsoft 品牌资产。
+- 通过 `WorkbenchTooltip.qml` 提供统一的 VS Code Dark 风格中文悬停提示。
 - 只做布局、筛选输入、拖拽发起、键盘导航和轻交互；不直接修改 `WorkflowGraph`。
+- Activity Bar 固定为窄栏，不通过扩宽左侧栏来容纳新功能。
+- Activity Bar 中“方案库”用于预设流程和用户模板，“进度记录”用于轻量保存点、恢复和分支，不复刻完整 Git 或插件市场。
 
 ### `WorkflowCanvas`
 
@@ -524,6 +538,8 @@ ImageNodeEditor/qml/
 - 把节点移动、选中、删除、复制、参数变更和连线变更回调给 `MainWindow`。
 - 接收左侧节点库拖拽创建请求，换算为 scene 坐标并走现有新增节点/撤销路径。
 - 在拖拽悬停时绘制落点预览，不直接修改业务图。
+- drop 事件内先清理临时预览，再延后触发新增节点，避免重建 scene 时删除悬空图元。
+- 拦截 Qt Nodes 默认 `1.2x` 滚轮缩放，改为向 `MainWindow` 汇报低速滚轮步进，由统一画布缩放状态处理 25% 到 300% 的范围限制。
 - 连线落图前继续复用 `WorkflowValidator`，不把业务校验交给 Qt Nodes。
 
 ### `WorkflowNodeDelegate`
@@ -631,6 +647,12 @@ ImageNodeEditor/resources/
 - 使用 Qt Resource System 后，代码中用 `:/icons/...`、`:/samples/...` 访问资源。
 - Qt 自带标准图标可通过 `QStyle::standardIcon()` 获取，适合基础版本。
 - 自定义图标可使用自己绘制的 SVG / PNG 或授权清楚的开源图标。
+
+## 10.a `third_party/codicons/`
+
+- `codicon.ttf`：从 `@vscode/codicons` 固定 vendoring 的图标字体。
+- `LICENSE` / `LICENSE-CODE` / `NOTICE.md`：记录 Codicons 字体许可证、源码许可证说明和来源。
+- 仅用于工作台图标渲染；不使用 VS Code 名称、Logo、Marketplace 或 Microsoft 品牌资产。
 
 ---
 

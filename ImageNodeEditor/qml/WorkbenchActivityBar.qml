@@ -9,32 +9,45 @@ Rectangle {
 
     component ActivityButton: ToolButton {
         id: button
-        required property string sidebar
+        property string sidebar: ""
+        property string commandId: ""
         required property string iconName
         required property string hint
+        property bool checkedState: sidebar.length > 0 && workbenchBridge.activeSidebar === sidebar
         width: parent ? parent.width : 48
         height: width
         hoverEnabled: true
-        onClicked: workbenchBridge.activeSidebar = sidebar
-        ToolTip.visible: hovered
-        ToolTip.text: hint
+        onClicked: {
+            if (commandId.length > 0) {
+                workbenchBridge.triggerCommand(commandId)
+            } else if (sidebar.length > 0) {
+                workbenchBridge.activeSidebar = sidebar
+            }
+        }
+        WorkbenchTooltip {
+            sourceItem: button
+            active: button.hovered
+            tooltipText: button.hint
+            placement: "right"
+        }
         background: Rectangle {
             color: button.hovered ? "#292929" : "transparent"
             Rectangle {
                 width: 2
                 height: parent.height
-                visible: workbenchBridge.activeSidebar === button.sidebar
+                visible: button.checkedState
                 color: "#3794ff"
             }
         }
         contentItem: Item {
             WorkbenchIcon {
                 anchors.centerIn: parent
-                width: 23
-                height: 23
+                width: 30
+                height: 30
                 name: button.iconName
-                strokeColor: workbenchBridge.activeSidebar === button.sidebar ? "#f5f5f5" : "#a8a8a8"
+                strokeColor: button.checkedState ? "#f5f5f5" : "#a8a8a8"
                 fillColor: "transparent"
+                strokeWidth: 1.8
             }
         }
     }
@@ -46,35 +59,59 @@ Rectangle {
         ActivityButton {
             sidebar: "nodes"
             iconName: "nodes"
-            hint: "Node Library"
+            hint: "节点库"
         }
         ActivityButton {
             sidebar: "workflow"
             iconName: "workflow"
-            hint: "Workflow"
+            hint: "工作流大纲"
+        }
+        ActivityButton {
+            sidebar: "templates"
+            iconName: "templates"
+            hint: "方案库"
+        }
+        ActivityButton {
+            sidebar: "history"
+            iconName: "source-control"
+            hint: "进度记录"
         }
         ActivityButton {
             sidebar: "search"
             iconName: "search"
-            hint: "Search"
+            hint: "搜索和快速访问"
+        }
+        ActivityButton {
+            sidebar: "problems"
+            iconName: "problems"
+            hint: "问题"
+        }
+        ActivityButton {
+            sidebar: "diagnostics"
+            iconName: "run-diagnostics"
+            hint: "运行诊断"
         }
 
         Item {
             width: parent.width
-            height: Math.max(0, parent.height - y - 98)
+            height: Math.max(0, parent.height - y - 148)
         }
 
         ActivityButton {
-            sidebar: "search"
+            commandId: "workbench.quickAccess"
             iconName: "command"
-            hint: "Command Palette"
-            onClicked: workbenchBridge.showQuickAccess()
+            hint: "命令面板"
         }
         ActivityButton {
-            sidebar: "nodes"
+            commandId: "workbench.preview"
             iconName: "preview"
-            hint: workbenchBridge.previewVisible ? "Hide Preview" : "Show Preview"
-            onClicked: workbenchBridge.previewVisible = !workbenchBridge.previewVisible
+            hint: workbenchBridge.previewVisible ? "隐藏预览" : "显示预览"
+            checkedState: workbenchBridge.previewVisible
+        }
+        ActivityButton {
+            commandId: "settings.open"
+            iconName: "settings"
+            hint: "设置"
         }
     }
 }

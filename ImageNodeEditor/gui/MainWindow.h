@@ -28,8 +28,10 @@ class QToolBar;
 class QTimer;
 class QUndoStack;
 class QWidget;
+class QShowEvent;
 class TerminalPanel;
 class WorkbenchBridge;
+class WorkflowCheckpointModel;
 class WorkbenchCommandRegistry;
 class WorkbenchHostWidget;
 class NodeCatalogModel;
@@ -37,6 +39,7 @@ class ProblemModel;
 class QuickAccessModel;
 class WorkflowCanvas;
 class WorkflowOutlineModel;
+class WorkflowTemplateModel;
 
 class MainWindow : public QMainWindow {
 public:
@@ -69,6 +72,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void createActions();
@@ -98,6 +102,13 @@ private:
     void saveWorkflowAs();
     void rememberRecentWorkflow(const QString& path);
     void refreshRecentWorkflowModel();
+    void refreshWorkflowTemplateModel();
+    void refreshWorkflowCheckpointModel();
+    void saveCurrentWorkflowAsTemplate();
+    void applyWorkflowTemplate(const QString& templateId);
+    void createWorkflowCheckpoint();
+    void restoreWorkflowCheckpoint(const QString& checkpointId);
+    void branchFromWorkflowCheckpoint(const QString& checkpointId);
     bool confirmSaveIfNeeded();
     bool ensureSavePath();
     void updateWindowTitle();
@@ -153,6 +164,7 @@ private:
     QString pendingFromNode_;
     QString pendingFromPort_;
     double zoomScale_ = 1.0;
+    double wheelZoomStep_ = 1.04;
     double uiScale_ = 1.0;
     struct WorkbookPage {
         WorkflowGraph graph;
@@ -179,6 +191,8 @@ private:
     WorkflowOutlineModel* workflowOutlineModel_ = nullptr;
     ProblemModel* problemModel_ = nullptr;
     QuickAccessModel* quickAccessModel_ = nullptr;
+    WorkflowTemplateModel* workflowTemplateModel_ = nullptr;
+    WorkflowCheckpointModel* workflowCheckpointModel_ = nullptr;
     WorkbenchBridge* workbenchBridge_ = nullptr;
     QWidget* primarySidebar_ = nullptr;
     QWidget* previewSidebar_ = nullptr;
@@ -213,6 +227,7 @@ private:
     QAction* previewToggleAction_ = nullptr;
     QAction* bottomToggleAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
+    QString currentWorkflowBranch_ = "main";
     QTimer* livePreviewTimer_ = nullptr;
     QTimer* runAnimationTimer_ = nullptr;
     QUndoStack* undoStack_ = nullptr;

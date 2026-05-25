@@ -63,19 +63,126 @@ QString kindName(QuickAccessModel::Kind kind)
 {
     switch (kind) {
     case QuickAccessModel::Kind::Command:
-        return QStringLiteral("command");
+        return QStringLiteral("命令");
     case QuickAccessModel::Kind::Node:
-        return QStringLiteral("node");
+        return QStringLiteral("节点");
     case QuickAccessModel::Kind::WorkflowNode:
-        return QStringLiteral("workflowNode");
+        return QStringLiteral("工作流");
     case QuickAccessModel::Kind::Problem:
-        return QStringLiteral("problem");
+        return QStringLiteral("问题");
     case QuickAccessModel::Kind::RecentWorkflow:
-        return QStringLiteral("recentWorkflow");
+        return QStringLiteral("最近");
     }
     return {};
 }
 
+}
+
+WorkflowTemplateModel::WorkflowTemplateModel(QObject* parent) : QAbstractListModel(parent) {}
+
+int WorkflowTemplateModel::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : entries_.size();
+}
+
+QVariant WorkflowTemplateModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() < 0 || index.row() >= entries_.size()) {
+        return {};
+    }
+    const Entry& entry = entries_.at(index.row());
+    switch (role) {
+    case TemplateIdRole:
+        return entry.id;
+    case TitleRole:
+        return entry.title;
+    case DetailRole:
+        return entry.detail;
+    case SourceRole:
+        return entry.source;
+    case BuiltInRole:
+        return entry.builtIn;
+    default:
+        return {};
+    }
+}
+
+QHash<int, QByteArray> WorkflowTemplateModel::roleNames() const
+{
+    return {{TemplateIdRole, "templateId"},
+            {TitleRole, "title"},
+            {DetailRole, "detail"},
+            {SourceRole, "source"},
+            {BuiltInRole, "builtIn"}};
+}
+
+void WorkflowTemplateModel::setEntries(QVector<Entry> entries)
+{
+    beginResetModel();
+    entries_ = std::move(entries);
+    endResetModel();
+}
+
+WorkflowTemplateModel::Entry WorkflowTemplateModel::entryById(const QString& id) const
+{
+    for (const Entry& entry : entries_) {
+        if (entry.id == id) {
+            return entry;
+        }
+    }
+    return {};
+}
+
+WorkflowCheckpointModel::WorkflowCheckpointModel(QObject* parent) : QAbstractListModel(parent) {}
+
+int WorkflowCheckpointModel::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : entries_.size();
+}
+
+QVariant WorkflowCheckpointModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() < 0 || index.row() >= entries_.size()) {
+        return {};
+    }
+    const Entry& entry = entries_.at(index.row());
+    switch (role) {
+    case CheckpointIdRole:
+        return entry.id;
+    case TitleRole:
+        return entry.title;
+    case DetailRole:
+        return entry.detail;
+    case BranchRole:
+        return entry.branch;
+    default:
+        return {};
+    }
+}
+
+QHash<int, QByteArray> WorkflowCheckpointModel::roleNames() const
+{
+    return {{CheckpointIdRole, "checkpointId"},
+            {TitleRole, "title"},
+            {DetailRole, "detail"},
+            {BranchRole, "branch"}};
+}
+
+void WorkflowCheckpointModel::setEntries(QVector<Entry> entries)
+{
+    beginResetModel();
+    entries_ = std::move(entries);
+    endResetModel();
+}
+
+WorkflowCheckpointModel::Entry WorkflowCheckpointModel::entryById(const QString& id) const
+{
+    for (const Entry& entry : entries_) {
+        if (entry.id == id) {
+            return entry;
+        }
+    }
+    return {};
 }
 
 WorkbenchCommandRegistry::WorkbenchCommandRegistry(QObject* parent) : QAbstractListModel(parent) {}
@@ -658,6 +765,37 @@ void WorkbenchBridge::startNodeDrag(const QString& typeName, const QString& titl
     drag->setPixmap(pixmap);
     drag->setHotSpot(QPoint(20, 20));
     drag->exec(Qt::CopyAction);
+}
+
+void WorkbenchBridge::saveWorkflowTemplate()
+{
+    Q_EMIT workflowTemplateSaveRequested();
+}
+
+void WorkbenchBridge::applyWorkflowTemplate(const QString& templateId)
+{
+    if (!templateId.trimmed().isEmpty()) {
+        Q_EMIT workflowTemplateApplyRequested(templateId);
+    }
+}
+
+void WorkbenchBridge::createCheckpoint()
+{
+    Q_EMIT checkpointCreateRequested();
+}
+
+void WorkbenchBridge::restoreCheckpoint(const QString& checkpointId)
+{
+    if (!checkpointId.trimmed().isEmpty()) {
+        Q_EMIT checkpointRestoreRequested(checkpointId);
+    }
+}
+
+void WorkbenchBridge::branchFromCheckpoint(const QString& checkpointId)
+{
+    if (!checkpointId.trimmed().isEmpty()) {
+        Q_EMIT checkpointBranchRequested(checkpointId);
+    }
 }
 
 void WorkbenchBridge::requestWindowMove()

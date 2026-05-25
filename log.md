@@ -878,3 +878,87 @@ Qt Nodes 只负责 GUI 承载，不替代 `WorkflowSerializer`。后续若升级
 
 后续注意：
 本阶段仍保留隐藏的原生菜单/工具栏对象作为 QAction 容器，方便快捷键和命令面板复用；后续若继续清理，应先确认所有 QAction 都已由命令注册表覆盖，再删除旧可视工具栏创建路径。
+
+---
+
+### 2026-05-25 / 原生窗口栏与拖拽崩溃修复阶段
+
+类型：修复
+
+概述：
+恢复平台原生窗口栏和窗口按钮，重排 QML 顶部命令栏与左侧 Activity Bar，并修复画布已有节点时从节点库拖入新节点可能崩溃的问题。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/main.cpp`、`ImageNodeEditor/gui/AppIcon.*`、`ImageNodeEditor/gui/MainWindow.cpp`、`ImageNodeEditor/gui/WorkflowCanvas.cpp`、`ImageNodeEditor/qml/WorkbenchTitleBar.qml`、`ImageNodeEditor/qml/WorkbenchActivityBar.qml`、`ImageNodeEditor/qml/WorkbenchSidebar.qml`、`ImageNodeEditor/qml/WorkbenchIcon.qml`、`struct.md`
+
+处理方式：
+移除桌面窗口默认 frameless 设置，保留 Qt 原生菜单栏和系统窗口按钮；QML 顶栏改为应用命令栏，左上角显示原创节点图像 workflow 图标，右侧放运行、预览、底部面板和设置等命令。Activity Bar 保持 48px 宽度但放大图标，并增加问题与运行诊断入口。拖拽修复的根因是 drop 回调中新增节点会重建 Qt Nodes scene，而旧 drop preview 图元随后被再次删除；现在 drop 时先读取 payload 和 scene 坐标、清理预览图元，再用延迟回调执行新增节点，`rebuild()` 也会在替换 scene 前清理临时图元。
+
+当前状态：
+已解决
+
+后续注意：
+`WorkbenchBridge` 中旧的窗口控制 invokable 目前保留但 QML 默认不再调用；后续做 API 清理时可一并移除。
+
+---
+
+### 2026-05-25 / VS Code Dark 贴近化与 Codicons 图标阶段
+
+类型：修改
+
+概述：
+继续把工作台视觉向 VS Code Dark 靠拢，去掉窗口内左上角产品图标，统一中文提示与主要界面文案，引入 Codicons 字体子集替换 QML 手绘图标，并为 macOS 增加透明标题栏融合策略。
+
+影响范围：
+`CMakeLists.txt`、`ImageNodeEditor/gui/MainWindow.cpp`、`ImageNodeEditor/gui/NativeWindowChrome.*`、`ImageNodeEditor/gui/WorkbenchModels.cpp`、`ImageNodeEditor/gui/AppTheme.cpp`、`ImageNodeEditor/qml/`、`third_party/codicons/`、`struct.md`
+
+处理方式：
+QML 顶部命令栏移除产品图标区域，macOS 通过 AppKit 隐藏标题文字并启用透明标题栏，Windows/Linux 保留原生标题栏路径。新增 `WorkbenchTooltip.qml` 统一深色悬停说明框，Activity Bar、顶栏、编辑区头部和节点库提示改为中文。`WorkbenchIcon.qml` 改为加载 vendored `codicon.ttf` 并按内部图标名映射到 Codicons glyph；原生菜单动作设置为不在菜单中显示图标，只保留中文文字和快捷键。
+
+当前状态：
+已解决
+
+后续注意：
+本轮按中文优先实现，未引入完整语言切换。Codicons 仅作为图标字体使用，并保留许可证与来源说明；不要引入 VS Code/Microsoft 品牌图形。
+
+---
+
+### 2026-05-25 / 设置页、低速缩放与整理画布优化阶段
+
+类型：修改
+
+概述：
+继续贴近 VS Code Dark 工作台风格，重写设置页，降低画布滚轮缩放速度，并把原“自动布局”升级为面向用户的“整理画布”功能。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.*`、`ImageNodeEditor/gui/WorkflowCanvas.*`、`ImageNodeEditor/qml/WorkbenchTitleBar.qml`、`ImageNodeEditor/qml/WorkbenchEditorHeader.qml`、`ImageNodeEditor/qml/WorkbenchSidebar.qml`、`struct.md`
+
+处理方式：
+设置页从旧 `QFormLayout` 改为左侧分类导航加右侧内容页，按“常用 / 画布 / 工作台 / 快捷键”组织；新增滚轮缩放速度设置、整理画布入口、命令面板入口、工作台区域开关和当前命令快捷键查询。Qt Nodes 默认滚轮缩放每格约 `1.2x`，现在由 `WorkflowCanvas` 拦截滚轮事件并把步进交给 `MainWindow`，默认每格约 `1.04x`，工具按钮缩放也降为 `1.06x`。整理画布继续使用现有 workflow 图模型和撤销栈，但布局算法改为先校验连线，再按拓扑层级从左到右排列，并对同层节点做输入/输出重心排序，按端口与参数估算节点高度后居中排布。
+
+当前状态：
+已解决
+
+后续注意：
+快捷键页本轮只提供查询和搜索，不做快捷键重绑定。整理画布采用内置 DAG 分层算法，不引入 Graphviz/Dagre 运行时依赖，后续若需要更强的交叉最小化可在当前算法后继续增加局部交换优化。
+
+---
+
+### 2026-05-25 / 方案库与进度记录阶段
+
+类型：新增
+
+概述：
+把 VS Code 的“扩展/源代码管理”侧栏概念改造成更适合图像 workflow 的“方案库”和“进度记录”：方案库提供预设处理流程和用户自定义模板；进度记录提供轻量保存点、恢复和分支式尝试。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.*`、`ImageNodeEditor/gui/WorkbenchHostWidget.*`、`ImageNodeEditor/gui/WorkbenchModels.*`、`ImageNodeEditor/qml/WorkbenchActivityBar.qml`、`ImageNodeEditor/qml/WorkbenchSidebar.qml`、`ImageNodeEditor/qml/WorkbenchIcon.qml`、`struct.md`
+
+处理方式：
+新增 `WorkflowTemplateModel` 和 `WorkflowCheckpointModel` 暴露给 QML。方案库内置“灰度预览、缩放导出、文字叠加预览、双图混合预览”四个预设 workflow，用户也可以把当前 workflow 保存为模板；用户模板以 JSON 快照保存到 `QStandardPaths::AppDataLocation/templates`，元数据保存在 `QSettings`。进度记录同样保存 JSON 快照到 `checkpoints`，每条记录带分支名；恢复保存点和套用模板都会覆盖当前画布，但通过现有 `pushGraphEditCommand` 进入撤销栈。从保存点创建分支会载入该保存点、切换当前轻量分支名，并自动写入一条分支创建记录。
+
+当前状态：
+已解决
+
+后续注意：
+本轮没有实现完整 Git 语义，不做 merge/rebase/stash，也没有在线模板市场。后续可以在当前模板模型上增加删除、重命名、导入/导出模板包等操作。

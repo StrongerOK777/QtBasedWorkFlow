@@ -10,6 +10,68 @@
 class QAction;
 class WorkflowGraph;
 
+class WorkflowTemplateModel final : public QAbstractListModel {
+    Q_OBJECT
+public:
+    enum Role {
+        TemplateIdRole = Qt::UserRole + 1,
+        TitleRole,
+        DetailRole,
+        SourceRole,
+        BuiltInRole
+    };
+
+    struct Entry {
+        QString id;
+        QString title;
+        QString detail;
+        QString source;
+        bool builtIn = false;
+    };
+
+    explicit WorkflowTemplateModel(QObject* parent = nullptr);
+
+    int rowCount(const QModelIndex& parent = {}) const override;
+    QVariant data(const QModelIndex& index, int role) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+    void setEntries(QVector<Entry> entries);
+    Entry entryById(const QString& id) const;
+
+private:
+    QVector<Entry> entries_;
+};
+
+class WorkflowCheckpointModel final : public QAbstractListModel {
+    Q_OBJECT
+public:
+    enum Role {
+        CheckpointIdRole = Qt::UserRole + 1,
+        TitleRole,
+        DetailRole,
+        BranchRole
+    };
+
+    struct Entry {
+        QString id;
+        QString title;
+        QString detail;
+        QString branch;
+    };
+
+    explicit WorkflowCheckpointModel(QObject* parent = nullptr);
+
+    int rowCount(const QModelIndex& parent = {}) const override;
+    QVariant data(const QModelIndex& index, int role) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+    void setEntries(QVector<Entry> entries);
+    Entry entryById(const QString& id) const;
+
+private:
+    QVector<Entry> entries_;
+};
+
 class WorkbenchCommandRegistry final : public QAbstractListModel {
     Q_OBJECT
 public:
@@ -235,6 +297,11 @@ public:
     Q_INVOKABLE void showQuickAccess();
     Q_INVOKABLE void activateQuickAccess(int row);
     Q_INVOKABLE void startNodeDrag(const QString& typeName, const QString& title, const QString& category);
+    Q_INVOKABLE void saveWorkflowTemplate();
+    Q_INVOKABLE void applyWorkflowTemplate(const QString& templateId);
+    Q_INVOKABLE void createCheckpoint();
+    Q_INVOKABLE void restoreCheckpoint(const QString& checkpointId);
+    Q_INVOKABLE void branchFromCheckpoint(const QString& checkpointId);
     Q_INVOKABLE void requestWindowMove();
     Q_INVOKABLE void requestWindowMinimize();
     Q_INVOKABLE void requestWindowMaximizeToggle();
@@ -251,6 +318,11 @@ signals:
     void nodeCreationRequested(const QString& typeName);
     void nodeFocusRequested(const QString& nodeId);
     void recentWorkflowRequested(const QString& path);
+    void workflowTemplateSaveRequested();
+    void workflowTemplateApplyRequested(const QString& templateId);
+    void checkpointCreateRequested();
+    void checkpointRestoreRequested(const QString& checkpointId);
+    void checkpointBranchRequested(const QString& checkpointId);
     void previewVisibilityRequested(bool visible);
     void panelVisibilityRequested(bool visible);
     void quickAccessRequested();

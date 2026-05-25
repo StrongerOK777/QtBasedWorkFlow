@@ -28,7 +28,9 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QScrollBar>
+#include <QTimer>
 #include <QVariant>
+#include <QWheelEvent>
 
 #include <cmath>
 #include <memory>
@@ -72,6 +74,16 @@ QString categoryForType(const QString& typeName)
         }
     }
     return QStringLiteral("高级功能");
+}
+
+bool isKnownNodeType(const QString& typeName)
+{
+    for (const auto& descriptor : NodeFactory::instance().descriptors()) {
+        if (descriptor.typeName == typeName) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void applyQtNodesDarkStyle()
@@ -149,13 +161,15 @@ public:
                          std::function<void()> copySelection,
                          std::function<void(const QPointF&)> quickPalette,
                          std::function<void(const QString&, const QPointF&)> nodeDropped,
+                         std::function<void(double)> wheelZoomRequested,
                          QWidget* parent)
         : QtNodes::GraphicsView(scene, parent),
           uiScale_(uiScale),
           deleteSelection_(std::move(deleteSelection)),
           copySelection_(std::move(copySelection)),
           quickPalette_(std::move(quickPalette)),
-          nodeDropped_(std::move(nodeDropped))
+          nodeDropped_(std::move(nodeDropped)),
+          wheelZoomRequested_(std::move(wheelZoomRequested))
     {
         setAcceptDrops(true);
     }
@@ -174,6 +188,11 @@ public:
         }
     }
 
+    void clearTransientItems()
+    {
+        clearDropPreview();
+    }
+
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override
     {
@@ -188,6 +207,29 @@ protected:
             return;
         }
         QtNodes::GraphicsView::keyPressEvent(event);
+    }
+
+    void wheelEvent(QWheelEvent* event) override
+    {
+        double steps = 0.0;
+        if (!event->pixelDelta().isNull()) {
+            steps = event->pixelDelta().y() / 240.0;
+        } else if (event->angleDelta().y() != 0) {
+            steps = event->angleDelta().y() / 120.0;
+        }
+
+        if (std::abs(steps) < 0.001) {
+            QtNodes::GraphicsView::wheelEvent(event);
+            return;
+        }
+
+        if (wheelZoomRequested_) {
+            wheelZoomRequested_(steps);
+            event->accept();
+            return;
+        }
+
+        QtNodes::GraphicsView::wheelEvent(event);
     }
 
     void dragEnterEvent(QDragEnterEvent* event) override
@@ -220,9 +262,20 @@ protected:
     {
         if (event->mimeData()->hasFormat("application/x-imagenode-type") && nodeDropped_) {
             const QString typeName = QString::fromUtf8(event->mimeData()->data("application/x-imagenode-type"));
-            nodeDropped_(typeName, mapToScene(event->position().toPoint()));
+            if (typeName.trimmed().isEmpty() || !isKnownNodeType(typeName)) {
+                clearDropPreview();
+                event->ignore();
+                return;
+            }
+            const QPointF scenePos = mapToScene(event->position().toPoint());
+            auto callback = nodeDropped_;
             clearDropPreview();
             event->acceptProposedAction();
+            QTimer::singleShot(0, this, [callback = std::move(callback), typeName, scenePos] {
+                if (callback) {
+                    callback(typeName, scenePos);
+                }
+            });
             return;
         }
         clearDropPreview();
@@ -249,6 +302,9 @@ private:
         if (!dropPreview_) {
             return;
         }
+        if (dropPreview_->scene() == scene()) {
+            scene()->removeItem(dropPreview_);
+        }
         delete dropPreview_;
         dropPreview_ = nullptr;
     }
@@ -258,6 +314,7 @@ private:
     std::function<void()> copySelection_;
     std::function<void(const QPointF&)> quickPalette_;
     std::function<void(const QString&, const QPointF&)> nodeDropped_;
+    std::function<void(double)> wheelZoomRequested_;
     QGraphicsRectItem* dropPreview_ = nullptr;
 };
 
@@ -295,6 +352,7 @@ WorkflowCanvas::WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbac
                                      callbacks_.copySelection,
                                      callbacks_.quickPalette,
                                      callbacks_.nodeDropped,
+                                     callbacks_.wheelZoomRequested,
                                      owner_);
     view_->setObjectName("workflowView");
     view_->viewport()->setObjectName("workflowViewport");
@@ -329,6 +387,7 @@ void WorkflowCanvas::rebuild(WorkflowGraph& graph,
         }, descriptor.category);
     }
 
+    static_cast<WorkflowGraphicsView*>(view_)->clearTransientItems();
     static_cast<QGraphicsView*>(view_)->setScene(nullptr);
     scene_.reset();
     graphModel_ = std::make_unique<QtNodes::DataFlowGraphModel>(registry_);
