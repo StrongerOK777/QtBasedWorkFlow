@@ -306,6 +306,8 @@ public:
     Q_INVOKABLE void requestWindowMinimize();
     Q_INVOKABLE void requestWindowMaximizeToggle();
     Q_INVOKABLE void requestWindowClose();
+    Q_INVOKABLE void showTooltip(const QString& text, const QString& placement);
+    Q_INVOKABLE void hideTooltip();
 
 signals:
     void documentTitleChanged();
@@ -331,6 +333,8 @@ signals:
     void windowMinimizeRequested();
     void windowMaximizeToggleRequested();
     void windowCloseRequested();
+    void tooltipRequested(const QString& text, const QString& placement);
+    void tooltipHideRequested();
 
 private:
     WorkbenchCommandRegistry* commands_ = nullptr;

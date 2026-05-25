@@ -322,14 +322,20 @@ class WorkflowGraphicsScene final : public QtNodes::DataFlowGraphicsScene {
 public:
     WorkflowGraphicsScene(QtNodes::DataFlowGraphModel& graphModel,
                           std::function<void(const QPointF&)> quickPalette,
+                          std::function<QMenu*(const QPointF&)> sceneContextMenu,
                           QObject* parent)
-        : QtNodes::DataFlowGraphicsScene(graphModel, parent), quickPalette_(std::move(quickPalette))
+        : QtNodes::DataFlowGraphicsScene(graphModel, parent),
+          quickPalette_(std::move(quickPalette)),
+          sceneContextMenu_(std::move(sceneContextMenu))
     {
         setGroupingEnabled(false);
     }
 
     QMenu* createSceneMenu(const QPointF scenePos) override
     {
+        if (sceneContextMenu_) {
+            return sceneContextMenu_(scenePos);
+        }
         if (quickPalette_) {
             quickPalette_(scenePos);
         }
@@ -338,6 +344,7 @@ public:
 
 private:
     std::function<void(const QPointF&)> quickPalette_;
+    std::function<QMenu*(const QPointF&)> sceneContextMenu_;
 };
 
 }
@@ -414,7 +421,7 @@ void WorkflowCanvas::rebuild(WorkflowGraph& graph,
         }
     }
 
-    scene_ = std::make_unique<WorkflowGraphicsScene>(*graphModel_, callbacks_.quickPalette, owner_);
+    scene_ = std::make_unique<WorkflowGraphicsScene>(*graphModel_, callbacks_.quickPalette, callbacks_.sceneContextMenu, owner_);
     scene_->setSceneRect(-2000, -2000, 4000, 4000);
     scene_->setNodePainter(std::make_unique<WorkflowNodePainter>());
     view_->setScene(scene_.get());

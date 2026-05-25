@@ -28,10 +28,10 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QEvent>
-#include <QEventLoop>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGraphicsDropShadowEffect>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
@@ -56,10 +56,12 @@
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QProcess>
+#include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScreen>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
 #include <QSet>
@@ -75,6 +77,7 @@
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTextCursor>
+#include <QThread>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -946,7 +949,27 @@ MainWindow::MainWindow(QWidget* parent)
     applyUiScale();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    ++executionGeneration_;
+    ++livePreviewGeneration_;
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
+    }
+    hideWorkbenchTooltip();
+    delete tooltipPopup_;
+    tooltipPopup_ = nullptr;
+    tooltipLabel_ = nullptr;
+    const auto threads = workerThreads_;
+    for (auto* thread : threads) {
+        if (!thread) {
+            continue;
+        }
+        if (thread->isRunning()) {
+            thread->wait();
+        }
+    }
+}
 
 void MainWindow::createActions()
 {
@@ -1135,6 +1158,7 @@ void MainWindow::createLayout()
     canvasCallbacks.deleteSelection = [this] { removeSelectedItems(); };
     canvasCallbacks.copySelection = [this] { copySelectedNode(); };
     canvasCallbacks.quickPalette = [this](const QPointF& pos) { showQuickNodePaletteAt(pos); };
+    canvasCallbacks.sceneContextMenu = [this](const QPointF& pos) { return createCanvasContextMenu(pos); };
     canvasCallbacks.nodeDropped = [this](const QString& typeName, const QPointF& pos) {
         addNodeFromType(typeName, pos);
     };
@@ -1375,6 +1399,8 @@ void MainWindow::createLayout()
         isMaximized() ? showNormal() : showMaximized();
     });
     connect(workbenchBridge_, &WorkbenchBridge::windowCloseRequested, this, [this] { close(); });
+    connect(workbenchBridge_, &WorkbenchBridge::tooltipRequested, this, &MainWindow::showWorkbenchTooltip);
+    connect(workbenchBridge_, &WorkbenchBridge::tooltipHideRequested, this, &MainWindow::hideWorkbenchTooltip);
     refreshRecentWorkflowModel();
     refreshWorkflowTemplateModel();
     refreshWorkflowCheckpointModel();
@@ -1580,6 +1606,9 @@ void MainWindow::addNodeFromMenu(const QString& typeName)
 
 void MainWindow::addNodeFromType(const QString& typeName, const QPointF& position)
 {
+    if (rejectGraphReplacementWhileBusy("添加节点")) {
+        return;
+    }
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
     auto created = NodeFactory::instance().create(typeName);
@@ -1663,6 +1692,9 @@ void MainWindow::showEdgeContextMenu(int edgeIndex, const QPoint& screenPos)
 
 void MainWindow::copySelectedNode()
 {
+    if (rejectGraphReplacementWhileBusy("复制节点")) {
+        return;
+    }
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
 
@@ -1722,6 +1754,9 @@ void MainWindow::copySelectedNode()
 
 void MainWindow::encapsulateSelectionAsMacro()
 {
+    if (rejectGraphReplacementWhileBusy("封装宏节点")) {
+        return;
+    }
     QStringList selectedIds = canvas_ ? canvas_->selectedNodeIds() : QStringList{};
     selectedIds.removeDuplicates();
     if (selectedIds.isEmpty()) {
@@ -1840,6 +1875,9 @@ void MainWindow::encapsulateSelectionAsMacro()
 
 void MainWindow::autoLayoutWorkflow()
 {
+    if (rejectGraphReplacementWhileBusy("整理画布")) {
+        return;
+    }
     if (graph_.nodes().isEmpty()) {
         appendLog("当前图没有可布局的节点");
         return;
@@ -2177,6 +2215,73 @@ void MainWindow::showQuickNodePaletteAt(const QPointF& scenePosition)
     view_->setFocus(Qt::ShortcutFocusReason);
 }
 
+QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
+{
+    auto* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->setStyleSheet(R"(
+        QMenu {
+            background: #252526;
+            border: 1px solid #454545;
+            color: #cccccc;
+            padding: 4px 0px;
+        }
+        QMenu::item {
+            min-height: 26px;
+            padding: 4px 28px 4px 24px;
+        }
+        QMenu::item:selected {
+            background: #094771;
+            color: #ffffff;
+        }
+        QMenu::item:disabled {
+            color: #6a6a6a;
+        }
+        QMenu::separator {
+            height: 1px;
+            background: #3c3c3c;
+            margin: 5px 8px;
+        }
+    )");
+
+    auto* quickAdd = menu->addAction("快捷添加节点");
+    quickAdd->setEnabled(!executionBusy_);
+    connect(quickAdd, &QAction::triggered, this, [this, scenePosition] {
+        showQuickNodePaletteAt(scenePosition);
+    });
+
+    auto* layoutAction = menu->addAction("整理画布");
+    layoutAction->setEnabled(!executionBusy_);
+    connect(layoutAction, &QAction::triggered, this, [this] { autoLayoutWorkflow(); });
+
+    menu->addAction("重置视图", this, [this] {
+        if (!qFuzzyIsNull(zoomScale_)) {
+            applyZoomFactor(1.0 / zoomScale_);
+        }
+        if (view_) {
+            view_->centerOn(0, 0);
+        }
+    });
+    menu->addSeparator();
+
+    if (previewToggleAction_) {
+        menu->addAction(previewToggleAction_);
+    }
+    if (bottomToggleAction_) {
+        menu->addAction(bottomToggleAction_);
+    }
+    menu->addSeparator();
+
+    auto* checkpoint = menu->addAction("保存当前进度");
+    checkpoint->setEnabled(!executionBusy_);
+    connect(checkpoint, &QAction::triggered, this, [this] { createWorkflowCheckpoint(); });
+
+    auto* saveTemplate = menu->addAction("保存当前为模板");
+    saveTemplate->setEnabled(!executionBusy_);
+    connect(saveTemplate, &QAction::triggered, this, [this] { saveCurrentWorkflowAsTemplate(); });
+    return menu;
+}
+
 void MainWindow::focusParameterPanel()
 {
     if (selectedNodeId_.isEmpty()) {
@@ -2228,6 +2333,9 @@ void MainWindow::requestConnect(const QString& fromNode, const QString& fromPort
 
 bool MainWindow::acceptCanvasEdge(const Edge& edge)
 {
+    if (rejectGraphReplacementWhileBusy("连接节点")) {
+        return false;
+    }
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
     WorkflowValidator validator;
@@ -2302,6 +2410,9 @@ void MainWindow::rebuildEdges()
 
 void MainWindow::removeSelectedItems()
 {
+    if (rejectGraphReplacementWhileBusy("删除节点或连线")) {
+        return;
+    }
     QVector<int> edgeIndexes = canvas_ ? canvas_->selectedEdgeIndexes(graph_) : QVector<int>{};
     QStringList nodeIds = canvas_ ? canvas_->selectedNodeIds() : QStringList{};
     if (edgeIndexes.isEmpty() && nodeIds.isEmpty()) {
@@ -2395,6 +2506,9 @@ void MainWindow::setSelectedNodeParameter(const QString& name, const QVariant& v
 
 void MainWindow::setNodeParameterForNode(const QString& nodeId, const QString& name, const QVariant& value)
 {
+    if (rejectGraphReplacementWhileBusy("修改参数")) {
+        return;
+    }
     auto node = graph_.node(nodeId);
     if (!node) {
         return;
@@ -2472,7 +2586,113 @@ void MainWindow::handleNodeExecutionEvent(const NodeExecutionSummary& summary)
             runAnimationTimer_->stop();
         }
     }
-    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+}
+
+void MainWindow::setExecutionBusy(bool busy)
+{
+    if (executionBusy_ == busy) {
+        return;
+    }
+    executionBusy_ = busy;
+    if (runAction_) {
+        runAction_->setEnabled(!busy);
+    }
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(busy ? QString("正在后台执行，画布仍可浏览") : QString("就绪"));
+    }
+}
+
+bool MainWindow::rejectGraphReplacementWhileBusy(const QString& actionName)
+{
+    if (!executionBusy_) {
+        return false;
+    }
+    const QString message = QString("正在执行工作流，暂不能%1。请等待本次执行完成。").arg(actionName);
+    appendLog(message);
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(message);
+    }
+    return true;
+}
+
+void MainWindow::trackWorkerThread(QThread* thread)
+{
+    if (!thread) {
+        return;
+    }
+    workerThreads_.append(thread);
+    connect(thread, &QThread::finished, this, [this, thread] {
+        workerThreads_.removeAll(thread);
+        thread->deleteLater();
+    });
+}
+
+void MainWindow::showWorkbenchTooltip(const QString& text, const QString& placement)
+{
+    if (text.trimmed().isEmpty()) {
+        hideWorkbenchTooltip();
+        return;
+    }
+    if (!tooltipPopup_) {
+        tooltipPopup_ = new QFrame(nullptr,
+                                   Qt::ToolTip | Qt::FramelessWindowHint | Qt::BypassWindowManagerHint |
+                                       Qt::WindowStaysOnTopHint);
+        tooltipPopup_->setObjectName("workbenchTooltip");
+        tooltipPopup_->setAttribute(Qt::WA_ShowWithoutActivating);
+        tooltipPopup_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        tooltipPopup_->setStyleSheet(R"(
+            QFrame#workbenchTooltip {
+                background: #252526;
+                border: 1px solid #454545;
+                color: #cccccc;
+            }
+            QLabel {
+                color: #cccccc;
+                font-size: 12px;
+                padding: 7px 9px;
+            }
+        )");
+        auto* shadow = new QGraphicsDropShadowEffect(tooltipPopup_);
+        shadow->setBlurRadius(16);
+        shadow->setOffset(0, 3);
+        shadow->setColor(QColor(0, 0, 0, 140));
+        tooltipPopup_->setGraphicsEffect(shadow);
+        auto* layout = new QVBoxLayout(tooltipPopup_);
+        layout->setContentsMargins(0, 0, 0, 0);
+        tooltipLabel_ = new QLabel(tooltipPopup_);
+        tooltipLabel_->setWordWrap(true);
+        tooltipLabel_->setMaximumWidth(AppTheme::px(280, uiScale_));
+        layout->addWidget(tooltipLabel_);
+    }
+
+    tooltipLabel_->setText(text);
+    tooltipLabel_->setMaximumWidth(AppTheme::px(280, uiScale_));
+    tooltipPopup_->adjustSize();
+
+    QPoint cursor = QCursor::pos();
+    QPoint pos = cursor + QPoint(AppTheme::px(14, uiScale_), AppTheme::px(16, uiScale_));
+    const QSize size = tooltipPopup_->sizeHint();
+    if (placement == "right") {
+        pos = cursor + QPoint(AppTheme::px(18, uiScale_), -size.height() / 2);
+    } else if (placement == "bottom") {
+        pos = cursor + QPoint(-size.width() / 2, AppTheme::px(20, uiScale_));
+    }
+
+    if (auto* screen = QGuiApplication::screenAt(cursor)) {
+        const QRect available = screen->availableGeometry().adjusted(8, 8, -8, -8);
+        pos.setX(std::clamp(pos.x(), available.left(), available.right() - size.width()));
+        pos.setY(std::clamp(pos.y(), available.top(), available.bottom() - size.height()));
+    }
+    tooltipPopup_->move(pos);
+    tooltipPopup_->raise();
+    tooltipPopup_->show();
+}
+
+void MainWindow::hideWorkbenchTooltip()
+{
+    if (tooltipPopup_) {
+        tooltipPopup_->hide();
+    }
 }
 
 void MainWindow::updateRunAnimation()
@@ -2540,67 +2760,52 @@ void MainWindow::highlightNodeBriefly(const QString& nodeId)
     });
 }
 
-void MainWindow::runWorkflow()
+void MainWindow::finishWorkflowExecution(int generation,
+                                         const Result<ExecutionResult>& result,
+                                         const ExecutionResult& engineLastResult,
+                                         const ExecutionEngine& updatedEngine)
 {
-    if (livePreviewTimer_) {
-        livePreviewTimer_->stop();
-    }
-    resetNodeRunStates();
-    if (workbenchBridge_) {
-        workbenchBridge_->setStatusText("正在执行工作流");
-    }
-    auto result = engine_.execute(graph_, [this](const NodeExecutionSummary& summary) {
-        handleNodeExecutionEvent(summary);
-    });
-    if (result.isFail()) {
-        lastResult_ = engine_.lastResult();
-        rebuildEdges();
-        for (const auto& summary : lastResult_.nodeSummaries) {
-            appendLog(summary.message, summary.nodeId);
-        }
-        appendLog(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
-        appendProblem(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
-        focusFailedNode(lastResult_.failedNodeId);
-        QMessageBox::warning(this, "执行失败", result.error());
+    if (generation != executionGeneration_) {
         return;
     }
-    lastResult_ = result.value();
+    engine_ = updatedEngine;
+    lastResult_ = result.isFail() ? engineLastResult : result.value();
     rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
         appendLog(summary.message, summary.nodeId);
     }
+
+    if (result.isFail()) {
+        appendLog(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
+        appendProblem(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
+        focusFailedNode(lastResult_.failedNodeId);
+        setExecutionBusy(false);
+        QMessageBox::warning(this, "执行失败", result.error());
+        return;
+    }
+
     appendLog("执行完成");
+    setExecutionBusy(false);
     updatePreviewForSelection();
 }
 
-void MainWindow::scheduleLivePreview()
+void MainWindow::finishLivePreview(int generation,
+                                   const QString& previewNodeId,
+                                   const Result<ExecutionResult>& result,
+                                   const ExecutionResult& engineLastResult,
+                                   const ExecutionEngine& updatedEngine)
 {
-    if (!livePreviewTimer_ || selectedNodeId_.isEmpty()) {
+    if (generation != livePreviewGeneration_ || executionBusy_) {
         return;
     }
-    livePreviewTimer_->start();
-}
-
-void MainWindow::runLivePreview()
-{
-    if (selectedNodeId_.isEmpty() || !graph_.containsNode(selectedNodeId_)) {
-        return;
+    engine_ = updatedEngine;
+    lastResult_ = result.isFail() ? engineLastResult : result.value();
+    rebuildEdges();
+    for (const auto& summary : lastResult_.nodeSummaries) {
+        appendLog(summary.message, summary.nodeId);
     }
 
-    const QString previewNodeId = selectedNodeId_;
-    resetNodeRunStates();
-    if (workbenchBridge_) {
-        workbenchBridge_->setStatusText(QString("实时预览 %1").arg(previewNodeId));
-    }
-    auto result = engine_.executeForNode(graph_, previewNodeId, [this](const NodeExecutionSummary& summary) {
-        handleNodeExecutionEvent(summary);
-    });
     if (result.isFail()) {
-        lastResult_ = engine_.lastResult();
-        rebuildEdges();
-        for (const auto& summary : lastResult_.nodeSummaries) {
-            appendLog(summary.message, summary.nodeId);
-        }
         const QString failedNode = lastResult_.failedNodeId.isEmpty() ? previewNodeId : lastResult_.failedNodeId;
         appendLog(QString("实时预览失败：%1").arg(result.error()), failedNode);
         appendProblem(QString("实时预览失败：%1").arg(result.error()), failedNode);
@@ -2608,13 +2813,109 @@ void MainWindow::runLivePreview()
         return;
     }
 
-    lastResult_ = result.value();
-    rebuildEdges();
-    for (const auto& summary : lastResult_.nodeSummaries) {
-        appendLog(summary.message, summary.nodeId);
-    }
     appendLog(QString("实时预览完成：%1").arg(previewNodeId), previewNodeId);
     updatePreviewForSelection();
+}
+
+void MainWindow::runWorkflow()
+{
+    if (executionBusy_) {
+        appendLog("已有工作流正在执行，已忽略重复执行请求");
+        return;
+    }
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
+    }
+    ++livePreviewGeneration_;
+    const int generation = ++executionGeneration_;
+    resetNodeRunStates();
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText("正在执行工作流");
+    }
+    setExecutionBusy(true);
+    appendLog("开始后台执行工作流");
+
+    WorkflowGraph graphSnapshot = WorkflowCommands::cloneGraph(graph_);
+    ExecutionEngine engineSnapshot = engine_;
+    QPointer<MainWindow> self(this);
+    auto* thread = QThread::create([self, generation, graphSnapshot = std::move(graphSnapshot), engineSnapshot = std::move(engineSnapshot)]() mutable {
+        auto postSummary = [self, generation](const NodeExecutionSummary& summary) {
+            if (!self) {
+                return;
+            }
+            QMetaObject::invokeMethod(self.data(), [self, generation, summary] {
+                if (self && generation == self->executionGeneration_) {
+                    self->handleNodeExecutionEvent(summary);
+                }
+            }, Qt::QueuedConnection);
+        };
+        const auto result = engineSnapshot.execute(graphSnapshot, postSummary);
+        const ExecutionResult threadLastResult = engineSnapshot.lastResult();
+        if (!self) {
+            return;
+        }
+        QMetaObject::invokeMethod(self.data(), [self, generation, result, threadLastResult, engineSnapshot] {
+            if (self) {
+                self->finishWorkflowExecution(generation, result, threadLastResult, engineSnapshot);
+            }
+        }, Qt::QueuedConnection);
+    });
+    trackWorkerThread(thread);
+    thread->start();
+}
+
+void MainWindow::scheduleLivePreview()
+{
+    if (!livePreviewTimer_ || selectedNodeId_.isEmpty() || executionBusy_) {
+        return;
+    }
+    ++livePreviewGeneration_;
+    livePreviewTimer_->start();
+}
+
+void MainWindow::runLivePreview()
+{
+    if (executionBusy_ || selectedNodeId_.isEmpty() || !graph_.containsNode(selectedNodeId_)) {
+        return;
+    }
+
+    const QString previewNodeId = selectedNodeId_;
+    const int generation = livePreviewGeneration_ == 0 ? ++livePreviewGeneration_ : livePreviewGeneration_;
+    resetNodeRunStates();
+    if (workbenchBridge_) {
+        workbenchBridge_->setStatusText(QString("实时预览 %1").arg(previewNodeId));
+    }
+    WorkflowGraph graphSnapshot = WorkflowCommands::cloneGraph(graph_);
+    ExecutionEngine engineSnapshot = engine_;
+    QPointer<MainWindow> self(this);
+    auto* thread = QThread::create([self,
+                                    generation,
+                                    previewNodeId,
+                                    graphSnapshot = std::move(graphSnapshot),
+                                    engineSnapshot = std::move(engineSnapshot)]() mutable {
+        auto postSummary = [self, generation](const NodeExecutionSummary& summary) {
+            if (!self) {
+                return;
+            }
+            QMetaObject::invokeMethod(self.data(), [self, generation, summary] {
+                if (self && generation == self->livePreviewGeneration_ && !self->executionBusy_) {
+                    self->handleNodeExecutionEvent(summary);
+                }
+            }, Qt::QueuedConnection);
+        };
+        const auto result = engineSnapshot.executeForNode(graphSnapshot, previewNodeId, postSummary);
+        const ExecutionResult threadLastResult = engineSnapshot.lastResult();
+        if (!self) {
+            return;
+        }
+        QMetaObject::invokeMethod(self.data(), [self, generation, previewNodeId, result, threadLastResult, engineSnapshot] {
+            if (self) {
+                self->finishLivePreview(generation, previewNodeId, result, threadLastResult, engineSnapshot);
+            }
+        }, Qt::QueuedConnection);
+    });
+    trackWorkerThread(thread);
+    thread->start();
 }
 
 void MainWindow::exportWorkflowCopy()
@@ -2708,6 +3009,9 @@ void MainWindow::exportCanvasImage()
 
 void MainWindow::newWorkflow()
 {
+    if (rejectGraphReplacementWhileBusy("新建工作流")) {
+        return;
+    }
     if (!confirmSaveIfNeeded()) {
         return;
     }
@@ -2746,6 +3050,9 @@ void MainWindow::newWorkflow()
 
 void MainWindow::openWorkflow()
 {
+    if (rejectGraphReplacementWhileBusy("打开工作流")) {
+        return;
+    }
     if (!confirmSaveIfNeeded()) {
         return;
     }
@@ -2759,6 +3066,9 @@ void MainWindow::openWorkflow()
 void MainWindow::openWorkflowPath(const QString& path, bool confirmCurrentWorkflow)
 {
     if (path.trimmed().isEmpty()) {
+        return;
+    }
+    if (rejectGraphReplacementWhileBusy("打开工作流")) {
         return;
     }
     if (confirmCurrentWorkflow && !confirmSaveIfNeeded()) {
@@ -2833,6 +3143,9 @@ bool MainWindow::ensureSavePath()
 
 void MainWindow::removeEdgeByIndex(int edgeIndex)
 {
+    if (rejectGraphReplacementWhileBusy("删除连线")) {
+        return;
+    }
     const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     const QString selectedBefore = selectedNodeId_;
     auto removed = graph_.removeEdge(edgeIndex);
@@ -2998,6 +3311,9 @@ void MainWindow::refreshWorkflowCheckpointModel()
 
 void MainWindow::saveCurrentWorkflowAsTemplate()
 {
+    if (rejectGraphReplacementWhileBusy("保存模板")) {
+        return;
+    }
     const QString title = QInputDialog::getText(this, "保存为模板", "模板名称：", QLineEdit::Normal,
                                                QFileInfo(currentFile_).completeBaseName().isEmpty()
                                                    ? QString("我的图像处理模板")
@@ -3031,6 +3347,9 @@ void MainWindow::saveCurrentWorkflowAsTemplate()
 void MainWindow::applyWorkflowTemplate(const QString& templateId)
 {
     if (templateId.trimmed().isEmpty()) {
+        return;
+    }
+    if (rejectGraphReplacementWhileBusy("套用模板")) {
         return;
     }
     if (QMessageBox::question(this, "套用模板", "套用模板会覆盖当前画布，但可以通过撤销回到当前状态。是否继续？",
@@ -3083,6 +3402,9 @@ void MainWindow::applyWorkflowTemplate(const QString& templateId)
 
 void MainWindow::createWorkflowCheckpoint()
 {
+    if (rejectGraphReplacementWhileBusy("保存当前进度")) {
+        return;
+    }
     const QString defaultTitle = QString("保存点 %1").arg(QDateTime::currentDateTime().toString("MM-dd HH:mm"));
     const QString title = QInputDialog::getText(this, "保存当前进度", "记录名称：", QLineEdit::Normal, defaultTitle);
     if (title.trimmed().isEmpty()) {
@@ -3117,6 +3439,9 @@ void MainWindow::createWorkflowCheckpoint()
 
 void MainWindow::restoreWorkflowCheckpoint(const QString& checkpointId)
 {
+    if (rejectGraphReplacementWhileBusy("恢复进度")) {
+        return;
+    }
     QSettings settings;
     settings.beginGroup("workflowCheckpoints");
     const QString path = settings.value("file/" + checkpointId).toString();
@@ -3161,6 +3486,9 @@ void MainWindow::restoreWorkflowCheckpoint(const QString& checkpointId)
 
 void MainWindow::branchFromWorkflowCheckpoint(const QString& checkpointId)
 {
+    if (rejectGraphReplacementWhileBusy("创建分支")) {
+        return;
+    }
     QSettings settings;
     settings.beginGroup("workflowCheckpoints");
     const QString path = settings.value("file/" + checkpointId).toString();
@@ -3534,7 +3862,8 @@ void MainWindow::showSettingsDialog()
     QDialog dialog(this);
     dialog.setWindowTitle("设置");
     dialog.setObjectName("settingsDialog");
-    dialog.resize(AppTheme::px(780, uiScale_), AppTheme::px(540, uiScale_));
+    dialog.setMinimumSize(AppTheme::px(860, uiScale_), AppTheme::px(600, uiScale_));
+    dialog.resize(AppTheme::px(900, uiScale_), AppTheme::px(620, uiScale_));
     dialog.setStyleSheet(R"(
         QDialog#settingsDialog {
             background: #1e1e1e;
@@ -3557,6 +3886,13 @@ void MainWindow::showSettingsDialog()
         QWidget#settingsSection {
             background: #252526;
             border: 1px solid #3c3c3c;
+        }
+        QScrollArea#settingsScroll {
+            background: #1e1e1e;
+            border: 0px;
+        }
+        QScrollArea#settingsScroll > QWidget > QWidget {
+            background: #1e1e1e;
         }
         QListWidget#settingsNav,
         QListWidget#shortcutList {
@@ -3586,6 +3922,26 @@ void MainWindow::showSettingsDialog()
         QLineEdit, QDoubleSpinBox, QSlider, QCheckBox {
             color: #cccccc;
         }
+        QCheckBox {
+            min-height: 32px;
+            spacing: 9px;
+            padding: 2px 0px;
+        }
+        QCheckBox::indicator {
+            width: 18px;
+            height: 18px;
+            border: 1px solid #6a6a6a;
+            background: #313131;
+        }
+        QCheckBox::indicator:hover {
+            border: 1px solid #cccccc;
+            background: #3c3c3c;
+        }
+        QCheckBox::indicator:checked {
+            image: none;
+            background: #0e639c;
+            border: 1px solid #3794ff;
+        }
         QLineEdit, QDoubleSpinBox {
             background: #3c3c3c;
             border: 1px solid #555555;
@@ -3600,6 +3956,8 @@ void MainWindow::showSettingsDialog()
             border: 1px solid #3c3c3c;
             color: #cccccc;
             padding: 6px 12px;
+            min-height: 36px;
+            min-width: 108px;
         }
         QPushButton:hover {
             background: #3a3d41;
@@ -3608,7 +3966,8 @@ void MainWindow::showSettingsDialog()
             background: #094771;
         }
         QDialogButtonBox QPushButton {
-            min-width: 76px;
+            min-width: 112px;
+            min-height: 38px;
         }
     )");
 
@@ -3631,7 +3990,7 @@ void MainWindow::showSettingsDialog()
 
     auto* nav = new QListWidget;
     nav->setObjectName("settingsNav");
-    nav->setFixedWidth(AppTheme::px(148, uiScale_));
+    nav->setFixedWidth(AppTheme::px(180, uiScale_));
     nav->addItem("常用");
     nav->addItem("画布");
     nav->addItem("工作台");
@@ -3699,6 +4058,7 @@ void MainWindow::showSettingsDialog()
     uiScaleSpin->setSuffix("%");
     uiScaleSpin->setValue(uiScale_ * 100.0);
     uiScaleSpin->setFixedWidth(AppTheme::px(112, uiScale_));
+    uiScaleSpin->setToolTip("调整工作台整体缩放比例");
 
     auto* canvasRow = new QWidget;
     auto* canvasLayout = new QHBoxLayout(canvasRow);
@@ -3708,6 +4068,7 @@ void MainWindow::showSettingsDialog()
     canvasZoomSlider->setFixedWidth(AppTheme::px(200, uiScale_));
     canvasZoomSlider->setRange(25, 300);
     canvasZoomSlider->setValue(int(std::lround(zoomScale_ * 100.0)));
+    canvasZoomSlider->setToolTip("调整当前画布缩放比例");
     auto* canvasZoomLabel = new QLabel(QString("%1%").arg(canvasZoomSlider->value()));
     canvasZoomLabel->setMinimumWidth(AppTheme::px(48, uiScale_));
     canvasLayout->addWidget(canvasZoomSlider);
@@ -3723,16 +4084,20 @@ void MainWindow::showSettingsDialog()
     wheelZoomSpin->setSuffix("% / 格");
     wheelZoomSpin->setValue((wheelZoomStep_ - 1.0) * 100.0);
     wheelZoomSpin->setFixedWidth(AppTheme::px(126, uiScale_));
+    wheelZoomSpin->setToolTip("控制鼠标滚轮缩放速度，数值越小越慢");
 
     auto* previewVisible = new QCheckBox;
     previewVisible->setText("显示右侧预览");
     previewVisible->setChecked(!previewSidebar_ || previewSidebar_->isVisible());
+    previewVisible->setToolTip("显示或隐藏右侧预览区域");
     auto* bottomVisible = new QCheckBox;
     bottomVisible->setText("显示底部面板");
     bottomVisible->setChecked(!bottomPanel_ || bottomPanel_->isVisible());
+    bottomVisible->setToolTip("显示或隐藏底部终端、问题和输出面板");
     auto* miniMapVisible = new QCheckBox;
     miniMapVisible->setText("显示画布小地图");
     miniMapVisible->setChecked(!miniMap_ || miniMap_->isVisible());
+    miniMapVisible->setToolTip("显示或隐藏画布左下角小地图");
 
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用 VS Code Dark 风格，避免浅色主题和工作台视觉分叉。");
@@ -3741,6 +4106,9 @@ void MainWindow::showSettingsDialog()
     auto* openCommandPaletteButton = new QPushButton("打开命令面板");
     auto* organizeButton = new QPushButton("整理画布");
     auto* resetLayoutButton = new QPushButton("重置工作台布局");
+    openCommandPaletteButton->setToolTip("打开命令、节点和问题快速搜索入口");
+    organizeButton->setToolTip("按节点拓扑顺序自动整理当前画布");
+    resetLayoutButton->setToolTip("恢复侧栏、预览和底部面板的默认布局");
     auto* actionsRow = new QWidget;
     auto* actionsLayout = new QHBoxLayout(actionsRow);
     actionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -3766,6 +4134,8 @@ void MainWindow::showSettingsDialog()
     auto* workbenchActionSection = makeSection(workbenchPage, "布局");
     auto* resetLayoutButton2 = new QPushButton("重置工作台布局");
     auto* organizeButton2 = new QPushButton("整理画布");
+    resetLayoutButton2->setToolTip("恢复侧栏、预览和底部面板的默认布局");
+    organizeButton2->setToolTip("按节点拓扑顺序自动整理当前画布");
     auto* workbenchActionRow = new QWidget;
     auto* workbenchActionLayout = new QHBoxLayout(workbenchActionRow);
     workbenchActionLayout->setContentsMargins(0, 0, 0, 0);
@@ -3789,8 +4159,13 @@ void MainWindow::showSettingsDialog()
     pages->addWidget(canvasPage);
     pages->addWidget(workbenchPage);
     pages->addWidget(shortcutsPage);
+    auto* pagesScroll = new QScrollArea;
+    pagesScroll->setObjectName("settingsScroll");
+    pagesScroll->setWidgetResizable(true);
+    pagesScroll->setFrameShape(QFrame::NoFrame);
+    pagesScroll->setWidget(pages);
     contentLayout->addWidget(nav);
-    contentLayout->addWidget(pages, 1);
+    contentLayout->addWidget(pagesScroll, 1);
     root->addWidget(content, 1);
 
     auto populateShortcutList = [this, shortcutSearch, shortcutList] {
@@ -3839,12 +4214,23 @@ void MainWindow::showSettingsDialog()
     });
     connect(resetLayoutButton2, &QPushButton::clicked, resetLayoutButton, &QPushButton::click);
     auto* resetScaleButton = new QPushButton("重置为 100%");
+    resetScaleButton->setToolTip("将工作台控件缩放恢复为 100%");
     generalAppearance->addWidget(resetScaleButton);
     connect(resetScaleButton, &QPushButton::clicked, this, [uiScaleSpin] {
         uiScaleSpin->setValue(100.0);
     });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::Apply);
+    if (auto* button = buttons->button(QDialogButtonBox::Apply)) {
+        button->setText("应用");
+        button->setToolTip("应用当前设置但不关闭窗口");
+    }
+    if (auto* button = buttons->button(QDialogButtonBox::Cancel)) {
+        button->setText("取消");
+    }
+    if (auto* button = buttons->button(QDialogButtonBox::Ok)) {
+        button->setText("确定");
+    }
     root->addWidget(buttons);
 
     auto applySettings = [&] {

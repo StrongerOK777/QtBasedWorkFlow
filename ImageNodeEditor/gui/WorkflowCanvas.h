@@ -12,6 +12,7 @@
 class QGraphicsItem;
 class QGraphicsScene;
 class QGraphicsView;
+class QMenu;
 class QWidget;
 class WorkflowGraph;
 
@@ -36,6 +37,7 @@ public:
         std::function<void()> deleteSelection;
         std::function<void()> copySelection;
         std::function<void(const QPointF&)> quickPalette;
+        std::function<QMenu*(const QPointF&)> sceneContextMenu;
         std::function<void(const QString&, const QPointF&)> nodeDropped;
         std::function<void(double)> wheelZoomRequested;
         std::function<void(const QString&, const QString&, const QVariant&)> parameterChanged;

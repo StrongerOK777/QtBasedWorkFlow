@@ -817,3 +817,16 @@ void WorkbenchBridge::requestWindowClose()
 {
     Q_EMIT windowCloseRequested();
 }
+
+void WorkbenchBridge::showTooltip(const QString& text, const QString& placement)
+{
+    const QString trimmed = text.trimmed();
+    if (!trimmed.isEmpty()) {
+        Q_EMIT tooltipRequested(trimmed, placement);
+    }
+}
+
+void WorkbenchBridge::hideTooltip()
+{
+    Q_EMIT tooltipHideRequested();
+}

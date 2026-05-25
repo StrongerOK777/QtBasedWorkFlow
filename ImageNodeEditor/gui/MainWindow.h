@@ -13,6 +13,7 @@
 
 class QAction;
 class QCloseEvent;
+class QFrame;
 class QGraphicsItem;
 class QGraphicsScene;
 class QGraphicsView;
@@ -23,6 +24,7 @@ class QMenu;
 class QSplitter;
 class QTabBar;
 class QTabWidget;
+class QThread;
 class QToolButton;
 class QToolBar;
 class QTimer;
@@ -125,6 +127,7 @@ private:
     void updatePreviewForSelection();
     void resetWorkbenchLayout();
     void toggleFullScreenMode();
+    QMenu* createCanvasContextMenu(const QPointF& scenePosition);
     void showSettingsDialog();
     void increaseUiScale();
     void decreaseUiScale();
@@ -135,6 +138,20 @@ private:
     void resetNodeRunStates();
     void applyNodeRunState(const QString& nodeId, NodeExecutionState state);
     void handleNodeExecutionEvent(const NodeExecutionSummary& summary);
+    void setExecutionBusy(bool busy);
+    bool rejectGraphReplacementWhileBusy(const QString& actionName);
+    void finishWorkflowExecution(int generation,
+                                 const Result<ExecutionResult>& result,
+                                 const ExecutionResult& lastResult,
+                                 const ExecutionEngine& engine);
+    void finishLivePreview(int generation,
+                           const QString& previewNodeId,
+                           const Result<ExecutionResult>& result,
+                           const ExecutionResult& lastResult,
+                           const ExecutionEngine& engine);
+    void trackWorkerThread(QThread* thread);
+    void showWorkbenchTooltip(const QString& text, const QString& placement);
+    void hideWorkbenchTooltip();
     void updateRunAnimation();
     void focusFailedNode(const QString& nodeId);
     void focusLogNode(QListWidgetItem* item);
@@ -230,6 +247,12 @@ private:
     QString currentWorkflowBranch_ = "main";
     QTimer* livePreviewTimer_ = nullptr;
     QTimer* runAnimationTimer_ = nullptr;
+    QVector<QThread*> workerThreads_;
+    bool executionBusy_ = false;
+    int executionGeneration_ = 0;
+    int livePreviewGeneration_ = 0;
+    QFrame* tooltipPopup_ = nullptr;
+    QLabel* tooltipLabel_ = nullptr;
     QUndoStack* undoStack_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
     QMap<QString, NodeExecutionState> nodeRunStates_;
