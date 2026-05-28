@@ -1,5 +1,6 @@
 #include "workflow/ExecutionEngine.h"
 
+#include "core/NodeLabel.h"
 #include "nodes/ImageNode.h"
 #include "workflow/WorkflowGraph.h"
 #include "workflow/WorkflowValidator.h"
@@ -224,20 +225,21 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             const QString signature = nodeSignature(nodeId, node, inputParts);
             nodeSignatures.insert(nodeId, signature);
 
+            const QString nodeLabel = formatNodeLabel(node->displayName(), nodeId);
             record(NodeExecutionSummary{nodeId, node->displayName(), NodeExecutionState::Running,
-                                        QString("执行节点 %1 (%2)").arg(nodeId, node->displayName())});
+                                        QString("执行节点 %1").arg(nodeLabel)});
 
             const auto cached = cache_.constFind(nodeId);
             if (node->isCacheable() && cached != cache_.constEnd() && cached.value().signature == signature) {
                 result.nodeOutputs.insert(nodeId, cached.value().outputs);
-                result.log.append(QString("复用缓存 %1 (%2)").arg(nodeId, node->displayName()));
+                result.log.append(QString("复用缓存 %1").arg(nodeLabel));
                 record(NodeExecutionSummary{nodeId, node->displayName(), NodeExecutionState::CacheHit,
-                                            QString("复用缓存 %1").arg(nodeId), 0});
+                                            QString("复用缓存 %1").arg(nodeLabel), 0});
                 completedThisRound.append(nodeId);
                 continue;
             }
 
-            result.log.append(QString("执行节点 %1 (%2)").arg(nodeId, node->displayName()));
+            result.log.append(QString("执行节点 %1").arg(nodeLabel));
             jobs.push_back(Job{nodeId,
                                node->displayName(),
                                signature,
@@ -254,21 +256,22 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             auto jobResult = job.future.get();
             auto outputs = jobResult.first;
             const qint64 elapsedMs = jobResult.second;
+            const QString jobLabel = formatNodeLabel(job.displayName, job.nodeId);
             if (outputs.isFail()) {
-                result.log.append(QString("节点失败 %1：%2").arg(job.nodeId, outputs.error()));
+                result.log.append(QString("节点失败 %1：%2").arg(jobLabel, outputs.error()));
                 result.failedNodeId = job.nodeId;
                 record(NodeExecutionSummary{job.nodeId, job.displayName, NodeExecutionState::Failed,
-                                            QString("节点失败 %1：%2").arg(job.nodeId, outputs.error()), elapsedMs});
+                                            QString("节点失败 %1：%2").arg(jobLabel, outputs.error()), elapsedMs});
                 lastResult_ = result;
-                return Result<ExecutionResult>::fail(QString("节点 %1 (%2)：%3").arg(job.nodeId, job.displayName, outputs.error()));
+                return Result<ExecutionResult>::fail(QString("节点 %1：%2").arg(jobLabel, outputs.error()));
             }
             result.nodeOutputs.insert(job.nodeId, outputs.value());
             if (job.cacheable) {
                 cache_.insert(job.nodeId, CacheEntry{job.signature, outputs.value()});
             }
-            result.log.append(QString("节点完成 %1").arg(job.nodeId));
+            result.log.append(QString("节点完成 %1").arg(jobLabel));
             record(NodeExecutionSummary{job.nodeId, job.displayName, NodeExecutionState::Succeeded,
-                                        QString("节点完成 %1 (%2 ms)").arg(job.nodeId).arg(elapsedMs), elapsedMs});
+                                        QString("节点完成 %1 (%2 ms)").arg(jobLabel).arg(elapsedMs), elapsedMs});
             completedThisRound.append(job.nodeId);
         }
 

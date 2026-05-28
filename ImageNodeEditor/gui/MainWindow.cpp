@@ -1,5 +1,6 @@
 #include "gui/MainWindow.h"
 
+#include "core/NodeLabel.h"
 #include "gui/AppIcon.h"
 #include "gui/AppTheme.h"
 #include "gui/NativeWindowChrome.h"
@@ -956,19 +957,25 @@ MainWindow::~MainWindow()
     if (livePreviewTimer_) {
         livePreviewTimer_->stop();
     }
+    if (runAnimationTimer_) {
+        runAnimationTimer_->stop();
+    }
+    // 先等后台执行线程结束，避免它们在对象销毁后回调 this。
+    const auto threads = workerThreads_;
+    for (auto* thread : threads) {
+        if (thread && thread->isRunning()) {
+            thread->wait();
+        }
+    }
+    // 在 bridge / 各 Model（均 parent 给 this，会先于 host 析构）被销毁前，
+    // 先拆除 QML 表面，避免 QML 绑定访问悬空对象导致退出报错。
+    if (workbenchHost_) {
+        workbenchHost_->teardownSurfaces();
+    }
     hideWorkbenchTooltip();
     delete tooltipPopup_;
     tooltipPopup_ = nullptr;
     tooltipLabel_ = nullptr;
-    const auto threads = workerThreads_;
-    for (auto* thread : threads) {
-        if (!thread) {
-            continue;
-        }
-        if (thread->isRunning()) {
-            thread->wait();
-        }
-    }
 }
 
 void MainWindow::createActions()
@@ -1653,7 +1660,7 @@ void MainWindow::commitNodeMove(const QString& nodeId, const QPointF& beforePosi
     before.setNodePosition(nodeId, beforePosition);
     WorkflowGraph after = WorkflowCommands::cloneGraph(graph_);
     after.setNodePosition(nodeId, afterPosition);
-    pushGraphEditCommand(QString("移动节点 %1").arg(nodeId), before, nodeId, after, nodeId, QString("move:%1").arg(nodeId));
+    pushGraphEditCommand(QString("移动节点 %1").arg(nodeLabel(nodeId)), before, nodeId, after, nodeId, QString("move:%1").arg(nodeId));
 }
 
 void MainWindow::showNodeContextMenu(const QString& nodeId, const QPoint& screenPos)
@@ -2076,15 +2083,16 @@ void MainWindow::autoLayoutWorkflow()
     }
 
     if (!changed) {
-        appendLog("当前图已接近整理结果");
+        fitGraphInView();
+        appendLog("当前图已接近整理结果，已居中显示");
         return;
     }
 
     rebuildScene();
     if (auto* item = nodeItems_.value(selectedNodeId_)) {
         item->setSelected(true);
-        view_->centerOn(item);
     }
+    fitGraphInView();
     appendLog("已整理当前画布");
     pushGraphEditCommand("整理画布", before, selectedBefore, WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 }
@@ -2115,7 +2123,7 @@ void MainWindow::enterMacroNodeInternal(const QString& nodeId, bool clearForward
     rebuildProperties();
     updateNavigationActions();
     updateWindowTitle();
-    appendLog(QString("进入宏节点子图：%1").arg(nodeId), nodeId);
+    appendLog(QString("进入宏节点子图：%1").arg(nodeLabel(nodeId)), nodeId);
 }
 
 void MainWindow::leaveMacroNode()
@@ -2143,7 +2151,7 @@ void MainWindow::leaveMacroNode()
     rebuildProperties();
     updateNavigationActions();
     updateWindowTitle();
-    appendLog(QString("返回上级图：%1").arg(selectedNodeId_), selectedNodeId_);
+    appendLog(QString("返回上级图：%1").arg(nodeLabel(selectedNodeId_)), selectedNodeId_);
 }
 
 void MainWindow::navigateForwardMacroNode()
@@ -2254,14 +2262,7 @@ QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
     layoutAction->setEnabled(!executionBusy_);
     connect(layoutAction, &QAction::triggered, this, [this] { autoLayoutWorkflow(); });
 
-    menu->addAction("重置视图", this, [this] {
-        if (!qFuzzyIsNull(zoomScale_)) {
-            applyZoomFactor(1.0 / zoomScale_);
-        }
-        if (view_) {
-            view_->centerOn(0, 0);
-        }
-    });
+    menu->addAction("重置视图（适应全部节点）", this, [this] { fitGraphInView(); });
     menu->addSeparator();
 
     if (previewToggleAction_) {
@@ -2291,7 +2292,7 @@ void MainWindow::focusParameterPanel()
         item->setFocus();
         view_->centerOn(item);
     }
-    appendLog(QString("修改参数：%1").arg(selectedNodeId_), selectedNodeId_);
+    appendLog(QString("修改参数：%1").arg(nodeLabel(selectedNodeId_)), selectedNodeId_);
 }
 
 void MainWindow::zoomIn()
@@ -2320,6 +2321,34 @@ void MainWindow::applyZoomFactor(double factor)
     }
     zoomScale_ = nextScale;
     view_->scale(actualFactor, actualFactor);
+    if (workbenchBridge_) {
+        workbenchBridge_->setZoomText(QString("%1%").arg(int(std::lround(zoomScale_ * 100.0))));
+    }
+    updateMiniMap();
+}
+
+void MainWindow::fitGraphInView()
+{
+    if (!view_ || !scene_) {
+        return;
+    }
+    QRectF bounds = scene_->itemsBoundingRect();
+    if (bounds.isEmpty()) {
+        return;
+    }
+    const qreal pad = 60.0 * uiScale_;
+    bounds.adjust(-pad, -pad, pad, pad);
+    const QSize viewport = view_->viewport()->size();
+    if (viewport.width() <= 0 || viewport.height() <= 0 || bounds.width() <= 0 || bounds.height() <= 0) {
+        return;
+    }
+    const double scale = std::clamp(std::min(viewport.width() / bounds.width(),
+                                             viewport.height() / bounds.height()),
+                                    0.25, 3.0);
+    view_->resetTransform();
+    view_->scale(scale, scale);
+    zoomScale_ = scale;
+    view_->centerOn(bounds.center());
     if (workbenchBridge_) {
         workbenchBridge_->setZoomText(QString("%1%").arg(int(std::lround(zoomScale_ * 100.0))));
     }
@@ -2387,9 +2416,9 @@ void MainWindow::rebuildScene()
     for (const auto& record : graph_.nodes()) {
         if (workflowList_) {
             const QString displayName = record.node ? record.node->displayName() : QString("未知节点");
-            auto* outlineItem = new QListWidgetItem(QString("%1\n%2").arg(displayName, record.id));
+            auto* outlineItem = new QListWidgetItem(formatNodeLabel(displayName, record.id));
             outlineItem->setData(Qt::UserRole, record.id);
-            outlineItem->setToolTip(record.node ? record.node->typeName() : record.id);
+            outlineItem->setToolTip(formatNodeLabel(displayName, record.id));
             workflowList_->addItem(outlineItem);
         }
     }
@@ -2433,8 +2462,9 @@ void MainWindow::removeSelectedItems()
 
     nodeIds.removeDuplicates();
     for (const QString& nodeId : nodeIds) {
+        const QString label = nodeLabel(nodeId);
         graph_.removeNode(nodeId);
-        appendLog(QString("删除节点：%1").arg(nodeId), nodeId);
+        appendLog(QString("删除节点：%1").arg(label), nodeId);
     }
 
     selectedNodeId_.clear();
@@ -2450,6 +2480,12 @@ void MainWindow::rebuildProperties()
     // selection-change synchronization point for older call sites.
 }
 
+QString MainWindow::nodeLabel(const QString& nodeId) const
+{
+    const auto node = graph_.node(nodeId);
+    return formatNodeLabel(node ? node->displayName() : QString(), nodeId);
+}
+
 void MainWindow::appendLog(const QString& message, const QString& nodeId)
 {
     if (!log_) {
@@ -2458,7 +2494,7 @@ void MainWindow::appendLog(const QString& message, const QString& nodeId)
     auto* item = new QListWidgetItem(message);
     item->setData(Qt::UserRole, nodeId);
     if (!nodeId.isEmpty()) {
-        item->setToolTip(QString("双击定位节点：%1").arg(nodeId));
+        item->setToolTip("双击定位对应节点");
         item->setForeground(QBrush(AppTheme::colors().nodeSelected));
     }
     log_->addItem(item);
@@ -2477,7 +2513,7 @@ void MainWindow::appendProblem(const QString& message, const QString& nodeId)
     item->setData(Qt::UserRole, nodeId);
     item->setForeground(QBrush(QColor("#ff453a")));
     if (!nodeId.isEmpty()) {
-        item->setToolTip(QString("双击定位节点：%1").arg(nodeId));
+        item->setToolTip("双击定位对应节点");
     }
     problemLog_->addItem(item);
     problemLog_->scrollToBottom();
@@ -2813,7 +2849,7 @@ void MainWindow::finishLivePreview(int generation,
         return;
     }
 
-    appendLog(QString("实时预览完成：%1").arg(previewNodeId), previewNodeId);
+    appendLog(QString("实时预览完成：%1").arg(nodeLabel(previewNodeId)), previewNodeId);
     updatePreviewForSelection();
 }
 
@@ -2883,7 +2919,7 @@ void MainWindow::runLivePreview()
     const int generation = livePreviewGeneration_ == 0 ? ++livePreviewGeneration_ : livePreviewGeneration_;
     resetNodeRunStates();
     if (workbenchBridge_) {
-        workbenchBridge_->setStatusText(QString("实时预览 %1").arg(previewNodeId));
+        workbenchBridge_->setStatusText(QString("实时预览 %1").arg(nodeLabel(previewNodeId)));
     }
     WorkflowGraph graphSnapshot = WorkflowCommands::cloneGraph(graph_);
     ExecutionEngine engineSnapshot = engine_;
@@ -4100,22 +4136,19 @@ void MainWindow::showSettingsDialog()
     miniMapVisible->setToolTip("显示或隐藏画布左下角小地图");
 
     auto* generalPage = makePage();
-    auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用 VS Code Dark 风格，避免浅色主题和工作台视觉分叉。");
+    auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用深色工作台风格，避免浅色主题和工作台视觉分叉。");
     makeRow(generalAppearance, "界面大小", uiScaleSpin, "控制菜单、侧栏、按钮和节点参数控件的整体缩放。");
-    auto* generalActions = makeSection(generalPage, "常用操作");
+    auto* generalActions = makeSection(generalPage, "常用操作", "快速触发常用命令；工作台区域布局相关设置在“工作台”页。");
     auto* openCommandPaletteButton = new QPushButton("打开命令面板");
     auto* organizeButton = new QPushButton("整理画布");
-    auto* resetLayoutButton = new QPushButton("重置工作台布局");
     openCommandPaletteButton->setToolTip("打开命令、节点和问题快速搜索入口");
-    organizeButton->setToolTip("按节点拓扑顺序自动整理当前画布");
-    resetLayoutButton->setToolTip("恢复侧栏、预览和底部面板的默认布局");
+    organizeButton->setToolTip("整理画布并自动居中显示全部节点");
     auto* actionsRow = new QWidget;
     auto* actionsLayout = new QHBoxLayout(actionsRow);
     actionsLayout->setContentsMargins(0, 0, 0, 0);
     actionsLayout->setSpacing(AppTheme::px(8, uiScale_));
     actionsLayout->addWidget(openCommandPaletteButton);
     actionsLayout->addWidget(organizeButton);
-    actionsLayout->addWidget(resetLayoutButton);
     actionsLayout->addStretch(1);
     generalActions->addWidget(actionsRow);
     generalPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
@@ -4131,17 +4164,14 @@ void MainWindow::showSettingsDialog()
     areaSection->addWidget(previewVisible);
     areaSection->addWidget(bottomVisible);
     areaSection->addWidget(miniMapVisible);
-    auto* workbenchActionSection = makeSection(workbenchPage, "布局");
+    auto* workbenchActionSection = makeSection(workbenchPage, "布局", "把侧栏、预览和底部面板恢复到默认排布。");
     auto* resetLayoutButton2 = new QPushButton("重置工作台布局");
-    auto* organizeButton2 = new QPushButton("整理画布");
     resetLayoutButton2->setToolTip("恢复侧栏、预览和底部面板的默认布局");
-    organizeButton2->setToolTip("按节点拓扑顺序自动整理当前画布");
     auto* workbenchActionRow = new QWidget;
     auto* workbenchActionLayout = new QHBoxLayout(workbenchActionRow);
     workbenchActionLayout->setContentsMargins(0, 0, 0, 0);
     workbenchActionLayout->setSpacing(AppTheme::px(8, uiScale_));
     workbenchActionLayout->addWidget(resetLayoutButton2);
-    workbenchActionLayout->addWidget(organizeButton2);
     workbenchActionLayout->addStretch(1);
     workbenchActionSection->addWidget(workbenchActionRow);
     workbenchPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
@@ -4155,17 +4185,24 @@ void MainWindow::showSettingsDialog()
     shortcutList->setObjectName("shortcutList");
     shortcutSection->addWidget(shortcutList, 1);
 
-    pages->addWidget(generalPage);
-    pages->addWidget(canvasPage);
-    pages->addWidget(workbenchPage);
-    pages->addWidget(shortcutsPage);
-    auto* pagesScroll = new QScrollArea;
-    pagesScroll->setObjectName("settingsScroll");
-    pagesScroll->setWidgetResizable(true);
-    pagesScroll->setFrameShape(QFrame::NoFrame);
-    pagesScroll->setWidget(pages);
+    // 每页各自包一个 QScrollArea，让自动换行的提示标签在各自视口宽度下正确计算
+    // 高度，避免整页塞进单个 QScrollArea 时 heightForWidth 无法穿过 QStackedWidget
+    // 传递而导致文字重叠。
+    auto addScrollablePage = [](QStackedWidget* stack, QWidget* page) {
+        auto* scroll = new QScrollArea;
+        scroll->setObjectName("settingsScroll");
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scroll->setWidget(page);
+        stack->addWidget(scroll);
+    };
+    addScrollablePage(pages, generalPage);
+    addScrollablePage(pages, canvasPage);
+    addScrollablePage(pages, workbenchPage);
+    addScrollablePage(pages, shortcutsPage);
     contentLayout->addWidget(nav);
-    contentLayout->addWidget(pagesScroll, 1);
+    contentLayout->addWidget(pages, 1);
     root->addWidget(content, 1);
 
     auto populateShortcutList = [this, shortcutSearch, shortcutList] {
@@ -4205,14 +4242,12 @@ void MainWindow::showSettingsDialog()
         autoLayoutWorkflow();
     };
     connect(organizeButton, &QPushButton::clicked, &dialog, organizeNow);
-    connect(organizeButton2, &QPushButton::clicked, &dialog, organizeNow);
-    connect(resetLayoutButton, &QPushButton::clicked, this, [this, previewVisible, bottomVisible, miniMapVisible] {
+    connect(resetLayoutButton2, &QPushButton::clicked, this, [this, previewVisible, bottomVisible, miniMapVisible] {
         resetWorkbenchLayout();
         previewVisible->setChecked(true);
         bottomVisible->setChecked(true);
         miniMapVisible->setChecked(true);
     });
-    connect(resetLayoutButton2, &QPushButton::clicked, resetLayoutButton, &QPushButton::click);
     auto* resetScaleButton = new QPushButton("重置为 100%");
     resetScaleButton->setToolTip("将工作台控件缩放恢复为 100%");
     generalAppearance->addWidget(resetScaleButton);
@@ -4442,6 +4477,15 @@ void MainWindow::closeEvent(QCloseEvent* event)
     if (!confirmSaveIfNeeded()) {
         event->ignore();
         return;
+    }
+    // 关闭后到来的后台执行/实时预览回调按 generation 检查丢弃，避免回调进入正在销毁的窗口。
+    ++executionGeneration_;
+    ++livePreviewGeneration_;
+    if (livePreviewTimer_) {
+        livePreviewTimer_->stop();
+    }
+    if (runAnimationTimer_) {
+        runAnimationTimer_->stop();
     }
     QSettings settings;
     settings.setValue("mainWindow/geometry", saveGeometry());

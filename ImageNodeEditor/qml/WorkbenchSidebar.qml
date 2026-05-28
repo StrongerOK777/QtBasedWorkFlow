@@ -162,7 +162,7 @@ Rectangle {
                     Layout.fillWidth: true
                 }
                 Text {
-                    text: "预设方案类似 VS Code 扩展入口，但只保存可直接套用的图像处理流程。"
+                    text: "预设方案类似扩展面板入口，但只保存可直接套用的图像处理流程。"
                     color: "#969696"
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
@@ -281,7 +281,7 @@ Rectangle {
                     Layout.fillWidth: true
                 }
                 Text {
-                    text: "像轻量 Git 一样保存当前画布、恢复旧版本，或从旧保存点创建新分支。"
+                    text: "像轻量版本管理一样保存当前画布、恢复旧版本，或从旧保存点创建新分支。"
                     color: "#969696"
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
@@ -428,7 +428,10 @@ Rectangle {
                                 width: parent.width
                             }
                             Text {
-                                text: category + "  " + nodeId
+                                text: {
+                                    var i = nodeId.lastIndexOf("_");
+                                    return i >= 0 ? category + "  #" + nodeId.substring(i + 1) : category;
+                                }
                                 color: "#969696"
                                 font.pixelSize: 11
                                 elide: Text.ElideMiddle

@@ -150,6 +150,25 @@ void WorkbenchHostWidget::showQuickAccess()
     }
 }
 
+void WorkbenchHostWidget::teardownSurfaces()
+{
+    if (quickAccessPopup_) {
+        quickAccessPopup_->hide();
+    }
+    if (bridge_) {
+        disconnect(bridge_, nullptr, this, nullptr);
+        if (quickAccessPopup_) {
+            disconnect(bridge_, nullptr, quickAccessPopup_, nullptr);
+        }
+    }
+    // 清空每个 QQuickWidget 的源，销毁 QML 组件树及其对 bridge / 各 Model
+    // 上下文属性的绑定，确保后续这些对象析构时不会被 QML 再次访问。
+    const auto surfaces = findChildren<QQuickWidget*>();
+    for (auto* surface : surfaces) {
+        surface->setSource(QUrl());
+    }
+}
+
 void WorkbenchHostWidget::setUiScale(double uiScale)
 {
     uiScale_ = uiScale;

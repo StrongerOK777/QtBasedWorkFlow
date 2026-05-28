@@ -118,11 +118,6 @@ Rectangle {
             checkedState: workbenchBridge.panelVisible
             onClicked: workbenchBridge.panelVisible = !workbenchBridge.panelVisible
         }
-        CommandButton {
-            iconName: "settings"
-            tooltipText: "设置"
-            onClicked: workbenchBridge.triggerCommand("settings.open")
-        }
 
         Item { Layout.preferredWidth: 8 }
     }

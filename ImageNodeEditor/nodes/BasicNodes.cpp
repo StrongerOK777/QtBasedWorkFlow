@@ -246,7 +246,7 @@ void registerBasicNodes(NodeFactory& factory)
                  });
 
     registerNode(factory, "TextOverlay", "文字叠加", "合成处理", {in("image", "图片")}, {out()},
-                 {param("text", "文字", ParameterType::Text, QString("Hello")),
+                 {param("text", "文字", ParameterType::Text, QString("示例文字")),
                   param("x", "X", ParameterType::Integer, 30, 0, 100000),
                   param("y", "Y", ParameterType::Integer, 60, 0, 100000),
                   param("size", "字号", ParameterType::Integer, 32, 1, 256),

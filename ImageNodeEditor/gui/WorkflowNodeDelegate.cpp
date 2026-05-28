@@ -10,6 +10,7 @@
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -35,6 +36,24 @@ QVector<PortInfo> ports(const QSharedPointer<ImageNode>& node, QtNodes::PortType
         return {};
     }
     return portType == QtNodes::PortType::In ? node->inputPorts() : node->outputPorts();
+}
+
+// 把存储用的英文选项值映射为界面显示的中文，未知值回退原值。
+QString choiceOptionLabel(const QString& value)
+{
+    static const QHash<QString, QString> kLabels = {
+        {"horizontal", "横向"},
+        {"vertical", "纵向"},
+        {"grid", "网格"},
+        {"normal", "正常"},
+        {"rotate90", "旋转 90°"},
+        {"rotate180", "旋转 180°"},
+        {"rotate270", "旋转 270°"},
+        {"flipHorizontal", "水平翻转"},
+        {"flipVertical", "垂直翻转"},
+    };
+    const auto it = kLabels.constFind(value);
+    return it != kLabels.constEnd() ? it.value() : value;
 }
 
 QtNodes::NodeDataType workflowDataType(PortType type)
@@ -294,10 +313,16 @@ QWidget* WorkflowNodeDelegate::makeParameterEditor(const NodeParameter& paramete
     }
     if (parameter.type == ParameterType::Choice) {
         auto* editor = new QComboBox;
-        editor->addItems(parameter.options);
-        editor->setCurrentText(value.toString());
-        QObject::connect(editor, &QComboBox::currentTextChanged, editor, [emitChanged](const QString& next) {
-            emitChanged(next);
+        for (const QString& option : parameter.options) {
+            editor->addItem(choiceOptionLabel(option), option);
+        }
+        int index = editor->findData(value.toString());
+        if (index < 0) {
+            index = 0;
+        }
+        editor->setCurrentIndex(index);
+        QObject::connect(editor, &QComboBox::currentIndexChanged, editor, [editor, emitChanged](int) {
+            emitChanged(editor->currentData().toString());
         });
         return editor;
     }
@@ -317,9 +342,9 @@ QWidget* WorkflowNodeDelegate::makeParameterEditor(const NodeParameter& paramete
         QObject::connect(button, &QPushButton::clicked, button, [edit, emitChanged, parameter] {
             QString next;
             if (parameter.type == ParameterType::FileOpen) {
-                next = QFileDialog::getOpenFileName(edit, "选择图片", {}, "Images (*.png *.jpg *.jpeg *.bmp *.webp);;All files (*)");
+                next = QFileDialog::getOpenFileName(edit, "选择图片", {}, "图片 (*.png *.jpg *.jpeg *.bmp *.webp);;所有文件 (*)");
             } else if (parameter.type == ParameterType::FileSave) {
-                next = QFileDialog::getSaveFileName(edit, "选择导出路径", edit->text(), "PNG (*.png);;JPEG (*.jpg);;All files (*)");
+                next = QFileDialog::getSaveFileName(edit, "选择导出路径", edit->text(), "PNG 图片 (*.png);;JPEG 图片 (*.jpg);;所有文件 (*)");
             } else {
                 const QColor color = QColorDialog::getColor(QColor(edit->text()), edit);
                 if (color.isValid()) {

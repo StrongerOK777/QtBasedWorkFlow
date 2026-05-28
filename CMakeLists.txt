@@ -34,6 +34,7 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/app/CommandLineRunner.cpp
     ImageNodeEditor/core/Edge.h
     ImageNodeEditor/core/NodeData.h
+    ImageNodeEditor/core/NodeLabel.h
     ImageNodeEditor/core/NodeParameter.h
     ImageNodeEditor/core/PortType.h
     ImageNodeEditor/core/Result.h

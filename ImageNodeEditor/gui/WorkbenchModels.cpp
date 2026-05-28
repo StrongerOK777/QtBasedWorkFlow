@@ -1,5 +1,6 @@
 #include "gui/WorkbenchModels.h"
 
+#include "core/NodeLabel.h"
 #include "nodes/ImageNode.h"
 #include "workflow/WorkflowGraph.h"
 
@@ -561,7 +562,7 @@ void QuickAccessModel::refresh()
                 entries_.append(Entry{Kind::Node,
                                       descriptor.typeName,
                                       QString("添加节点：%1").arg(descriptor.displayName),
-                                      QString("%1 · %2 · 内置节点").arg(descriptor.category, descriptor.typeName),
+                                      QString("%1 · 内置节点").arg(descriptor.category),
                                       descriptor.typeName,
                                       {},
                                       {}});
@@ -573,8 +574,8 @@ void QuickAccessModel::refresh()
             if (!emptyQuery && matchesTerms(QString("%1 %2 %3 %4").arg(node.title, node.typeName, node.category, node.nodeId), normalizedQuery)) {
                 entries_.append(Entry{Kind::WorkflowNode,
                                       node.nodeId,
-                                      QString("定位节点：%1").arg(node.title),
-                                      QString("%1 · %2").arg(node.nodeId, node.category),
+                                      QString("定位节点：%1").arg(formatNodeLabel(node.title, node.nodeId)),
+                                      node.category,
                                       {},
                                       node.nodeId,
                                       {}});

@@ -86,6 +86,8 @@ private:
     void removeCanvasEdge(const Edge& edge);
     void appendLog(const QString& message, const QString& nodeId = {});
     void appendProblem(const QString& message, const QString& nodeId = {});
+    QString nodeLabel(const QString& nodeId) const;
+    void fitGraphInView();
     void clearLog();
     void runWorkflow();
     void exportWorkflowCopy();

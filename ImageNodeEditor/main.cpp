@@ -8,11 +8,13 @@
 #include <QCoreApplication>
 #include <QQuickStyle>
 
+#include <exception>
+
 namespace {
 
 void configureParser(QCommandLineParser& parser, QCommandLineOption& noGui, QCommandLineOption& workflow)
 {
-    parser.setApplicationDescription("Qt node-based image processing workflow editor");
+    parser.setApplicationDescription("基于 Qt 的节点式图像处理工作流编辑器");
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption(noGui);
@@ -34,8 +36,8 @@ bool hasCliOnlyArgument(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    QCommandLineOption noGui({"n", "no-gui"}, "Run workflow without GUI.");
-    QCommandLineOption workflow({"w", "workflow"}, "Workflow JSON path.", "file");
+    QCommandLineOption noGui({"n", "no-gui"}, "不启动图形界面，直接执行工作流。");
+    QCommandLineOption workflow({"w", "workflow"}, "工作流 JSON 文件路径。", "file");
 
     if (hasCliOnlyArgument(argc, argv)) {
         QCoreApplication app(argc, argv);
@@ -71,5 +73,13 @@ int main(int argc, char* argv[])
 
     MainWindow window;
     window.show();
-    return app.exec();
+    try {
+        return app.exec();
+    } catch (const std::exception& e) {
+        qCritical("程序因未处理的异常退出：%s", e.what());
+        return 1;
+    } catch (...) {
+        qCritical("程序因未处理的未知异常退出");
+        return 1;
+    }
 }
