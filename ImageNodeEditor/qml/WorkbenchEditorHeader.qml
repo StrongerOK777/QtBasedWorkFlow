@@ -3,8 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 Rectangle {
-    color: "#252526"
-    border.color: "#2d2d2d"
+    color: "#212327"
+    border.color: "#2e2f33"
     border.width: 1
 
     component HeaderButton: ToolButton {
@@ -21,14 +21,23 @@ Rectangle {
             tooltipText: button.tooltipText
             placement: "bottom"
         }
-        background: Rectangle { color: button.hovered ? "#37373d" : "transparent" }
+        background: Rectangle {
+            color: "transparent"
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 3
+                radius: 6
+                color: button.hovered ? "#2c2f34" : "transparent"
+                Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            }
+        }
         contentItem: Item {
             WorkbenchIcon {
                 anchors.centerIn: parent
                 width: 18
                 height: 18
                 name: button.iconName
-                strokeColor: "#cccccc"
+                strokeColor: button.hovered ? "#c8cace" : "#9aa0a6"
             }
         }
     }
@@ -40,15 +49,14 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 220
             Layout.fillHeight: true
-            color: "#1e1e1e"
-            border.color: "#2d2d2d"
+            color: "#1b1c1e"
             Text {
                 anchors.fill: parent
-                anchors.leftMargin: 12
+                anchors.leftMargin: 14
                 anchors.rightMargin: 8
                 text: workbenchBridge.documentTitle
-                color: "#ffffff"
-                font.pixelSize: 12
+                color: "#c8cace"
+                font.pixelSize: 12.5
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideMiddle
             }

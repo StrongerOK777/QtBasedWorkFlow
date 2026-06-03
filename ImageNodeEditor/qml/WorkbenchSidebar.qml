@@ -4,35 +4,37 @@ import QtQuick.Layouts
 
 Rectangle {
     id: sidebar
-    color: "#202020"
-    border.color: "#303030"
+    color: "#1d1e21"
+    border.color: "#2e2f33"
     border.width: 1
 
     component SidebarHeader: Text {
-        color: "#bbbbbb"
-        font.pixelSize: 11
-        font.weight: Font.Bold
-        font.capitalization: Font.AllUppercase
+        color: "#8b9097"
+        font.pixelSize: 12
+        font.weight: Font.DemiBold
+        font.letterSpacing: 0.4
         elide: Text.ElideRight
     }
 
     component SearchField: TextField {
-        color: "#f0f0f0"
-        placeholderTextColor: "#989898"
+        color: "#e3e4e6"
+        placeholderTextColor: "#6b7178"
         selectByMouse: true
         font.pixelSize: 13
-        leftPadding: 8
-        rightPadding: 8
+        leftPadding: 10
+        rightPadding: 10
         background: Rectangle {
-            color: "#313131"
-            border.color: parent.activeFocus ? "#3794ff" : "#454545"
+            radius: 8
+            color: "#2c2f34"
+            border.color: parent.activeFocus ? "#6ea0e0" : "#2e2f33"
             border.width: 1
+            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
     }
 
     component ResultList: ListView {
         clip: true
-        spacing: 1
+        spacing: 2
         ScrollBar.vertical: ScrollBar {}
     }
 
@@ -76,8 +78,8 @@ Rectangle {
                         required property string iconName
                         width: ListView.view.width
                         height: 46
-                        color: ListView.isCurrentItem ? "#094771"
-                               : mouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: ListView.isCurrentItem ? "#303a47"
+                               : mouse.containsMouse ? "#26282d" : "transparent"
                         property real pressX: 0
                         property real pressY: 0
                         property bool dragStarted: false
@@ -174,7 +176,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
-                    color: templateSaveMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    color: templateSaveMouse.containsMouse ? "#26282d" : "#212327"
                     border.color: "#3c3c3c"
                     Text {
                         anchors.centerIn: parent
@@ -201,12 +203,12 @@ Rectangle {
                         required property bool builtIn
                         width: ListView.view.width
                         height: 72
-                        color: templateMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: templateMouse.containsMouse ? "#26282d" : "transparent"
                         Rectangle {
                             x: 0
                             width: 2
                             height: parent.height
-                            color: builtIn ? "#3794ff" : "#858585"
+                            color: builtIn ? "#6ea0e0" : "#858585"
                         }
                         Column {
                             anchors.left: parent.left
@@ -247,8 +249,8 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 44
                             height: 26
-                            color: applyTemplateMouse.containsMouse ? "#0e639c" : "#313131"
-                            border.color: applyTemplateMouse.containsMouse ? "#3794ff" : "#454545"
+                            color: applyTemplateMouse.containsMouse ? "#43617f" : "#2c2f34"
+                            border.color: applyTemplateMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
                             Text {
                                 anchors.centerIn: parent
                                 text: "套用"
@@ -312,7 +314,7 @@ Rectangle {
                         required property string detail
                         width: ListView.view.width
                         height: 50
-                        color: timelineRowMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: timelineRowMouse.containsMouse ? "#26282d" : "transparent"
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 8
@@ -343,8 +345,8 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 52
                             height: 24
-                            color: timelineRestoreMouse.containsMouse ? "#0e639c" : "#313131"
-                            border.color: timelineRestoreMouse.containsMouse ? "#3794ff" : "#454545"
+                            color: timelineRestoreMouse.containsMouse ? "#43617f" : "#2c2f34"
+                            border.color: timelineRestoreMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
                             Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
                             MouseArea {
                                 id: timelineRestoreMouse
@@ -364,7 +366,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#333333"
+                    color: "#2e2f33"
                 }
 
                 SidebarHeader {
@@ -374,7 +376,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
-                    color: checkpointSaveMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    color: checkpointSaveMouse.containsMouse ? "#26282d" : "#212327"
                     border.color: "#3c3c3c"
                     Text {
                         anchors.centerIn: parent
@@ -400,7 +402,7 @@ Rectangle {
                         required property string branch
                         width: ListView.view.width
                         height: 82
-                        color: checkpointMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: checkpointMouse.containsMouse ? "#26282d" : "transparent"
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 8
@@ -434,8 +436,8 @@ Rectangle {
                             Rectangle {
                                 width: 52
                                 height: 24
-                                color: restoreMouse.containsMouse ? "#0e639c" : "#313131"
-                                border.color: restoreMouse.containsMouse ? "#3794ff" : "#454545"
+                                color: restoreMouse.containsMouse ? "#43617f" : "#2c2f34"
+                                border.color: restoreMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
                                 Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
                                 MouseArea {
                                     id: restoreMouse
@@ -447,8 +449,8 @@ Rectangle {
                             Rectangle {
                                 width: 52
                                 height: 24
-                                color: branchMouse.containsMouse ? "#3a3d41" : "#252526"
-                                border.color: "#454545"
+                                color: branchMouse.containsMouse ? "#303237" : "#212327"
+                                border.color: "#2e2f33"
                                 Text { anchors.centerIn: parent; text: "分支"; color: "#cccccc"; font.pixelSize: 12 }
                                 MouseArea {
                                     id: branchMouse
@@ -496,7 +498,7 @@ Rectangle {
                         required property string category
                         width: ListView.view.width
                         height: 46
-                        color: outlineMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: outlineMouse.containsMouse ? "#26282d" : "transparent"
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 6
@@ -552,8 +554,8 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
-                    color: "#313131"
-                    border.color: quickMouse.containsMouse ? "#3794ff" : "#454545"
+                    color: "#2c2f34"
+                    border.color: quickMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
                     Text {
                         anchors.fill: parent
                         anchors.leftMargin: 9
@@ -584,7 +586,7 @@ Rectangle {
                         required property string category
                         width: ListView.view.width
                         height: 44
-                        color: searchMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: searchMouse.containsMouse ? "#26282d" : "transparent"
                         Text {
                             anchors.fill: parent
                             anchors.margins: 6
@@ -624,7 +626,7 @@ Rectangle {
                         required property string nodeId
                         width: ListView.view.width
                         height: 54
-                        color: problemMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: problemMouse.containsMouse ? "#26282d" : "transparent"
                         Text {
                             anchors.fill: parent
                             anchors.margins: 6
@@ -661,7 +663,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 74
-                    color: "#252526"
+                    color: "#212327"
                     border.color: "#3c3c3c"
                     Text {
                         anchors.fill: parent
@@ -676,8 +678,8 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
-                    color: runDiagMouse.containsMouse ? "#0e639c" : "#094771"
-                    border.color: "#3794ff"
+                    color: runDiagMouse.containsMouse ? "#43617f" : "#303a47"
+                    border.color: "#6ea0e0"
                     Text {
                         anchors.centerIn: parent
                         text: "执行工作流"
@@ -696,7 +698,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 34
-                    color: layoutDiagMouse.containsMouse ? "#2a2d2e" : "#252526"
+                    color: layoutDiagMouse.containsMouse ? "#26282d" : "#212327"
                     border.color: "#3c3c3c"
                     Text {
                         anchors.centerIn: parent
@@ -726,7 +728,7 @@ Rectangle {
                         required property string nodeId
                         width: ListView.view.width
                         height: 48
-                        color: diagProblemMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: diagProblemMouse.containsMouse ? "#26282d" : "transparent"
                         Text {
                             anchors.fill: parent
                             anchors.margins: 6

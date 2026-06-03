@@ -1342,25 +1342,25 @@ void MainWindow::createLayout()
     bottomTabs_->setStyleSheet(R"(
         QTabWidget#bottomTabs::pane {
             border: 0px;
-            background: #1e1e1e;
+            background: #1b1c1e;
         }
         QTabWidget#bottomTabs QTabBar::tab {
             min-height: 26px;
-            padding: 0px 10px;
-            margin: 0px;
+            padding: 0px 12px;
+            margin: 3px 2px 0px 2px;
             border: 0px;
-            border-right: 1px solid #2d2d2d;
-            background: #1e1e1e;
-            color: #969696;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            background: transparent;
+            color: #9aa0a6;
         }
         QTabWidget#bottomTabs QTabBar::tab:selected {
-            background: #252526;
+            background: #26282d;
             color: #ffffff;
-            border-top: 1px solid #3794ff;
         }
         QTabWidget#bottomTabs QTabBar::tab:hover {
-            background: #2a2d2e;
-            color: #cccccc;
+            background: #26282d;
+            color: #c8cace;
         }
     )");
     bottomTabs_->addTab(terminalPanel_, "终端");
@@ -2336,26 +2336,28 @@ QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
     menu->setAttribute(Qt::WA_DeleteOnClose);
     menu->setStyleSheet(R"(
         QMenu {
-            background: #252526;
-            border: 1px solid #454545;
-            color: #cccccc;
-            padding: 4px 0px;
+            background: #212327;
+            border: 1px solid #2e2f33;
+            border-radius: 10px;
+            color: #e3e4e6;
+            padding: 5px;
         }
         QMenu::item {
             min-height: 26px;
-            padding: 4px 28px 4px 24px;
+            padding: 5px 26px 5px 22px;
+            border-radius: 6px;
         }
         QMenu::item:selected {
-            background: #094771;
+            background: #303a47;
             color: #ffffff;
         }
         QMenu::item:disabled {
-            color: #6a6a6a;
+            color: #6b7178;
         }
         QMenu::separator {
             height: 1px;
-            background: #3c3c3c;
-            margin: 5px 8px;
+            background: #2e2f33;
+            margin: 5px 10px;
         }
     )");
 
@@ -2783,22 +2785,25 @@ void MainWindow::showWorkbenchTooltip(const QString& text, const QString& placem
         tooltipPopup_->setObjectName("workbenchTooltip");
         tooltipPopup_->setAttribute(Qt::WA_ShowWithoutActivating);
         tooltipPopup_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        // 透明窗口背景，让 8px 圆角真正显示出来（否则四角会露出方形底色）。
+        tooltipPopup_->setAttribute(Qt::WA_TranslucentBackground);
         tooltipPopup_->setStyleSheet(R"(
             QFrame#workbenchTooltip {
-                background: #252526;
-                border: 1px solid #454545;
-                color: #cccccc;
+                background: #26282d;
+                border: 1px solid #34363b;
+                border-radius: 8px;
+                color: #e3e4e6;
             }
             QLabel {
-                color: #cccccc;
+                color: #e3e4e6;
                 font-size: 12px;
-                padding: 7px 9px;
+                padding: 7px 10px;
             }
         )");
         auto* shadow = new QGraphicsDropShadowEffect(tooltipPopup_);
-        shadow->setBlurRadius(16);
-        shadow->setOffset(0, 3);
-        shadow->setColor(QColor(0, 0, 0, 140));
+        shadow->setBlurRadius(20);
+        shadow->setOffset(0, 4);
+        shadow->setColor(QColor(0, 0, 0, 130));
         tooltipPopup_->setGraphicsEffect(shadow);
         auto* layout = new QVBoxLayout(tooltipPopup_);
         layout->setContentsMargins(0, 0, 0, 0);
@@ -4121,54 +4126,56 @@ void MainWindow::showSettingsDialog()
     dialog.resize(AppTheme::px(900, uiScale_), AppTheme::px(620, uiScale_));
     dialog.setStyleSheet(R"(
         QDialog#settingsDialog {
-            background: #1e1e1e;
-            color: #cccccc;
+            background: #1b1c1e;
+            color: #e3e4e6;
         }
         QLabel#settingsTitle {
-            color: #ffffff;
+            color: #f1f2f3;
             font-size: 20px;
             font-weight: 600;
         }
         QLabel#settingsSubtitle,
         QLabel#settingsHint {
-            color: #969696;
+            color: #9aa0a6;
         }
         QLabel#settingsSectionTitle {
-            color: #ffffff;
+            color: #e8eaed;
             font-size: 13px;
             font-weight: 600;
         }
         QWidget#settingsSection {
-            background: #252526;
-            border: 1px solid #3c3c3c;
+            background: #212327;
+            border: 1px solid #2e2f33;
+            border-radius: 12px;
         }
         QScrollArea#settingsScroll {
-            background: #1e1e1e;
+            background: #1b1c1e;
             border: 0px;
         }
         QScrollArea#settingsScroll > QWidget > QWidget {
-            background: #1e1e1e;
+            background: #1b1c1e;
         }
         QListWidget#settingsNav,
         QListWidget#shortcutList {
-            background: #252526;
-            border: 1px solid #3c3c3c;
-            color: #cccccc;
+            background: #212327;
+            border: 1px solid #2e2f33;
+            border-radius: 10px;
+            color: #e3e4e6;
             outline: 0px;
+            padding: 4px;
         }
         QListWidget#settingsNav::item {
             min-height: 32px;
-            padding: 0px 10px;
-            border-left: 2px solid transparent;
+            padding: 0px 12px;
+            border-radius: 7px;
         }
         QListWidget#settingsNav::item:selected {
-            background: #37373d;
-            border-left: 2px solid #3794ff;
+            background: #303a47;
             color: #ffffff;
         }
         QListWidget#settingsNav::item:hover,
         QListWidget#shortcutList::item:hover {
-            background: #2a2d2e;
+            background: #26282d;
         }
         QListWidget#shortcutList::item {
             min-height: 34px;

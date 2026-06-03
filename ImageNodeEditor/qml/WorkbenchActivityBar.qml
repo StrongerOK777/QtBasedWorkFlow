@@ -3,8 +3,8 @@ import QtQuick.Controls
 
 Rectangle {
     id: activityBar
-    color: "#181818"
-    border.color: "#2b2b2b"
+    color: "#1b1c1e"
+    border.color: "#2e2f33"
     border.width: 1
 
     component ActivityButton: ToolButton {
@@ -31,23 +31,34 @@ Rectangle {
             placement: "right"
         }
         background: Rectangle {
-            color: button.hovered ? "#292929" : "transparent"
+            color: "transparent"
             Rectangle {
-                width: 2
-                height: parent.height
+                anchors.fill: parent
+                anchors.margins: 6
+                radius: 9
+                color: button.checkedState ? "#2a313b" : button.hovered ? "#26282d" : "transparent"
+                Behavior on color { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }
+            }
+            Rectangle {
+                width: 3
+                radius: 1.5
+                height: parent.height * 0.42
+                anchors.verticalCenter: parent.verticalCenter
+                x: 1
                 visible: button.checkedState
-                color: "#3794ff"
+                color: "#6ea0e0"
             }
         }
         contentItem: Item {
             WorkbenchIcon {
                 anchors.centerIn: parent
-                width: 30
-                height: 30
+                width: 28
+                height: 28
                 name: button.iconName
-                strokeColor: button.checkedState ? "#f5f5f5" : "#a8a8a8"
+                strokeColor: button.checkedState ? "#e8eaed" : button.hovered ? "#c8cace" : "#8d9298"
                 fillColor: "transparent"
-                strokeWidth: 1.8
+                strokeWidth: 1.7
+                Behavior on strokeColor { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }
             }
         }
     }

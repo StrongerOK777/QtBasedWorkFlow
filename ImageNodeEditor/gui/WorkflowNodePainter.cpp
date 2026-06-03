@@ -8,6 +8,7 @@
 
 #include <QLinearGradient>
 #include <QPainter>
+#include <QPainterPath>
 
 #include <algorithm>
 #include <cmath>
@@ -74,48 +75,57 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     const QRectF headerRect(body.left(), body.top(), body.width(), 32.0);
     const bool selected = graphicsNode.isSelected();
 
+    const qreal radius = 12.0;
     painter->save();
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(0, 0, 0, 120));
-    painter->drawRect(shadowRect);
+    painter->setRenderHint(QPainter::Antialiasing, true);
 
+    // 柔和阴影
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0, 0, 0, 90));
+    painter->drawRoundedRect(shadowRect, radius, radius);
+
+    // 主体（轻微竖向渐变）+ hairline 边 / 选中柔化蓝
     QLinearGradient fill(body.topLeft(), body.bottomLeft());
-    fill.setColorAt(0, QColor("#252526"));
-    fill.setColorAt(1, QColor("#1f1f1f"));
+    fill.setColorAt(0, QColor("#26282d"));
+    fill.setColorAt(1, QColor("#1f2024"));
     painter->setBrush(fill);
-    painter->setPen(QPen(selected ? QColor("#3794ff") : QColor("#3c3c3c"), selected ? 2.0 : 1.0));
-    painter->drawRect(borderRect);
+    painter->setPen(QPen(selected ? QColor("#6ea0e0") : QColor("#34363b"), selected ? 1.8 : 1.0));
+    painter->drawRoundedRect(borderRect, radius, radius);
 
+    // 头部：裁剪到圆角主体内绘制，使上方圆角自然；顶部一抹克制的类别色。
+    painter->save();
+    QPainterPath clipPath;
+    clipPath.addRoundedRect(borderRect, radius, radius);
+    painter->setClipPath(clipPath);
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor("#2d2d2d"));
-    painter->drawRect(headerRect.adjusted(1, 1, -1, 0));
-    painter->setBrush(visual.stripe);
-    painter->drawRect(QRectF(body.left() + 1, body.top() + 1, 4, std::max<qreal>(1, body.height() - 2)));
-    painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 190));
-    painter->drawRect(QRectF(body.left() + 1, body.top() + 1, body.width() - 2, 3));
-    painter->setPen(QPen(QColor("#3c3c3c"), 1));
+    painter->setBrush(QColor("#2a2c31"));
+    painter->drawRect(QRectF(body.left(), body.top(), body.width(), headerRect.height()));
+    painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 150));
+    painter->drawRect(QRectF(body.left(), body.top(), body.width(), 3));
+    painter->restore();
+    painter->setPen(QPen(QColor("#2e2f33"), 1));
     painter->drawLine(QPointF(body.left() + 1, headerRect.bottom()), QPointF(body.right() - 1, headerRect.bottom()));
 
     if (delegate && delegate->executionState() != NodeExecutionState::NotExecuted) {
-        const QRectF strip(body.left() + 8, body.bottom() - 7, body.width() - 16, 3);
+        const QRectF strip(body.left() + 10, body.bottom() - 8, body.width() - 20, 3);
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 72));
-        painter->drawRect(strip);
+        painter->drawRoundedRect(strip, 1.5, 1.5);
         if (delegate->executionState() == NodeExecutionState::Running) {
             const qreal segmentWidth = std::max<qreal>(20, strip.width() * 0.22);
             const qreal travel = strip.width() + segmentWidth;
             const qreal offset = std::fmod(delegate->animationPhase() * 8.0, travel) - segmentWidth;
             painter->setBrush(categoryColor);
-            painter->drawRect(QRectF(strip.left() + offset, strip.top(), segmentWidth, strip.height()).intersected(strip));
+            painter->drawRoundedRect(QRectF(strip.left() + offset, strip.top(), segmentWidth, strip.height()).intersected(strip), 1.5, 1.5);
         } else {
             painter->setBrush(categoryColor);
-            painter->drawRect(strip);
+            painter->drawRoundedRect(strip, 1.5, 1.5);
         }
     }
     if (selected) {
         painter->setBrush(Qt::NoBrush);
-        painter->setPen(QPen(QColor(55, 148, 255, 78), 5));
-        painter->drawRect(borderRect.adjusted(2, 2, -2, -2));
+        painter->setPen(QPen(QColor(110, 160, 224, 70), 4));
+        painter->drawRoundedRect(borderRect.adjusted(2, 2, -2, -2), radius - 2, radius - 2);
     }
     painter->restore();
 

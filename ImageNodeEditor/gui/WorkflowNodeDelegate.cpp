@@ -219,50 +219,53 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
     panel->setObjectName("nodeInlineParameters");
     panel->setStyleSheet(QString(R"(
         QWidget#nodeInlineParameters {
-            background: #252526;
-            border: 1px solid #3c3c3c;
-            border-radius: 0px;
+            background: #23252a;
+            border: 1px solid #34363b;
+            border-radius: 10px;
         }
         QLabel {
-            color: #9d9d9d;
+            color: #9aa0a6;
             font-weight: 500;
         }
         QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
             min-height: 22px;
-            padding: 1px 5px;
-            color: #cccccc;
-            background: #3c3c3c;
-            border: 1px solid #454545;
-            selection-background-color: #04395e;
+            padding: 1px 6px;
+            color: #e3e4e6;
+            background: #2c2f34;
+            border: 1px solid #2e2f33;
+            border-radius: 6px;
+            selection-background-color: #35506e;
             selection-color: #ffffff;
         }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-            border-color: #3794ff;
+            border-color: #6ea0e0;
         }
         QCheckBox {
-            color: #cccccc;
+            color: #e3e4e6;
             spacing: 6px;
         }
         QCheckBox::indicator {
             width: 14px;
             height: 14px;
-            border: 1px solid #6a6a6a;
-            background: #3c3c3c;
+            border: 1px solid #4a4d52;
+            border-radius: 4px;
+            background: #2c2f34;
         }
         QCheckBox::indicator:checked {
-            background: #007acc;
-            border-color: #3794ff;
+            background: #6ea0e0;
+            border-color: #6ea0e0;
         }
         QPushButton {
             min-height: 22px;
-            color: #cccccc;
-            background: #2d2d2d;
-            border: 1px solid #454545;
-            padding: 1px 6px;
+            color: #e3e4e6;
+            background: #2c2f34;
+            border: 1px solid #2e2f33;
+            border-radius: 6px;
+            padding: 1px 8px;
         }
         QPushButton:hover {
-            background: #3c3c3c;
-            border-color: #555555;
+            background: #34373d;
+            border-color: #3b3d42;
         }
     )"));
 
