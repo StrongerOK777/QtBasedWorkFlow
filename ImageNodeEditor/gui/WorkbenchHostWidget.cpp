@@ -3,17 +3,17 @@
 #include "gui/AppTheme.h"
 #include "gui/WorkbenchModels.h"
 
-#include <QApplication>
-#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QQuickWidget>
 #include <QQmlContext>
+#include <QResizeEvent>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <functional>
 
 namespace {
 
@@ -24,6 +24,27 @@ constexpr auto kSidebarSource = "qrc:/workbench/WorkbenchSidebar.qml";
 constexpr auto kStatusSource = "qrc:/workbench/WorkbenchStatusBar.qml";
 constexpr auto kQuickAccessSource = "qrc:/workbench/WorkbenchQuickAccess.qml";
 
+// 透明遮罩：覆盖命令面板以外的区域，单击即关闭面板。置于各 QQuickWidget 表面之上，
+// 因此能稳定接收点击，不受 QQuickWidget 事件投递细节影响。
+class ClickScrim final : public QWidget {
+public:
+    explicit ClickScrim(QWidget* parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_StyledBackground, true);
+        setStyleSheet("background: transparent;");
+    }
+    std::function<void()> onPress;
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (onPress) {
+            onPress();
+        }
+        event->accept();
+    }
+};
+
 }
 
 WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
@@ -33,6 +54,7 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
                                          ProblemModel* problems,
                                          WorkflowTemplateModel* templates,
                                          WorkflowCheckpointModel* checkpoints,
+                                         WorkflowCheckpointModel* timeline,
                                          QuickAccessModel* quickAccess,
                                          QWidget* editor,
                                          QWidget* preview,
@@ -47,6 +69,7 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
       problems_(problems),
       templates_(templates),
       checkpoints_(checkpoints),
+      timeline_(timeline),
       quickAccess_(quickAccess),
       bottomPanel_(bottomPanel),
       uiScale_(uiScale)
@@ -122,33 +145,24 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     quickAccessPopup_ = popupFrame;
     quickAccessPopup_->hide();
 
+    // 命令面板的「点击外部关闭」遮罩层：透明、覆盖整个工作台、置于面板之下。
+    auto* scrim = new ClickScrim(this);
+    scrim->onPress = [this] {
+        if (bridge_) {
+            bridge_->activateQuickAccess(-1);  // 与 Esc 一致：触发 quickAccessFinished
+        } else if (quickAccessPopup_) {
+            quickAccessPopup_->hide();
+        }
+    };
+    quickAccessScrim_ = scrim;
+    quickAccessScrim_->hide();
+
     if (bridge_) {
         connect(bridge_, &WorkbenchBridge::quickAccessRequested, this, &WorkbenchHostWidget::showQuickAccess);
         connect(bridge_, &WorkbenchBridge::quickAccessFinished, quickAccessPopup_, &QWidget::hide);
-    }
-    // 监听全局鼠标按下，实现命令面板「点击外部关闭」；this 析构时 Qt 自动移除过滤器。
-    if (qApp) {
-        qApp->installEventFilter(this);
+        connect(bridge_, &WorkbenchBridge::quickAccessFinished, quickAccessScrim_, &QWidget::hide);
     }
     setUiScale(uiScale_);
-}
-
-bool WorkbenchHostWidget::eventFilter(QObject* watched, QEvent* event)
-{
-    if (event->type() == QEvent::MouseButtonPress && quickAccessPopup_ && quickAccessPopup_->isVisible()) {
-        const auto* mouseEvent = static_cast<QMouseEvent*>(event);
-        const QPoint globalPos = mouseEvent->globalPosition().toPoint();
-        const QRect popupRect(quickAccessPopup_->mapToGlobal(QPoint(0, 0)), quickAccessPopup_->size());
-        if (!popupRect.contains(globalPos)) {
-            // 复用既有取消路径（与 Esc 一致）：触发 quickAccessFinished -> 隐藏浮层。
-            if (bridge_) {
-                bridge_->activateQuickAccess(-1);
-            } else {
-                quickAccessPopup_->hide();
-            }
-        }
-    }
-    return QWidget::eventFilter(watched, event);
 }
 
 QWidget* WorkbenchHostWidget::primarySidebar() const
@@ -164,6 +178,12 @@ void WorkbenchHostWidget::showQuickAccess()
     if (quickAccess_) {
         quickAccess_->setQuery({});
     }
+    // 先铺满遮罩层并置顶，再把面板叠在遮罩之上：点面板外即落到遮罩 -> 关闭。
+    if (quickAccessScrim_) {
+        quickAccessScrim_->setGeometry(rect());
+        quickAccessScrim_->show();
+        quickAccessScrim_->raise();
+    }
     const int width = std::min(AppTheme::px(720, uiScale_), std::max(AppTheme::px(440, uiScale_), this->width() - AppTheme::px(80, uiScale_)));
     quickAccessPopup_->resize(width, AppTheme::px(430, uiScale_));
     const QPoint topLeft(std::max(0, (this->width() - width) / 2), AppTheme::px(32, uiScale_));
@@ -175,15 +195,32 @@ void WorkbenchHostWidget::showQuickAccess()
     }
 }
 
+void WorkbenchHostWidget::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (quickAccessScrim_ && quickAccessScrim_->isVisible()) {
+        quickAccessScrim_->setGeometry(rect());
+        if (quickAccessPopup_) {
+            quickAccessPopup_->raise();
+        }
+    }
+}
+
 void WorkbenchHostWidget::teardownSurfaces()
 {
     if (quickAccessPopup_) {
         quickAccessPopup_->hide();
     }
+    if (quickAccessScrim_) {
+        quickAccessScrim_->hide();
+    }
     if (bridge_) {
         disconnect(bridge_, nullptr, this, nullptr);
         if (quickAccessPopup_) {
             disconnect(bridge_, nullptr, quickAccessPopup_, nullptr);
+        }
+        if (quickAccessScrim_) {
+            disconnect(bridge_, nullptr, quickAccessScrim_, nullptr);
         }
     }
     // 清空每个 QQuickWidget 的源，销毁 QML 组件树及其对 bridge / 各 Model
@@ -230,6 +267,7 @@ QQuickWidget* WorkbenchHostWidget::makeQuickSurface(const QUrl& source, QWidget*
     surface->rootContext()->setContextProperty("problemModel", problems_);
     surface->rootContext()->setContextProperty("workflowTemplateModel", templates_);
     surface->rootContext()->setContextProperty("workflowCheckpointModel", checkpoints_);
+    surface->rootContext()->setContextProperty("workflowTimelineModel", timeline_);
     surface->rootContext()->setContextProperty("quickAccessModel", quickAccess_);
     surface->setSource(source);
     return surface;

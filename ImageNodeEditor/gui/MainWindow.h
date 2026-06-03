@@ -109,6 +109,9 @@ private:
     void refreshRecentWorkflowModel();
     void refreshWorkflowTemplateModel();
     void refreshWorkflowCheckpointModel();
+    void refreshWorkflowTimelineModel();
+    void recordSaveTimeline();
+    void restoreTimelineEntry(const QString& timelineId);
     void saveCurrentWorkflowAsTemplate();
     void applyWorkflowTemplate(const QString& templateId);
     void createWorkflowCheckpoint();
@@ -196,6 +199,8 @@ private:
     QVector<WorkbookPage> workbookPages_;
     int currentWorkbookIndex_ = -1;
     bool switchingWorkbook_ = false;
+    // 进入关闭/析构流程后置位，退出期跳过会访问原生窗口/QML 桥的回调，避免崩溃。
+    bool shuttingDown_ = false;
 
     QGraphicsScene* scene_ = nullptr;
     QGraphicsView* view_ = nullptr;
@@ -213,6 +218,7 @@ private:
     QuickAccessModel* quickAccessModel_ = nullptr;
     WorkflowTemplateModel* workflowTemplateModel_ = nullptr;
     WorkflowCheckpointModel* workflowCheckpointModel_ = nullptr;
+    WorkflowCheckpointModel* workflowTimelineModel_ = nullptr;
     WorkbenchBridge* workbenchBridge_ = nullptr;
     QWidget* primarySidebar_ = nullptr;
     QWidget* previewSidebar_ = nullptr;

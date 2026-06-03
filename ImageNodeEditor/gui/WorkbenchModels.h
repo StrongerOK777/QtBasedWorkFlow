@@ -305,6 +305,7 @@ public:
     Q_INVOKABLE void createCheckpoint();
     Q_INVOKABLE void restoreCheckpoint(const QString& checkpointId);
     Q_INVOKABLE void branchFromCheckpoint(const QString& checkpointId);
+    Q_INVOKABLE void restoreTimeline(const QString& timelineId);
     Q_INVOKABLE void requestWindowMove();
     Q_INVOKABLE void requestWindowMinimize();
     Q_INVOKABLE void requestWindowMaximizeToggle();
@@ -329,6 +330,7 @@ signals:
     void checkpointCreateRequested();
     void checkpointRestoreRequested(const QString& checkpointId);
     void checkpointBranchRequested(const QString& checkpointId);
+    void timelineRestoreRequested(const QString& timelineId);
     void previewVisibilityRequested(bool visible);
     void panelVisibilityRequested(bool visible);
     void quickAccessRequested();

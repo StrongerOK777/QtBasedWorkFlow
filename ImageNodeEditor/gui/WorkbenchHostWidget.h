@@ -23,6 +23,7 @@ public:
                         ProblemModel* problems,
                         WorkflowTemplateModel* templates,
                         WorkflowCheckpointModel* checkpoints,
+                        WorkflowCheckpointModel* timeline,
                         QuickAccessModel* quickAccess,
                         QWidget* editor,
                         QWidget* preview,
@@ -42,8 +43,8 @@ public:
     void teardownSurfaces();
 
 protected:
-    // 命令面板浮层打开时，监听全局鼠标按下：点击浮层之外即关闭。
-    bool eventFilter(QObject* watched, QEvent* event) override;
+    // 命令面板浮层打开时，遮罩层覆盖其余区域并随窗口同步尺寸。
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     QQuickWidget* makeQuickSurface(const QUrl& source, QWidget* parent);
@@ -55,6 +56,7 @@ private:
     ProblemModel* problems_ = nullptr;
     WorkflowTemplateModel* templates_ = nullptr;
     WorkflowCheckpointModel* checkpoints_ = nullptr;
+    WorkflowCheckpointModel* timeline_ = nullptr;
     QuickAccessModel* quickAccess_ = nullptr;
     QQuickWidget* activitySurface_ = nullptr;
     QQuickWidget* titleSurface_ = nullptr;
@@ -62,6 +64,7 @@ private:
     QQuickWidget* sidebarSurface_ = nullptr;
     QQuickWidget* statusSurface_ = nullptr;
     QWidget* quickAccessPopup_ = nullptr;
+    QWidget* quickAccessScrim_ = nullptr;
     QWidget* previewSidebar_ = nullptr;
     QWidget* bottomPanel_ = nullptr;
     QSplitter* workbenchSplitter_ = nullptr;

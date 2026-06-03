@@ -808,6 +808,13 @@ void WorkbenchBridge::branchFromCheckpoint(const QString& checkpointId)
     }
 }
 
+void WorkbenchBridge::restoreTimeline(const QString& timelineId)
+{
+    if (!timelineId.trimmed().isEmpty()) {
+        Q_EMIT timelineRestoreRequested(timelineId);
+    }
+}
+
 void WorkbenchBridge::requestWindowMove()
 {
     Q_EMIT windowMoveRequested();

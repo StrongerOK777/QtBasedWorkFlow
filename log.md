@@ -1025,3 +1025,29 @@ GUI 交互与退出无报错需在真实显示环境验证：本机以 `QT_QPA_P
 
 后续注意：
 macOS 顶部「黑色标题条」若仍存在，根因多为 Qt 在几何更新时按自身 styleMask 认知重算内容视图、抵消手动设置的 FullSizeContentView；当前以 show/状态变更时重套 chrome 缓解，若仍不彻底需在真机迭代（可能要直接调整内容视图 frame 或重排顶部工具栏层级）。Windows 端本轮保持原生标题栏（已可缩放/最大化），未引入全 frameless 改造。
+
+---
+
+### 2026-06-03 / 设置残影、保存时间线、退出崩溃、节点紧凑化、命令面板关闭、顶栏去重阶段
+
+类型：修复 / 新增 / 修改
+
+概述：
+按用户六项诉求继续打磨：1) 设置页消除导航挤叠与半透明残影；2) 新增「保存时间线」（Ctrl+S 自动记录可恢复快照，并入「进度记录」面板）；3) 修复退出时程序异常退出（崩溃）；4) 节点控件紧凑化、提升信息密度；5) 命令面板改为「点击外部即关闭」；6) 右上角去重，顶栏只留 QML 标题栏一处命令按钮。
+
+影响范围：
+`ImageNodeEditor/gui/MainWindow.h/.cpp`、`ImageNodeEditor/gui/WorkbenchHostWidget.h/.cpp`、`ImageNodeEditor/gui/WorkbenchModels.h/.cpp`、`ImageNodeEditor/gui/WorkflowNodeDelegate.cpp`、`ImageNodeEditor/gui/WorkflowNodePainter.cpp`、`ImageNodeEditor/qml/WorkbenchSidebar.qml`
+
+处理方式：
+退出崩溃：上一轮新增的 `MainWindow::changeEvent` 在 `WindowStateChange` 时调 `NativeWindowChrome::configure`（销毁期访问原生 NSWindow）及 `qApp` 全局事件过滤器是主要风险面。本轮新增 `shuttingDown_` 标志（`closeEvent`/析构置位），`changeEvent` 去掉 chrome 重套只保留 `setWindowMaximized` 并加 `!shuttingDown_ && isVisible()` 守卫，`showEvent` 同样守卫；并给内嵌终端 `TerminalPanel` 补析构 `kill` 子进程，消除退出期 `QProcess` 警告。实测：真机 `quit` 事件正常退出 code=0、无新崩溃报告、stderr 干净。
+命令面板：移除全局事件过滤器，改为自包含透明遮罩层 `ClickScrim`（`WorkbenchHostWidget` 匿名子类），`showQuickAccess` 时铺满并置于面板之下，点面板外即 `activateQuickAccess(-1)` 关闭；同时消除全局过滤器的退出崩溃面。
+设置页：导航 `QListWidget` 改用显式 `QListWidgetItem::setSizeHint`+`uniformItemSizes`+`spacing`，杜绝项挤叠；page/section 加 `WA_StyledBackground` 让实色背景完整绘制，消除半透明残影。
+保存时间线：复用 `WorkflowCheckpointModel` 新增第二实例 `workflowTimelineModel_`（QML 上下文属性 `workflowTimelineModel`，经 `WorkbenchHostWidget` 构造注入）；`saveWorkflow` 成功后 `recordSaveTimeline()` 存快照到 `timeline/` 并记 QSettings 组 `workflowTimeline`（上限 30，超出连文件删除）；`refreshWorkflowTimelineModel` 用「今天/昨天/MM-dd HH:mm」生成简洁标题；`WorkbenchBridge::restoreTimeline` → `MainWindow::restoreTimelineEntry` 载入快照并入撤销栈；侧栏「进度记录」面板顶部新增「时间线」小节并提供「恢复」。
+节点紧凑化：`WorkflowNodeDelegate::buildParameterPanel` 边距 9/7→6/4、间距 8/6→6/3、label 宽 54→40 右对齐、面板最小宽 196→150；控件 min-height 24→22、padding 收紧、「...」按钮宽 34→26；`WorkflowNodePainter` 头部 38→32。
+顶栏去重：移除 `headerToolbar_` 右侧 预览/底部面板/设置 按钮与 `workbookToolbar_` 的 执行 按钮，命令统一走 QML 标题栏（设置仍在左侧活动栏/命令面板）。
+
+当前状态：
+编译通过（Qt 6.11）；CLI `--no-gui` 回归 exit 0；`qmllint` 无错；退出崩溃已真机验证为干净退出。设置/节点/顶栏/时间线/命令面板等视觉与交互需用户真机确认（本机 `screencapture` 与合成按键均被系统权限拦截，无法自动截图/录屏）。
+
+后续注意：
+时间线快照与手动 checkpoint 各自独立存储（`timeline` vs `workflowCheckpoints` 组），互不影响。`headerToolbar_` 仍保留居中文档标题与前进/后退，与 QML 标题栏存在轻度重复，如需进一步精简可后续再议。
