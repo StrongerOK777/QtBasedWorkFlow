@@ -119,6 +119,37 @@ Rectangle {
             onClicked: workbenchBridge.panelVisible = !workbenchBridge.panelVisible
         }
 
+        // 窗口控制按钮：macOS 复用左上角原生红绿灯，这里只在其它平台显示。
+        CommandButton {
+            iconName: "window-minimize"
+            tooltipText: "最小化"
+            visible: Qt.platform.os !== "osx"
+            onClicked: workbenchBridge.requestWindowMinimize()
+        }
+        CommandButton {
+            iconName: workbenchBridge.windowMaximized ? "window-restore" : "window-maximize"
+            tooltipText: workbenchBridge.windowMaximized ? "向下还原" : "最大化"
+            visible: Qt.platform.os !== "osx"
+            onClicked: workbenchBridge.requestWindowMaximizeToggle()
+        }
+        CommandButton {
+            iconName: "window-close"
+            tooltipText: "关闭"
+            visible: Qt.platform.os !== "osx"
+            onClicked: workbenchBridge.requestWindowClose()
+        }
+
         Item { Layout.preferredWidth: 8 }
+    }
+
+    // 标题栏空白处：拖动移动窗口、双击切换最大化。两枚 Handler 会让位给上方的
+    // 命令按钮和命令框（它们各自的 MouseArea 会先抢占指针），只在空白区域生效。
+    DragHandler {
+        target: null
+        onActiveChanged: if (active) workbenchBridge.requestWindowMove()
+    }
+    TapHandler {
+        gesturePolicy: TapHandler.DragThreshold
+        onDoubleTapped: workbenchBridge.requestWindowMaximizeToggle()
     }
 }

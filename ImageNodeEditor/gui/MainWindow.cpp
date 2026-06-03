@@ -89,6 +89,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <initializer_list>
 #include <limits>
 
 namespace {
@@ -933,6 +934,8 @@ MainWindow::MainWindow(QWidget* parent)
     runAnimationTimer_->setInterval(90);
     connect(runAnimationTimer_, &QTimer::timeout, this, [this] { updateRunAnimation(); });
     updateWindowTitle();
+    // 初始尺寸只是兜底；createLayout() 末尾会用 restoreGeometry 恢复上次的
+    // 窗口大小/最大化状态，仅当没有可恢复的几何信息时才保留这个默认值。
     resize(1280, 820);
     QSettings settings;
     uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
@@ -1531,7 +1534,10 @@ void MainWindow::createLayout()
     updateWindowTitle();
 
     QSettings settings;
-    restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
+    // 恢复上次窗口几何（含最大化状态）；恢复失败时维持构造里设置的默认尺寸。
+    if (!restoreGeometry(settings.value("mainWindow/geometry").toByteArray())) {
+        resize(1280, 820);
+    }
     const QByteArray workbenchState = settings.value("mainWindow/workbenchSplitter").toByteArray();
     const QByteArray editorState = settings.value("mainWindow/editorSplitter").toByteArray();
     if (workbenchState.isEmpty() || editorState.isEmpty() ||
@@ -4041,30 +4047,40 @@ void MainWindow::showSettingsDialog()
         auto* layout = new QVBoxLayout(page);
         layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(AppTheme::px(10, uiScale_));
+        // 让页面最小高度始终容纳换行提示标签的真实高度，配合每页 QScrollArea
+        // 竖向滚动，避免下方按钮/控件被画到提示文字上造成重叠。
+        layout->setSizeConstraint(QLayout::SetMinimumSize);
         return page;
     };
 
-    auto makeSection = [this](QWidget* page, const QString& titleText, const QString& hintText = {}) {
+    // 换行提示标签：垂直方向按内容占最小必要高度，并保证宽度受限时上报正确高度。
+    auto makeHintLabel = [](const QString& text) {
+        auto* hint = new QLabel(text);
+        hint->setObjectName("settingsHint");
+        hint->setWordWrap(true);
+        hint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+        return hint;
+    };
+
+    auto makeSection = [this, makeHintLabel](QWidget* page, const QString& titleText, const QString& hintText = {}) {
         auto* section = new QWidget;
         section->setObjectName("settingsSection");
         auto* sectionLayout = new QVBoxLayout(section);
         sectionLayout->setContentsMargins(AppTheme::px(14, uiScale_), AppTheme::px(12, uiScale_),
                                            AppTheme::px(14, uiScale_), AppTheme::px(12, uiScale_));
         sectionLayout->setSpacing(AppTheme::px(10, uiScale_));
+        sectionLayout->setSizeConstraint(QLayout::SetMinimumSize);
         auto* titleLabel = new QLabel(titleText);
         titleLabel->setObjectName("settingsSectionTitle");
         sectionLayout->addWidget(titleLabel);
         if (!hintText.isEmpty()) {
-            auto* hint = new QLabel(hintText);
-            hint->setObjectName("settingsHint");
-            hint->setWordWrap(true);
-            sectionLayout->addWidget(hint);
+            sectionLayout->addWidget(makeHintLabel(hintText));
         }
         page->layout()->addWidget(section);
         return sectionLayout;
     };
 
-    auto makeRow = [this](QLayout* parent, const QString& labelText, QWidget* control, const QString& hintText = {}) {
+    auto makeRow = [this, makeHintLabel](QLayout* parent, const QString& labelText, QWidget* control, const QString& hintText = {}) {
         auto* row = new QWidget;
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
@@ -4073,17 +4089,16 @@ void MainWindow::showSettingsDialog()
         auto* labelsLayout = new QVBoxLayout(labels);
         labelsLayout->setContentsMargins(0, 0, 0, 0);
         labelsLayout->setSpacing(2);
+        labelsLayout->setSizeConstraint(QLayout::SetMinimumSize);
         auto* label = new QLabel(labelText);
         label->setObjectName("settingsSectionTitle");
         labelsLayout->addWidget(label);
         if (!hintText.isEmpty()) {
-            auto* hint = new QLabel(hintText);
-            hint->setObjectName("settingsHint");
-            hint->setWordWrap(true);
-            labelsLayout->addWidget(hint);
+            labelsLayout->addWidget(makeHintLabel(hintText));
         }
+        // 控件顶部对齐，避免标签换行变高时控件被拉伸或错位。
         rowLayout->addWidget(labels, 1);
-        rowLayout->addWidget(control, 0);
+        rowLayout->addWidget(control, 0, Qt::AlignTop);
         parent->addWidget(row);
     };
 
@@ -4138,19 +4153,31 @@ void MainWindow::showSettingsDialog()
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用深色工作台风格，避免浅色主题和工作台视觉分叉。");
     makeRow(generalAppearance, "界面大小", uiScaleSpin, "控制菜单、侧栏、按钮和节点参数控件的整体缩放。");
+    // 设置页按钮统一尺寸策略：固定大小、显式最小高度，放进带末尾弹簧的行里，
+    // 既不会被挤压重叠，也不会随窗口拉伸变形。
+    auto styleActionButton = [this](QPushButton* button) {
+        button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        button->setMinimumHeight(AppTheme::px(36, uiScale_));
+        return button;
+    };
+    auto makeButtonRow = [this](std::initializer_list<QPushButton*> buttons) {
+        auto* rowWidget = new QWidget;
+        auto* rowLayout = new QHBoxLayout(rowWidget);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(AppTheme::px(8, uiScale_));
+        for (auto* button : buttons) {
+            rowLayout->addWidget(button);
+        }
+        rowLayout->addStretch(1);
+        return rowWidget;
+    };
+
     auto* generalActions = makeSection(generalPage, "常用操作", "快速触发常用命令；工作台区域布局相关设置在“工作台”页。");
-    auto* openCommandPaletteButton = new QPushButton("打开命令面板");
-    auto* organizeButton = new QPushButton("整理画布");
+    auto* openCommandPaletteButton = styleActionButton(new QPushButton("打开命令面板"));
+    auto* organizeButton = styleActionButton(new QPushButton("整理画布"));
     openCommandPaletteButton->setToolTip("打开命令、节点和问题快速搜索入口");
     organizeButton->setToolTip("整理画布并自动居中显示全部节点");
-    auto* actionsRow = new QWidget;
-    auto* actionsLayout = new QHBoxLayout(actionsRow);
-    actionsLayout->setContentsMargins(0, 0, 0, 0);
-    actionsLayout->setSpacing(AppTheme::px(8, uiScale_));
-    actionsLayout->addWidget(openCommandPaletteButton);
-    actionsLayout->addWidget(organizeButton);
-    actionsLayout->addStretch(1);
-    generalActions->addWidget(actionsRow);
+    generalActions->addWidget(makeButtonRow({openCommandPaletteButton, organizeButton}));
     generalPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* canvasPage = makePage();
@@ -4165,15 +4192,9 @@ void MainWindow::showSettingsDialog()
     areaSection->addWidget(bottomVisible);
     areaSection->addWidget(miniMapVisible);
     auto* workbenchActionSection = makeSection(workbenchPage, "布局", "把侧栏、预览和底部面板恢复到默认排布。");
-    auto* resetLayoutButton2 = new QPushButton("重置工作台布局");
+    auto* resetLayoutButton2 = styleActionButton(new QPushButton("重置工作台布局"));
     resetLayoutButton2->setToolTip("恢复侧栏、预览和底部面板的默认布局");
-    auto* workbenchActionRow = new QWidget;
-    auto* workbenchActionLayout = new QHBoxLayout(workbenchActionRow);
-    workbenchActionLayout->setContentsMargins(0, 0, 0, 0);
-    workbenchActionLayout->setSpacing(AppTheme::px(8, uiScale_));
-    workbenchActionLayout->addWidget(resetLayoutButton2);
-    workbenchActionLayout->addStretch(1);
-    workbenchActionSection->addWidget(workbenchActionRow);
+    workbenchActionSection->addWidget(makeButtonRow({resetLayoutButton2}));
     workbenchPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* shortcutsPage = makePage();
@@ -4248,9 +4269,9 @@ void MainWindow::showSettingsDialog()
         bottomVisible->setChecked(true);
         miniMapVisible->setChecked(true);
     });
-    auto* resetScaleButton = new QPushButton("重置为 100%");
+    auto* resetScaleButton = styleActionButton(new QPushButton("重置为 100%"));
     resetScaleButton->setToolTip("将工作台控件缩放恢复为 100%");
-    generalAppearance->addWidget(resetScaleButton);
+    generalAppearance->addWidget(makeButtonRow({resetScaleButton}));
     connect(resetScaleButton, &QPushButton::clicked, this, [uiScaleSpin] {
         uiScaleSpin->setValue(100.0);
     });
@@ -4470,6 +4491,25 @@ void MainWindow::showEvent(QShowEvent* event)
 {
     QMainWindow::showEvent(event);
     NativeWindowChrome::configure(this);
+    if (workbenchBridge_) {
+        workbenchBridge_->setWindowMaximized(isMaximized() || isFullScreen());
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange) {
+        // 把最大化/全屏状态同步给 QML 标题栏，让最大化按钮在「最大化」和「还原」图标间切换。
+        if (workbenchBridge_) {
+            workbenchBridge_->setWindowMaximized(isMaximized() || isFullScreen());
+        }
+        // macOS 在最大化/还原时可能重置窗口 styleMask，丢失 FullSizeContentView
+        // 而重新露出黑色原生标题条；这里在非最小化状态下重新套用自绘标题栏样式。
+        if (!isMinimized()) {
+            NativeWindowChrome::configure(this);
+        }
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

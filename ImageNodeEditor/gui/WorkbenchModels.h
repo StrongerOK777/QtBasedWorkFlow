@@ -272,6 +272,7 @@ class WorkbenchBridge final : public QObject {
     Q_PROPERTY(QString activeSidebar READ activeSidebar WRITE setActiveSidebar NOTIFY activeSidebarChanged)
     Q_PROPERTY(bool previewVisible READ previewVisible WRITE setPreviewVisible NOTIFY previewVisibleChanged)
     Q_PROPERTY(bool panelVisible READ panelVisible WRITE setPanelVisible NOTIFY panelVisibleChanged)
+    Q_PROPERTY(bool windowMaximized READ windowMaximized NOTIFY windowMaximizedChanged)
 public:
     WorkbenchBridge(WorkbenchCommandRegistry* commands, QuickAccessModel* quickAccess, QObject* parent = nullptr);
 
@@ -282,6 +283,7 @@ public:
     QString activeSidebar() const { return activeSidebar_; }
     bool previewVisible() const { return previewVisible_; }
     bool panelVisible() const { return panelVisible_; }
+    bool windowMaximized() const { return windowMaximized_; }
 
     void setDocumentTitle(const QString& title);
     void setStatusText(const QString& status);
@@ -290,6 +292,7 @@ public:
     void setActiveSidebar(const QString& sidebar);
     void setPreviewVisible(bool visible);
     void setPanelVisible(bool visible);
+    void setWindowMaximized(bool maximized);
 
     Q_INVOKABLE void createNode(const QString& typeName);
     Q_INVOKABLE void focusNode(const QString& nodeId);
@@ -317,6 +320,7 @@ signals:
     void activeSidebarChanged();
     void previewVisibleChanged();
     void panelVisibleChanged();
+    void windowMaximizedChanged();
     void nodeCreationRequested(const QString& typeName);
     void nodeFocusRequested(const QString& nodeId);
     void recentWorkflowRequested(const QString& path);
@@ -346,4 +350,5 @@ private:
     QString activeSidebar_ = "nodes";
     bool previewVisible_ = true;
     bool panelVisible_ = true;
+    bool windowMaximized_ = false;
 };

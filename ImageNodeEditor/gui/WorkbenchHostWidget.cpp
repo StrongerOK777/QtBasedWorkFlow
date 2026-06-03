@@ -3,9 +3,12 @@
 #include "gui/AppTheme.h"
 #include "gui/WorkbenchModels.h"
 
+#include <QApplication>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QQuickWidget>
 #include <QQmlContext>
 #include <QSplitter>
@@ -123,7 +126,29 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
         connect(bridge_, &WorkbenchBridge::quickAccessRequested, this, &WorkbenchHostWidget::showQuickAccess);
         connect(bridge_, &WorkbenchBridge::quickAccessFinished, quickAccessPopup_, &QWidget::hide);
     }
+    // 监听全局鼠标按下，实现命令面板「点击外部关闭」；this 析构时 Qt 自动移除过滤器。
+    if (qApp) {
+        qApp->installEventFilter(this);
+    }
     setUiScale(uiScale_);
+}
+
+bool WorkbenchHostWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonPress && quickAccessPopup_ && quickAccessPopup_->isVisible()) {
+        const auto* mouseEvent = static_cast<QMouseEvent*>(event);
+        const QPoint globalPos = mouseEvent->globalPosition().toPoint();
+        const QRect popupRect(quickAccessPopup_->mapToGlobal(QPoint(0, 0)), quickAccessPopup_->size());
+        if (!popupRect.contains(globalPos)) {
+            // 复用既有取消路径（与 Esc 一致）：触发 quickAccessFinished -> 隐藏浮层。
+            if (bridge_) {
+                bridge_->activateQuickAccess(-1);
+            } else {
+                quickAccessPopup_->hide();
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 QWidget* WorkbenchHostWidget::primarySidebar() const

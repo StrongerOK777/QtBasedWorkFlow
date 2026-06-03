@@ -41,6 +41,10 @@ public:
     // 避免退出时 QML 绑定访问悬空对象而报错。
     void teardownSurfaces();
 
+protected:
+    // 命令面板浮层打开时，监听全局鼠标按下：点击浮层之外即关闭。
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     QQuickWidget* makeQuickSurface(const QUrl& source, QWidget* parent);
 

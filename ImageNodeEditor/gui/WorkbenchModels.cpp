@@ -684,6 +684,15 @@ void WorkbenchBridge::setPanelVisible(bool visible)
     Q_EMIT panelVisibilityRequested(visible);
 }
 
+void WorkbenchBridge::setWindowMaximized(bool maximized)
+{
+    if (windowMaximized_ == maximized) {
+        return;
+    }
+    windowMaximized_ = maximized;
+    Q_EMIT windowMaximizedChanged();
+}
+
 void WorkbenchBridge::createNode(const QString& typeName)
 {
     if (!typeName.trimmed().isEmpty()) {
