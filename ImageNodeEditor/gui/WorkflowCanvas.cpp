@@ -20,6 +20,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsView>
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDropEvent>
@@ -280,6 +281,20 @@ protected:
         }
         clearDropPreview();
         QtNodes::GraphicsView::dropEvent(event);
+    }
+
+    void contextMenuEvent(QContextMenuEvent* event) override
+    {
+        // 让事件传到节点项，触发 nodeContextMenu 信号（弹 App 的中文节点菜单）；
+        // 故意只调用祖父类 QGraphicsView，不调用 QtNodes::GraphicsView::contextMenuEvent
+        // —— 后者在右键节点/组时还会弹出自带的英文 Copy/Cut 菜单，与中文菜单重叠。
+        QGraphicsView::contextMenuEvent(event);
+        // 仅当右键落在空白画布（没有任何 item）时，弹出 App 的中文场景菜单。
+        if (items(event->pos()).isEmpty()) {
+            if (auto* menu = nodeScene()->createSceneMenu(mapToScene(event->pos()))) {
+                menu->exec(event->globalPos());
+            }
+        }
     }
 
 private:

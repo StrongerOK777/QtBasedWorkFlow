@@ -38,9 +38,11 @@ Rectangle {
 
     StackLayout {
         anchors.fill: parent
-        currentIndex: workbenchBridge.activeSidebar === "workflow" ? 1
-                      : workbenchBridge.activeSidebar === "templates" ? 2
-                      : workbenchBridge.activeSidebar === "history" ? 3
+        // 子面板物理顺序为 0 节点库 / 1 方案库 / 2 进度记录 / 3 工作流 / 4 搜索 / 5 问题 / 6 运行诊断，
+        // currentIndex 必须与该顺序一致，否则会出现「点方案库显示进度记录」之类的错位。
+        currentIndex: workbenchBridge.activeSidebar === "templates" ? 1
+                      : workbenchBridge.activeSidebar === "history" ? 2
+                      : workbenchBridge.activeSidebar === "workflow" ? 3
                       : workbenchBridge.activeSidebar === "search" ? 4
                       : workbenchBridge.activeSidebar === "problems" ? 5
                       : workbenchBridge.activeSidebar === "diagnostics" ? 6 : 0

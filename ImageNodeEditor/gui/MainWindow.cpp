@@ -798,6 +798,55 @@ bool findPortInfo(const QSharedPointer<ImageNode>& node, const QString& portName
     return false;
 }
 
+// 按子图内部节点的「自由端口」（输入：无内部来源；输出：无内部去向）生成宏端口映射。
+// 端口顺序按内部节点位置（上→下、左→右）；macroPort 用基于内部 node:port 的稳定名，
+// 这样编辑子图后重算时，未改动端口对应的外部连线得以保留。
+void computeMacroPortMappings(const WorkflowGraph& subgraph,
+                              QVector<MacroPortMapping>& inputs,
+                              QVector<MacroPortMapping>& outputs)
+{
+    inputs.clear();
+    outputs.clear();
+    const auto portKey = [](const QString& node, const QString& port) {
+        return node + QChar(0x1f) + port;
+    };
+    QSet<QString> internallyFedInputs;
+    QSet<QString> internallyUsedOutputs;
+    for (const Edge& edge : subgraph.edges()) {
+        internallyFedInputs.insert(portKey(edge.toNode, edge.toPort));
+        internallyUsedOutputs.insert(portKey(edge.fromNode, edge.fromPort));
+    }
+    QVector<WorkflowNodeRecord> records = subgraph.nodes();
+    std::sort(records.begin(), records.end(), [](const WorkflowNodeRecord& a, const WorkflowNodeRecord& b) {
+        if (a.position.y() != b.position.y()) {
+            return a.position.y() < b.position.y();
+        }
+        return a.position.x() < b.position.x();
+    });
+    for (const WorkflowNodeRecord& record : records) {
+        if (!record.node) {
+            continue;
+        }
+        const QString label = record.node->displayName();
+        for (const PortInfo& port : record.node->inputPorts()) {
+            if (internallyFedInputs.contains(portKey(record.id, port.name))) {
+                continue;  // 内部已喂 → 非自由输入
+            }
+            inputs.append(MacroPortMapping{QStringLiteral("in:") + record.id + ":" + port.name,
+                                           label + "·" + (port.displayName.isEmpty() ? port.name : port.displayName),
+                                           record.id, port.name, port.type});
+        }
+        for (const PortInfo& port : record.node->outputPorts()) {
+            if (internallyUsedOutputs.contains(portKey(record.id, port.name))) {
+                continue;  // 内部已消费 → 非自由输出
+            }
+            outputs.append(MacroPortMapping{QStringLiteral("out:") + record.id + ":" + port.name,
+                                            label + "·" + (port.displayName.isEmpty() ? port.name : port.displayName),
+                                            record.id, port.name, port.type});
+        }
+    }
+}
+
 }
 
 class TerminalPanel final : public QWidget {
@@ -1828,41 +1877,59 @@ void MainWindow::encapsulateSelectionAsMacro()
         ++positionCount;
     }
 
-    QVector<Edge> incomingEdges;
-    QVector<Edge> outgoingEdges;
-    QMap<QString, QString> inputMacroPorts;
-    QMap<QString, QString> outputMacroPorts;
-    QVector<MacroPortMapping> inputMappings;
-    QVector<MacroPortMapping> outputMappings;
-
+    // 收集内部边（加入子图）与跨界边（外部<->选中）；端口稍后按子图自由端口统一生成。
+    QVector<Edge> incomingEdges;   // 外部 -> 选中（成为宏输入）
+    QVector<Edge> outgoingEdges;   // 选中 -> 外部（成为宏输出）
     for (const auto& edge : graph_.edges()) {
         const bool fromSelected = selectedSet.contains(edge.fromNode);
         const bool toSelected = selectedSet.contains(edge.toNode);
         if (fromSelected && toSelected) {
             subgraph.addEdge(edge);
         } else if (!fromSelected && toSelected) {
-            const QString key = QString("%1.%2").arg(edge.toNode, edge.toPort);
-            if (!inputMacroPorts.contains(key)) {
-                PortInfo port;
-                findPortInfo(graph_.node(edge.toNode), edge.toPort, PortDirection::Input, &port);
-                const QString macroPort = QString("in%1").arg(inputMappings.size() + 1);
-                inputMacroPorts.insert(key, macroPort);
-                inputMappings.append(MacroPortMapping{macroPort, port.displayName.isEmpty() ? macroPort : port.displayName,
-                                                      edge.toNode, edge.toPort, port.type});
-            }
             incomingEdges.append(edge);
         } else if (fromSelected && !toSelected) {
-            const QString key = QString("%1.%2").arg(edge.fromNode, edge.fromPort);
-            if (!outputMacroPorts.contains(key)) {
-                PortInfo port;
-                findPortInfo(graph_.node(edge.fromNode), edge.fromPort, PortDirection::Output, &port);
-                const QString macroPort = QString("out%1").arg(outputMappings.size() + 1);
-                outputMacroPorts.insert(key, macroPort);
-                outputMappings.append(MacroPortMapping{macroPort, port.displayName.isEmpty() ? macroPort : port.displayName,
-                                                       edge.fromNode, edge.fromPort, port.type});
-            }
             outgoingEdges.append(edge);
         }
+    }
+
+    // 宏端口 = 子图的自由端口（数量与顺序由内部节点决定）。
+    QVector<MacroPortMapping> inputMappings;
+    QVector<MacroPortMapping> outputMappings;
+    computeMacroPortMappings(subgraph, inputMappings, outputMappings);
+
+    const auto portKey = [](const QString& node, const QString& port) { return node + QChar(0x1f) + port; };
+    QMap<QString, QString> inputMacroPorts;
+    QMap<QString, QString> outputMacroPorts;
+    for (const auto& mapping : inputMappings) {
+        inputMacroPorts.insert(portKey(mapping.internalNode, mapping.internalPort), mapping.macroPort);
+    }
+    for (const auto& mapping : outputMappings) {
+        outputMacroPorts.insert(portKey(mapping.internalNode, mapping.internalPort), mapping.macroPort);
+    }
+
+    // 跨界连线对应的内部端口若没被列为自由端口（如输出同时被内部消费），补一个宏端口，
+    // 保证封装后已有的外部连线不会丢。
+    auto ensureMacroPort = [&](const QString& node, const QString& portName, PortDirection direction) {
+        auto& lookup = direction == PortDirection::Input ? inputMacroPorts : outputMacroPorts;
+        const QString key = portKey(node, portName);
+        if (lookup.contains(key)) {
+            return;
+        }
+        PortInfo info;
+        findPortInfo(graph_.node(node), portName, direction, &info);
+        const QString label = graph_.node(node) ? graph_.node(node)->displayName() : QString();
+        const QString macroPort = (direction == PortDirection::Input ? QStringLiteral("in:") : QStringLiteral("out:"))
+                                  + node + ":" + portName;
+        lookup.insert(key, macroPort);
+        MacroPortMapping mapping{macroPort, label + "·" + (info.displayName.isEmpty() ? portName : info.displayName),
+                                 node, portName, info.type};
+        (direction == PortDirection::Input ? inputMappings : outputMappings).append(mapping);
+    };
+    for (const auto& edge : incomingEdges) {
+        ensureMacroPort(edge.toNode, edge.toPort, PortDirection::Input);
+    }
+    for (const auto& edge : outgoingEdges) {
+        ensureMacroPort(edge.fromNode, edge.fromPort, PortDirection::Output);
     }
 
     auto macro = QSharedPointer<MacroNode>(new MacroNode);
@@ -1878,12 +1945,10 @@ void MainWindow::encapsulateSelectionAsMacro()
     const QPointF macroPosition = positionCount > 0 ? positionSum / qreal(positionCount) : QPointF{};
     const QString macroId = graph_.addNode(macro, findAvailableNodePosition(macroPosition));
     for (const auto& edge : incomingEdges) {
-        const QString key = QString("%1.%2").arg(edge.toNode, edge.toPort);
-        graph_.addEdge(Edge{edge.fromNode, edge.fromPort, macroId, inputMacroPorts.value(key)});
+        graph_.addEdge(Edge{edge.fromNode, edge.fromPort, macroId, inputMacroPorts.value(portKey(edge.toNode, edge.toPort))});
     }
     for (const auto& edge : outgoingEdges) {
-        const QString key = QString("%1.%2").arg(edge.fromNode, edge.fromPort);
-        graph_.addEdge(Edge{macroId, outputMacroPorts.value(key), edge.toNode, edge.toPort});
+        graph_.addEdge(Edge{macroId, outputMacroPorts.value(portKey(edge.fromNode, edge.fromPort)), edge.toNode, edge.toPort});
     }
 
     selectedNodeId_ = macroId;
@@ -2154,8 +2219,32 @@ void MainWindow::leaveMacroNode()
     auto macro = dynamic_cast<MacroNode*>(context.graph.node(context.macroNodeId).data());
     if (macro) {
         macro->setSubgraph(WorkflowCommands::cloneGraph(graph_));
+        // 子图可能被增删节点：按新的自由端口重算宏端口（稳定名保留未变端口的外部连线）。
+        QVector<MacroPortMapping> inMappings;
+        QVector<MacroPortMapping> outMappings;
+        computeMacroPortMappings(macro->subgraph(), inMappings, outMappings);
+        macro->setInputMappings(inMappings);
+        macro->setOutputMappings(outMappings);
     }
     graph_ = WorkflowCommands::cloneGraph(context.graph);
+    // 裁掉父图中引用了已消失宏端口的连线（内部节点/端口被删导致端口消失时）。
+    if (macro) {
+        QSet<QString> validInputs;
+        QSet<QString> validOutputs;
+        for (const auto& port : macro->inputPorts()) {
+            validInputs.insert(port.name);
+        }
+        for (const auto& port : macro->outputPorts()) {
+            validOutputs.insert(port.name);
+        }
+        auto& edgeList = graph_.edges();
+        edgeList.erase(std::remove_if(edgeList.begin(), edgeList.end(), [&](const Edge& edge) {
+            if (edge.toNode == context.macroNodeId && !validInputs.contains(edge.toPort)) {
+                return true;
+            }
+            return edge.fromNode == context.macroNodeId && !validOutputs.contains(edge.fromPort);
+        }), edgeList.end());
+    }
     selectedNodeId_ = context.macroNodeId;
     lastResult_ = {};
     setPreviewImage({});
