@@ -684,6 +684,15 @@ void WorkbenchBridge::setPanelVisible(bool visible)
     Q_EMIT panelVisibilityRequested(visible);
 }
 
+void WorkbenchBridge::setWindowMaximized(bool maximized)
+{
+    if (windowMaximized_ == maximized) {
+        return;
+    }
+    windowMaximized_ = maximized;
+    Q_EMIT windowMaximizedChanged();
+}
+
 void WorkbenchBridge::createNode(const QString& typeName)
 {
     if (!typeName.trimmed().isEmpty()) {
@@ -796,6 +805,13 @@ void WorkbenchBridge::branchFromCheckpoint(const QString& checkpointId)
 {
     if (!checkpointId.trimmed().isEmpty()) {
         Q_EMIT checkpointBranchRequested(checkpointId);
+    }
+}
+
+void WorkbenchBridge::restoreTimeline(const QString& timelineId)
+{
+    if (!timelineId.trimmed().isEmpty()) {
+        Q_EMIT timelineRestoreRequested(timelineId);
     }
 }
 

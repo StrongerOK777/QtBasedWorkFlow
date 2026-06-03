@@ -29,6 +29,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QEvent>
+#include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -89,6 +90,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <initializer_list>
 #include <limits>
 
 namespace {
@@ -855,6 +857,15 @@ public:
         startShell();
     }
 
+    ~TerminalPanel() override
+    {
+        // 退出时先结束内嵌 shell 子进程，避免 QProcess 析构时仍在运行而报警告。
+        if (process_.state() != QProcess::NotRunning) {
+            process_.kill();
+            process_.waitForFinished(500);
+        }
+    }
+
     void restartShell()
     {
         if (process_.state() != QProcess::NotRunning) {
@@ -933,6 +944,8 @@ MainWindow::MainWindow(QWidget* parent)
     runAnimationTimer_->setInterval(90);
     connect(runAnimationTimer_, &QTimer::timeout, this, [this] { updateRunAnimation(); });
     updateWindowTitle();
+    // 初始尺寸只是兜底；createLayout() 末尾会用 restoreGeometry 恢复上次的
+    // 窗口大小/最大化状态，仅当没有可恢复的几何信息时才保留这个默认值。
     resize(1280, 820);
     QSettings settings;
     uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
@@ -952,6 +965,14 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+    shuttingDown_ = true;
+    // 关键：先断开撤销栈信号。否则 ~QWidget 的 deleteChildren() 删除 undoStack_ 时，
+    // QUndoStack::clear() 会发 indexChanged 触发 updateWindowTitle ->
+    // syncCurrentWorkbookPage -> graphForPersistence，访问已析构的成员而崩溃
+    // （仅在退出时撤销栈非空，即“有未保存改动”时复现）。
+    if (undoStack_) {
+        undoStack_->disconnect();
+    }
     ++executionGeneration_;
     ++livePreviewGeneration_;
     if (livePreviewTimer_) {
@@ -1347,6 +1368,7 @@ void MainWindow::createLayout()
     problemModel_ = new ProblemModel(this);
     workflowTemplateModel_ = new WorkflowTemplateModel(this);
     workflowCheckpointModel_ = new WorkflowCheckpointModel(this);
+    workflowTimelineModel_ = new WorkflowCheckpointModel(this);
     quickAccessModel_ = new QuickAccessModel(workbenchCommands_, nodeCatalogModel_, workflowOutlineModel_, problemModel_, this);
     workbenchBridge_ = new WorkbenchBridge(workbenchCommands_, quickAccessModel_, this);
     workbenchBridge_->setPreviewVisible(previewToggleAction_->isChecked());
@@ -1358,6 +1380,7 @@ void MainWindow::createLayout()
                                              problemModel_,
                                              workflowTemplateModel_,
                                              workflowCheckpointModel_,
+                                             workflowTimelineModel_,
                                              quickAccessModel_,
                                              viewContainer,
                                              preview_,
@@ -1396,6 +1419,8 @@ void MainWindow::createLayout()
             this, &MainWindow::restoreWorkflowCheckpoint);
     connect(workbenchBridge_, &WorkbenchBridge::checkpointBranchRequested,
             this, &MainWindow::branchFromWorkflowCheckpoint);
+    connect(workbenchBridge_, &WorkbenchBridge::timelineRestoreRequested,
+            this, &MainWindow::restoreTimelineEntry);
     connect(workbenchBridge_, &WorkbenchBridge::windowMoveRequested, this, [this] {
         if (auto* handle = windowHandle()) {
             handle->startSystemMove();
@@ -1411,6 +1436,7 @@ void MainWindow::createLayout()
     refreshRecentWorkflowModel();
     refreshWorkflowTemplateModel();
     refreshWorkflowCheckpointModel();
+    refreshWorkflowTimelineModel();
 
     headerToolbar_ = addToolBar("窗口标题层");
     headerToolbar_->setObjectName("headerToolbar");
@@ -1467,20 +1493,9 @@ void MainWindow::createLayout()
     titleLayout->addWidget(forwardButton);
     headerLayout->addWidget(titleCluster, 0, 1, Qt::AlignCenter);
 
-    auto* rightActions = new QWidget;
-    auto* rightLayout = new QHBoxLayout(rightActions);
-    rightLayout->setContentsMargins(0, 0, 0, 0);
-    rightLayout->setSpacing(0);
-    auto addHeaderAction = [rightLayout](QAction* action) {
-        auto* button = new QToolButton;
-        button->setDefaultAction(action);
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        rightLayout->addWidget(button);
-    };
-    addHeaderAction(previewToggleAction_);
-    addHeaderAction(bottomToggleAction_);
-    addHeaderAction(settingsAction_);
-    headerLayout->addWidget(rightActions, 0, 2, Qt::AlignRight);
+    // 预览/底部面板/设置 等按钮统一收敛到 QML 顶部标题栏与左侧活动栏，
+    // 不再在窗口标题层右侧重复放置（右上角去重）。保留空列以维持标题居中。
+    headerLayout->setColumnStretch(2, 1);
     headerToolbar_->addWidget(header);
     insertToolBar(mainToolbar_, headerToolbar_);
     insertToolBarBreak(mainToolbar_);
@@ -1525,13 +1540,16 @@ void MainWindow::createLayout()
     auto* workbookSpacer = new QWidget;
     workbookSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     workbookToolbar_->addWidget(workbookSpacer);
-    workbookToolbar_->addAction(runAction_);
+    // 「执行」按钮只保留在 QML 顶部标题栏，工作簿栏不再重复放置（右上角去重）。
     installDelayedTooltips(workbookToolbar_);
     updateNavigationActions();
     updateWindowTitle();
 
     QSettings settings;
-    restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
+    // 恢复上次窗口几何（含最大化状态）；恢复失败时维持构造里设置的默认尺寸。
+    if (!restoreGeometry(settings.value("mainWindow/geometry").toByteArray())) {
+        resize(1280, 820);
+    }
     const QByteArray workbenchState = settings.value("mainWindow/workbenchSplitter").toByteArray();
     const QByteArray editorState = settings.value("mainWindow/editorSplitter").toByteArray();
     if (workbenchState.isEmpty() || editorState.isEmpty() ||
@@ -3246,6 +3264,7 @@ bool MainWindow::saveWorkflow()
     }
     updateWindowTitle();
     rememberRecentWorkflow(currentFile_);
+    recordSaveTimeline();
     appendLog(QString("已保存：%1").arg(currentFile_));
     return true;
 }
@@ -3343,6 +3362,114 @@ void MainWindow::refreshWorkflowCheckpointModel()
     }
     settings.endGroup();
     workflowCheckpointModel_->setEntries(entries);
+}
+
+void MainWindow::recordSaveTimeline()
+{
+    if (!workflowTimelineModel_) {
+        return;
+    }
+    // 每次保存自动存一份快照并记一条时间线，供「进度记录」面板按时间回溯/恢复。
+    const QString id = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
+    const QString path = workflowSnapshotPath("timeline", id);
+    WorkflowSerializer serializer;
+    if (serializer.saveFile(graphForPersistence(), path).isFail()) {
+        return;  // 时间线属辅助记录，写失败不打断保存主流程
+    }
+    QSettings settings;
+    settings.beginGroup("workflowTimeline");
+    QStringList ids = settings.value("ids").toStringList();
+    ids.prepend(id);
+    while (ids.size() > 30) {
+        const QString stale = ids.takeLast();
+        const QString stalePath = settings.value("file/" + stale).toString();
+        if (!stalePath.isEmpty()) {
+            QFile::remove(stalePath);
+        }
+        settings.remove("file/" + stale);
+        settings.remove("label/" + stale);
+    }
+    settings.setValue("ids", ids);
+    settings.setValue("file/" + id, path);
+    settings.setValue("label/" + id, QFileInfo(currentFile_).fileName());
+    settings.endGroup();
+    refreshWorkflowTimelineModel();
+}
+
+void MainWindow::refreshWorkflowTimelineModel()
+{
+    if (!workflowTimelineModel_) {
+        return;
+    }
+    QVector<WorkflowCheckpointModel::Entry> entries;
+    QSettings settings;
+    settings.beginGroup("workflowTimeline");
+    const QStringList ids = settings.value("ids").toStringList();
+    const QDate today = QDate::currentDate();
+    for (const QString& id : ids) {
+        const QString path = settings.value("file/" + id).toString();
+        if (!QFileInfo::exists(path)) {
+            continue;
+        }
+        const QDateTime when = QFileInfo(path).lastModified();
+        QString timeLabel;
+        if (when.date() == today) {
+            timeLabel = QString("今天 %1").arg(when.toString("HH:mm"));
+        } else if (when.date() == today.addDays(-1)) {
+            timeLabel = QString("昨天 %1").arg(when.toString("HH:mm"));
+        } else {
+            timeLabel = when.toString("MM-dd HH:mm");
+        }
+        const QString label = settings.value("label/" + id).toString();
+        const QString detail = label.isEmpty()
+                                   ? QString("保存于 %1").arg(when.toString("HH:mm:ss"))
+                                   : QString("%1 · %2").arg(label, when.toString("HH:mm:ss"));
+        entries.append({id, timeLabel, detail, QString()});
+    }
+    settings.endGroup();
+    workflowTimelineModel_->setEntries(entries);
+}
+
+void MainWindow::restoreTimelineEntry(const QString& timelineId)
+{
+    if (rejectGraphReplacementWhileBusy("恢复到此次保存")) {
+        return;
+    }
+    QSettings settings;
+    settings.beginGroup("workflowTimeline");
+    const QString path = settings.value("file/" + timelineId).toString();
+    settings.endGroup();
+    if (path.isEmpty() || !QFileInfo::exists(path)) {
+        return;
+    }
+    if (QMessageBox::question(this, "恢复到此次保存",
+                              "将用这次保存的内容覆盖当前画布，可通过撤销返回。是否继续？",
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    WorkflowSerializer serializer;
+    auto loaded = serializer.loadFile(path);
+    if (loaded.isFail()) {
+        appendProblem(QString("恢复失败：%1").arg(loaded.error()));
+        QMessageBox::warning(this, "恢复失败", loaded.error());
+        return;
+    }
+    const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
+    const QString selectedBefore = selectedNodeId_;
+    graph_ = loaded.value();
+    graphStack_.clear();
+    forwardMacroHistory_.clear();
+    selectedNodeId_.clear();
+    engine_.clearCache();
+    lastResult_ = {};
+    setPreviewImage({});
+    resetNodeRunStates();
+    updateNavigationActions();
+    rebuildScene();
+    rebuildProperties();
+    pushGraphEditCommand("恢复时间线保存点", before, selectedBefore,
+                         WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
+    appendLog("已从时间线恢复一次保存");
 }
 
 void MainWindow::saveCurrentWorkflowAsTemplate()
@@ -3793,6 +3920,9 @@ void MainWindow::refreshWorkbookTabs()
 
 void MainWindow::updateWindowTitle()
 {
+    if (shuttingDown_) {
+        return;  // 退出/析构期不再刷新标题，避免回调访问半析构状态
+    }
     const QString fileName = currentFile_.isEmpty() ? "未命名" : QFileInfo(currentFile_).fileName();
     const QString dirty = currentWorkbookDirty() ? "*" : "";
     const QString title = QString("%1%2").arg(fileName, dirty);
@@ -4027,10 +4157,16 @@ void MainWindow::showSettingsDialog()
     auto* nav = new QListWidget;
     nav->setObjectName("settingsNav");
     nav->setFixedWidth(AppTheme::px(180, uiScale_));
-    nav->addItem("常用");
-    nav->addItem("画布");
-    nav->addItem("工作台");
-    nav->addItem("快捷键");
+    // 给每个导航项显式行高并统一尺寸，不再只靠样式表 min-height，杜绝导航项相互挤叠。
+    nav->setUniformItemSizes(true);
+    nav->setSpacing(AppTheme::px(2, uiScale_));
+    nav->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    for (const QString& navName : {QStringLiteral("常用"), QStringLiteral("画布"),
+                                   QStringLiteral("工作台"), QStringLiteral("快捷键")}) {
+        auto* navItem = new QListWidgetItem(navName, nav);
+        navItem->setSizeHint(QSize(0, AppTheme::px(34, uiScale_)));
+    }
     nav->setCurrentRow(0);
 
     auto* pages = new QStackedWidget;
@@ -4038,33 +4174,47 @@ void MainWindow::showSettingsDialog()
 
     auto makePage = [this] {
         auto* page = new QWidget;
+        // 用实色背景绘制整页，避免切换分页时旧内容透出形成半透明残影。
+        page->setAttribute(Qt::WA_StyledBackground, true);
         auto* layout = new QVBoxLayout(page);
         layout->setContentsMargins(0, 0, 0, 0);
         layout->setSpacing(AppTheme::px(10, uiScale_));
+        // 让页面最小高度始终容纳换行提示标签的真实高度，配合每页 QScrollArea
+        // 竖向滚动，避免下方按钮/控件被画到提示文字上造成重叠。
+        layout->setSizeConstraint(QLayout::SetMinimumSize);
         return page;
     };
 
-    auto makeSection = [this](QWidget* page, const QString& titleText, const QString& hintText = {}) {
+    // 换行提示标签：垂直方向按内容占最小必要高度，并保证宽度受限时上报正确高度。
+    auto makeHintLabel = [](const QString& text) {
+        auto* hint = new QLabel(text);
+        hint->setObjectName("settingsHint");
+        hint->setWordWrap(true);
+        hint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+        return hint;
+    };
+
+    auto makeSection = [this, makeHintLabel](QWidget* page, const QString& titleText, const QString& hintText = {}) {
         auto* section = new QWidget;
         section->setObjectName("settingsSection");
+        // 让 #settingsSection 的实色背景+边框完整绘制整块，杜绝只画半截的灰条。
+        section->setAttribute(Qt::WA_StyledBackground, true);
         auto* sectionLayout = new QVBoxLayout(section);
         sectionLayout->setContentsMargins(AppTheme::px(14, uiScale_), AppTheme::px(12, uiScale_),
                                            AppTheme::px(14, uiScale_), AppTheme::px(12, uiScale_));
         sectionLayout->setSpacing(AppTheme::px(10, uiScale_));
+        sectionLayout->setSizeConstraint(QLayout::SetMinimumSize);
         auto* titleLabel = new QLabel(titleText);
         titleLabel->setObjectName("settingsSectionTitle");
         sectionLayout->addWidget(titleLabel);
         if (!hintText.isEmpty()) {
-            auto* hint = new QLabel(hintText);
-            hint->setObjectName("settingsHint");
-            hint->setWordWrap(true);
-            sectionLayout->addWidget(hint);
+            sectionLayout->addWidget(makeHintLabel(hintText));
         }
         page->layout()->addWidget(section);
         return sectionLayout;
     };
 
-    auto makeRow = [this](QLayout* parent, const QString& labelText, QWidget* control, const QString& hintText = {}) {
+    auto makeRow = [this, makeHintLabel](QLayout* parent, const QString& labelText, QWidget* control, const QString& hintText = {}) {
         auto* row = new QWidget;
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
@@ -4073,17 +4223,16 @@ void MainWindow::showSettingsDialog()
         auto* labelsLayout = new QVBoxLayout(labels);
         labelsLayout->setContentsMargins(0, 0, 0, 0);
         labelsLayout->setSpacing(2);
+        labelsLayout->setSizeConstraint(QLayout::SetMinimumSize);
         auto* label = new QLabel(labelText);
         label->setObjectName("settingsSectionTitle");
         labelsLayout->addWidget(label);
         if (!hintText.isEmpty()) {
-            auto* hint = new QLabel(hintText);
-            hint->setObjectName("settingsHint");
-            hint->setWordWrap(true);
-            labelsLayout->addWidget(hint);
+            labelsLayout->addWidget(makeHintLabel(hintText));
         }
+        // 控件顶部对齐，避免标签换行变高时控件被拉伸或错位。
         rowLayout->addWidget(labels, 1);
-        rowLayout->addWidget(control, 0);
+        rowLayout->addWidget(control, 0, Qt::AlignTop);
         parent->addWidget(row);
     };
 
@@ -4138,19 +4287,31 @@ void MainWindow::showSettingsDialog()
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用深色工作台风格，避免浅色主题和工作台视觉分叉。");
     makeRow(generalAppearance, "界面大小", uiScaleSpin, "控制菜单、侧栏、按钮和节点参数控件的整体缩放。");
+    // 设置页按钮统一尺寸策略：固定大小、显式最小高度，放进带末尾弹簧的行里，
+    // 既不会被挤压重叠，也不会随窗口拉伸变形。
+    auto styleActionButton = [this](QPushButton* button) {
+        button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        button->setMinimumHeight(AppTheme::px(36, uiScale_));
+        return button;
+    };
+    auto makeButtonRow = [this](std::initializer_list<QPushButton*> buttons) {
+        auto* rowWidget = new QWidget;
+        auto* rowLayout = new QHBoxLayout(rowWidget);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(AppTheme::px(8, uiScale_));
+        for (auto* button : buttons) {
+            rowLayout->addWidget(button);
+        }
+        rowLayout->addStretch(1);
+        return rowWidget;
+    };
+
     auto* generalActions = makeSection(generalPage, "常用操作", "快速触发常用命令；工作台区域布局相关设置在“工作台”页。");
-    auto* openCommandPaletteButton = new QPushButton("打开命令面板");
-    auto* organizeButton = new QPushButton("整理画布");
+    auto* openCommandPaletteButton = styleActionButton(new QPushButton("打开命令面板"));
+    auto* organizeButton = styleActionButton(new QPushButton("整理画布"));
     openCommandPaletteButton->setToolTip("打开命令、节点和问题快速搜索入口");
     organizeButton->setToolTip("整理画布并自动居中显示全部节点");
-    auto* actionsRow = new QWidget;
-    auto* actionsLayout = new QHBoxLayout(actionsRow);
-    actionsLayout->setContentsMargins(0, 0, 0, 0);
-    actionsLayout->setSpacing(AppTheme::px(8, uiScale_));
-    actionsLayout->addWidget(openCommandPaletteButton);
-    actionsLayout->addWidget(organizeButton);
-    actionsLayout->addStretch(1);
-    generalActions->addWidget(actionsRow);
+    generalActions->addWidget(makeButtonRow({openCommandPaletteButton, organizeButton}));
     generalPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* canvasPage = makePage();
@@ -4165,15 +4326,9 @@ void MainWindow::showSettingsDialog()
     areaSection->addWidget(bottomVisible);
     areaSection->addWidget(miniMapVisible);
     auto* workbenchActionSection = makeSection(workbenchPage, "布局", "把侧栏、预览和底部面板恢复到默认排布。");
-    auto* resetLayoutButton2 = new QPushButton("重置工作台布局");
+    auto* resetLayoutButton2 = styleActionButton(new QPushButton("重置工作台布局"));
     resetLayoutButton2->setToolTip("恢复侧栏、预览和底部面板的默认布局");
-    auto* workbenchActionRow = new QWidget;
-    auto* workbenchActionLayout = new QHBoxLayout(workbenchActionRow);
-    workbenchActionLayout->setContentsMargins(0, 0, 0, 0);
-    workbenchActionLayout->setSpacing(AppTheme::px(8, uiScale_));
-    workbenchActionLayout->addWidget(resetLayoutButton2);
-    workbenchActionLayout->addStretch(1);
-    workbenchActionSection->addWidget(workbenchActionRow);
+    workbenchActionSection->addWidget(makeButtonRow({resetLayoutButton2}));
     workbenchPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* shortcutsPage = makePage();
@@ -4248,9 +4403,9 @@ void MainWindow::showSettingsDialog()
         bottomVisible->setChecked(true);
         miniMapVisible->setChecked(true);
     });
-    auto* resetScaleButton = new QPushButton("重置为 100%");
+    auto* resetScaleButton = styleActionButton(new QPushButton("重置为 100%"));
     resetScaleButton->setToolTip("将工作台控件缩放恢复为 100%");
-    generalAppearance->addWidget(resetScaleButton);
+    generalAppearance->addWidget(makeButtonRow({resetScaleButton}));
     connect(resetScaleButton, &QPushButton::clicked, this, [uiScaleSpin] {
         uiScaleSpin->setValue(100.0);
     });
@@ -4469,7 +4624,23 @@ void MainWindow::applyUiScale()
 void MainWindow::showEvent(QShowEvent* event)
 {
     QMainWindow::showEvent(event);
+    if (shuttingDown_) {
+        return;
+    }
     NativeWindowChrome::configure(this);
+    if (workbenchBridge_) {
+        workbenchBridge_->setWindowMaximized(isMaximized() || isFullScreen());
+    }
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    // 退出/析构期不再触碰 QML 桥或原生窗口，避免访问悬空对象崩溃。
+    if (event->type() == QEvent::WindowStateChange && !shuttingDown_ && isVisible() && workbenchBridge_) {
+        // 把最大化/全屏状态同步给 QML 标题栏，让最大化按钮在「最大化」和「还原」图标间切换。
+        workbenchBridge_->setWindowMaximized(isMaximized() || isFullScreen());
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -4478,6 +4649,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
         event->ignore();
         return;
     }
+    shuttingDown_ = true;
     // 关闭后到来的后台执行/实时预览回调按 generation 检查丢弃，避免回调进入正在销毁的窗口。
     ++executionGeneration_;
     ++livePreviewGeneration_;

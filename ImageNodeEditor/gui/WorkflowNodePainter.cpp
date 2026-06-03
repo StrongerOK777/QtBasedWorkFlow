@@ -71,7 +71,7 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     const QColor categoryColor = stateAccent(delegate, visual.accent);
     const QRectF shadowRect = body.translated(0, 4);
     const QRectF borderRect = body.adjusted(0.5, 0.5, -0.5, -0.5);
-    const QRectF headerRect(body.left(), body.top(), body.width(), 38.0);
+    const QRectF headerRect(body.left(), body.top(), body.width(), 32.0);
     const bool selected = graphicsNode.isSelected();
 
     painter->save();

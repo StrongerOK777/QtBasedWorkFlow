@@ -367,7 +367,15 @@ WorkflowCanvas::WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbac
     view_->setScaleRange(0.25, 3.0);
 }
 
-WorkflowCanvas::~WorkflowCanvas() = default;
+WorkflowCanvas::~WorkflowCanvas()
+{
+    // 析构时成员 scene_ 会逐个删除 NodeGraphicsObject 并触发 selectionChanged 等信号；
+    // 此时仍连着的 updateExpandedNodes 回调会访问正在析构的 scene（unique_ptr 析构不会
+    // 像 reset() 那样先置空指针，故 if(!scene_) 守卫失效）而崩溃。先断开 scene 的全部连接。
+    if (scene_) {
+        scene_->disconnect();
+    }
+}
 
 QGraphicsView* WorkflowCanvas::view() const
 {

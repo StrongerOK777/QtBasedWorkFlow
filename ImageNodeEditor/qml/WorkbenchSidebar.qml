@@ -66,6 +66,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     delegate: Rectangle {
+                        required property int index
                         required property string typeName
                         required property string title
                         required property string category
@@ -73,7 +74,8 @@ Rectangle {
                         required property string iconName
                         width: ListView.view.width
                         height: 46
-                        color: mouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: ListView.isCurrentItem ? "#094771"
+                               : mouse.containsMouse ? "#2a2d2e" : "transparent"
                         property real pressX: 0
                         property real pressY: 0
                         property bool dragStarted: false
@@ -135,15 +137,14 @@ Rectangle {
                                 }
                             }
                             onClicked: {
-                                if (!parent.dragStarted)
-                                    workbenchBridge.createNode(typeName)
+                                // 单击只选中高亮，不再直接加节点；加节点请拖拽到画布。
+                                parent.ListView.view.currentIndex = parent.index
                             }
-                            onDoubleClicked: workbenchBridge.createNode(typeName)
                         }
                         WorkbenchTooltip {
                             sourceItem: mouse
                             active: mouse.containsMouse
-                            tooltipText: "拖拽到画布创建：" + title
+                            tooltipText: "拖拽到画布添加：" + title
                             placement: "right"
                         }
                     }
@@ -285,6 +286,87 @@ Rectangle {
                     color: "#969696"
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                SidebarHeader {
+                    text: "时间线"
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: "每次保存（Ctrl+S）自动记录，可点「恢复」回到那次保存。"
+                    color: "#969696"
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                ResultList {
+                    model: workflowTimelineModel
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 156
+                    delegate: Rectangle {
+                        required property string checkpointId
+                        required property string title
+                        required property string detail
+                        width: ListView.view.width
+                        height: 50
+                        color: timelineRowMouse.containsMouse ? "#2a2d2e" : "transparent"
+                        Column {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.right: timelineRestore.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            Text {
+                                text: title
+                                color: "#dddddd"
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                            Text {
+                                text: detail
+                                color: "#969696"
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                        }
+                        Rectangle {
+                            id: timelineRestore
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 52
+                            height: 24
+                            color: timelineRestoreMouse.containsMouse ? "#0e639c" : "#313131"
+                            border.color: timelineRestoreMouse.containsMouse ? "#3794ff" : "#454545"
+                            Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
+                            MouseArea {
+                                id: timelineRestoreMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: workbenchBridge.restoreTimeline(checkpointId)
+                            }
+                        }
+                        MouseArea {
+                            id: timelineRowMouse
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            hoverEnabled: true
+                        }
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: "#333333"
+                }
+
+                SidebarHeader {
+                    text: "保存点"
                     Layout.fillWidth: true
                 }
                 Rectangle {

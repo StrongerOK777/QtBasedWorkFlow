@@ -224,12 +224,12 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
             border-radius: 0px;
         }
         QLabel {
-            color: #969696;
-            font-weight: 600;
+            color: #9d9d9d;
+            font-weight: 500;
         }
         QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-            min-height: 24px;
-            padding: 2px 6px;
+            min-height: 22px;
+            padding: 1px 5px;
             color: #cccccc;
             background: #3c3c3c;
             border: 1px solid #454545;
@@ -254,11 +254,11 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
             border-color: #3794ff;
         }
         QPushButton {
-            min-height: 24px;
+            min-height: 22px;
             color: #cccccc;
             background: #2d2d2d;
             border: 1px solid #454545;
-            padding: 2px 8px;
+            padding: 1px 6px;
         }
         QPushButton:hover {
             background: #3c3c3c;
@@ -267,16 +267,17 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
     )"));
 
     auto* form = new QFormLayout(panel);
-    form->setContentsMargins(AppTheme::px(9, uiScale_), AppTheme::px(7, uiScale_),
-                             AppTheme::px(9, uiScale_), AppTheme::px(7, uiScale_));
-    form->setHorizontalSpacing(AppTheme::px(8, uiScale_));
-    form->setVerticalSpacing(AppTheme::px(6, uiScale_));
+    form->setContentsMargins(AppTheme::px(6, uiScale_), AppTheme::px(4, uiScale_),
+                             AppTheme::px(6, uiScale_), AppTheme::px(4, uiScale_));
+    form->setHorizontalSpacing(AppTheme::px(6, uiScale_));
+    form->setVerticalSpacing(AppTheme::px(3, uiScale_));
+    form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
     for (const auto& parameter : node_->parameterDefinitions()) {
         auto* label = new QLabel(parameter.displayName);
-        label->setMinimumWidth(AppTheme::px(54, uiScale_));
+        label->setMinimumWidth(AppTheme::px(40, uiScale_));
         form->addRow(label, makeParameterEditor(parameter));
     }
-    panel->setMinimumWidth(AppTheme::px(196, uiScale_));
+    panel->setMinimumWidth(AppTheme::px(150, uiScale_));
     panel->adjustSize();
     return panel;
 }
@@ -337,7 +338,7 @@ QWidget* WorkflowNodeDelegate::makeParameterEditor(const NodeParameter& paramete
     if (parameter.type == ParameterType::FileOpen || parameter.type == ParameterType::FileSave ||
         parameter.type == ParameterType::Color) {
         auto* button = new QPushButton("...");
-        button->setFixedWidth(AppTheme::px(34, uiScale_));
+        button->setFixedWidth(AppTheme::px(26, uiScale_));
         layout->addWidget(button);
         QObject::connect(button, &QPushButton::clicked, button, [edit, emitChanged, parameter] {
             QString next;
