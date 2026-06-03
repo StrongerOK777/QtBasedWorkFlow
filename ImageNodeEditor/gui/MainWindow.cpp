@@ -966,6 +966,13 @@ MainWindow::MainWindow(QWidget* parent)
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    // 关键：先断开撤销栈信号。否则 ~QWidget 的 deleteChildren() 删除 undoStack_ 时，
+    // QUndoStack::clear() 会发 indexChanged 触发 updateWindowTitle ->
+    // syncCurrentWorkbookPage -> graphForPersistence，访问已析构的成员而崩溃
+    // （仅在退出时撤销栈非空，即“有未保存改动”时复现）。
+    if (undoStack_) {
+        undoStack_->disconnect();
+    }
     ++executionGeneration_;
     ++livePreviewGeneration_;
     if (livePreviewTimer_) {
@@ -3913,6 +3920,9 @@ void MainWindow::refreshWorkbookTabs()
 
 void MainWindow::updateWindowTitle()
 {
+    if (shuttingDown_) {
+        return;  // 退出/析构期不再刷新标题，避免回调访问半析构状态
+    }
     const QString fileName = currentFile_.isEmpty() ? "未命名" : QFileInfo(currentFile_).fileName();
     const QString dirty = currentWorkbookDirty() ? "*" : "";
     const QString title = QString("%1%2").arg(fileName, dirty);

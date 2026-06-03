@@ -1,6 +1,7 @@
 #include "app/CommandLineRunner.h"
 #include "gui/AppIcon.h"
 #include "gui/MainWindow.h"
+#include "gui/NativeWindowChrome.h"
 #include "nodes/NodeFactory.h"
 
 #include <QApplication>
@@ -65,6 +66,7 @@ int main(int argc, char* argv[])
     QCoreApplication::setOrganizationName("ALPDHomework");
     QCoreApplication::setApplicationVersion("0.1.0");
     app.setWindowIcon(AppIcon::makeAppIcon());
+    NativeWindowChrome::applyGlobalDarkAppearance();
     NodeFactory::instance().registerBuiltins();
 
     QCommandLineParser parser;

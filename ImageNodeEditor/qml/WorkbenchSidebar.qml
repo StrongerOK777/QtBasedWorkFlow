@@ -66,6 +66,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     delegate: Rectangle {
+                        required property int index
                         required property string typeName
                         required property string title
                         required property string category
@@ -73,7 +74,8 @@ Rectangle {
                         required property string iconName
                         width: ListView.view.width
                         height: 46
-                        color: mouse.containsMouse ? "#2a2d2e" : "transparent"
+                        color: ListView.isCurrentItem ? "#094771"
+                               : mouse.containsMouse ? "#2a2d2e" : "transparent"
                         property real pressX: 0
                         property real pressY: 0
                         property bool dragStarted: false
@@ -135,15 +137,14 @@ Rectangle {
                                 }
                             }
                             onClicked: {
-                                if (!parent.dragStarted)
-                                    workbenchBridge.createNode(typeName)
+                                // 单击只选中高亮，不再直接加节点；加节点请拖拽到画布。
+                                parent.ListView.view.currentIndex = parent.index
                             }
-                            onDoubleClicked: workbenchBridge.createNode(typeName)
                         }
                         WorkbenchTooltip {
                             sourceItem: mouse
                             active: mouse.containsMouse
-                            tooltipText: "拖拽到画布创建：" + title
+                            tooltipText: "拖拽到画布添加：" + title
                             placement: "right"
                         }
                     }

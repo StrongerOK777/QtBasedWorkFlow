@@ -54,38 +54,11 @@ Rectangle {
             }
         }
 
+        // 编辑器头部只作宏图层级面包屑：文档标题 + 前进/后退；
+        // 执行/预览/底部面板/添加/整理 等命令统一收敛到顶部标题栏，避免右上角重复。
         HeaderButton { iconName: "back"; tooltipText: "返回上一级图"; onClicked: workbenchBridge.triggerCommand("macro.back") }
         HeaderButton { iconName: "forward"; tooltipText: "前进到下一级图"; onClicked: workbenchBridge.triggerCommand("macro.forward") }
-        HeaderButton { iconName: "add"; tooltipText: "添加节点"; onClicked: workbenchBridge.triggerCommand("node.quickAdd") }
-        HeaderButton { iconName: "layout"; tooltipText: "整理画布"; onClicked: workbenchBridge.triggerCommand("workflow.autoLayout") }
 
         Item { Layout.fillWidth: true }
-
-        HeaderButton { iconName: "preview"; tooltipText: "显示或隐藏预览"; onClicked: workbenchBridge.previewVisible = !workbenchBridge.previewVisible }
-        HeaderButton { iconName: "panel"; tooltipText: "显示或隐藏底部面板"; onClicked: workbenchBridge.panelVisible = !workbenchBridge.panelVisible }
-        Rectangle {
-            Layout.preferredWidth: 86
-            Layout.preferredHeight: 28
-            color: runMouse.containsMouse ? "#16825d" : "#0e639c"
-            Text {
-                anchors.centerIn: parent
-                text: "执行"
-                color: "#ffffff"
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
-            }
-            MouseArea {
-                id: runMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: workbenchBridge.triggerCommand("workflow.run")
-            }
-            WorkbenchTooltip {
-                sourceItem: runMouse
-                active: runMouse.containsMouse
-                tooltipText: "执行工作流"
-                placement: "bottom"
-            }
-        }
     }
 }
