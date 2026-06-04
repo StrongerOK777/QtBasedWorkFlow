@@ -36,7 +36,9 @@ NodeGraphicsObject::NodeGraphicsObject(BasicGraphicsScene &scene, NodeId nodeId)
 
     setLockedState();
 
-    setCacheMode(QGraphicsItem::DeviceCoordinateCache);
+    // ImageNodeEditor: 自绘节点为圆角/异形轮廓，DeviceCoordinateCache 会把节点缓存成
+    // 矩形像素图，拖动时圆角与阴影露出矩形毛边；改 NoCache 使每帧抗锯齿绘制，轮廓干净。
+    setCacheMode(QGraphicsItem::NoCache);
 
     QJsonObject nodeStyleJson = _graphModel.nodeData(_nodeId, NodeRole::Style).toJsonObject();
 

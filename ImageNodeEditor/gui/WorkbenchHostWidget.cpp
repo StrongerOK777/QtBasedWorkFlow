@@ -19,7 +19,6 @@ namespace {
 
 constexpr auto kActivitySource = "qrc:/workbench/WorkbenchActivityBar.qml";
 constexpr auto kTitleSource = "qrc:/workbench/WorkbenchTitleBar.qml";
-constexpr auto kEditorHeaderSource = "qrc:/workbench/WorkbenchEditorHeader.qml";
 constexpr auto kSidebarSource = "qrc:/workbench/WorkbenchSidebar.qml";
 constexpr auto kStatusSource = "qrc:/workbench/WorkbenchStatusBar.qml";
 constexpr auto kQuickAccessSource = "qrc:/workbench/WorkbenchQuickAccess.qml";
@@ -80,16 +79,16 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     titleSurface_ = makeQuickSurface(QUrl(kTitleSource), this);
     activitySurface_ = makeQuickSurface(QUrl(kActivitySource), this);
     sidebarSurface_ = makeQuickSurface(QUrl(kSidebarSource), this);
-    editorHeaderSurface_ = makeQuickSurface(QUrl(kEditorHeaderSource), this);
     statusSurface_ = makeQuickSurface(QUrl(kStatusSource), this);
 
+    // 编辑器区（画布标签条 + 面包屑 + 画布）由 MainWindow 组装后作为 editor 传入；
+    // 不再单独叠一个 QML 编辑器头层（曾在画布顶部渲染出黑条）。
     auto* editorShell = new QWidget;
     editorShell->setObjectName("editorShell");
     editorShell->setAttribute(Qt::WA_StyledBackground, true);
     auto* editorShellLayout = new QVBoxLayout(editorShell);
     editorShellLayout->setContentsMargins(0, 0, 0, 0);
     editorShellLayout->setSpacing(0);
-    editorShellLayout->addWidget(editorHeaderSurface_);
     editorShellLayout->addWidget(editor, 1);
 
     editorSplitter_ = new QSplitter(Qt::Vertical);
@@ -241,9 +240,6 @@ void WorkbenchHostWidget::setUiScale(double uiScale)
     }
     if (titleSurface_) {
         titleSurface_->setFixedHeight(AppTheme::px(35, uiScale_));
-    }
-    if (editorHeaderSurface_) {
-        editorHeaderSurface_->setFixedHeight(AppTheme::px(35, uiScale_));
     }
     if (sidebarSurface_) {
         sidebarSurface_->setMinimumWidth(AppTheme::px(236, uiScale_));

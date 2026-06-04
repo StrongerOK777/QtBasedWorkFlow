@@ -1251,10 +1251,10 @@ void MainWindow::createLayout()
     view_->setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     view_->setResizeAnchor(QGraphicsView::AnchorViewCenter);
 
-    auto* viewContainer = new QWidget;
-    viewContainer->setObjectName("canvasContainer");
-    viewContainer->setAttribute(Qt::WA_StyledBackground, true);
-    auto* viewStack = new QStackedLayout(viewContainer);
+    auto* canvasInner = new QWidget;
+    canvasInner->setObjectName("canvasContainer");
+    canvasInner->setAttribute(Qt::WA_StyledBackground, true);
+    auto* viewStack = new QStackedLayout(canvasInner);
     viewStack->setContentsMargins(0, 0, 0, 0);
     viewStack->setStackingMode(QStackedLayout::StackAll);
     viewStack->addWidget(view_);
@@ -1283,6 +1283,81 @@ void MainWindow::createLayout()
     viewStack->setAlignment(miniMap_, Qt::AlignLeft | Qt::AlignBottom);
     connect(canvasZoomInButton_, &QToolButton::clicked, this, [this] { zoomIn(); });
     connect(canvasZoomOutButton_, &QToolButton::clicked, this, [this] { zoomOut(); });
+
+    // ===== 画布顶部：VS Code 风画布标签条 + 宏层级面包屑（在画布之上）=====
+    workbookTabs_ = new QTabBar;
+    workbookTabs_->setObjectName("workbookTabs");
+    workbookTabs_->setDocumentMode(true);
+    workbookTabs_->setExpanding(false);
+    workbookTabs_->setMovable(true);
+    workbookTabs_->setTabsClosable(true);
+    workbookTabs_->setElideMode(Qt::ElideRight);
+    workbookTabs_->setUsesScrollButtons(true);
+    connect(workbookTabs_, &QTabBar::currentChanged, this, [this](int index) { switchWorkbookPage(index); });
+    connect(workbookTabs_, &QTabBar::tabCloseRequested, this, [this](int index) { closeWorkbookPage(index); });
+    connect(workbookTabs_, &QTabBar::tabMoved, this, [this](int from, int to) {
+        if (from < 0 || from >= workbookPages_.size() || to < 0 || to >= workbookPages_.size()) {
+            return;
+        }
+        workbookPages_.move(from, to);
+        if (currentWorkbookIndex_ == from) {
+            currentWorkbookIndex_ = to;
+        } else if (from < currentWorkbookIndex_ && to >= currentWorkbookIndex_) {
+            --currentWorkbookIndex_;
+        } else if (from > currentWorkbookIndex_ && to <= currentWorkbookIndex_) {
+            ++currentWorkbookIndex_;
+        }
+        refreshWorkbookTabs();
+    });
+    newWorkbookAction_ = new QAction(lineIcon("new"), "新建画布", this);
+    newWorkbookAction_->setData("new");
+    newWorkbookAction_->setToolTip("新建画布");
+    connect(newWorkbookAction_, &QAction::triggered, this, [this] { addWorkbookPage(); });
+    auto* newCanvasButton = new QToolButton;
+    newCanvasButton->setObjectName("canvasNewButton");
+    newCanvasButton->setDefaultAction(newWorkbookAction_);
+    newCanvasButton->setAutoRaise(true);
+
+    auto* tabStrip = new QWidget;
+    tabStrip->setObjectName("canvasTabStrip");
+    tabStrip->setAttribute(Qt::WA_StyledBackground, true);
+    auto* tabStripLayout = new QHBoxLayout(tabStrip);
+    tabStripLayout->setContentsMargins(AppTheme::px(6, uiScale_), AppTheme::px(4, uiScale_), AppTheme::px(6, uiScale_), 0);
+    tabStripLayout->setSpacing(AppTheme::px(2, uiScale_));
+    tabStripLayout->addWidget(workbookTabs_, 0);
+    tabStripLayout->addWidget(newCanvasButton, 0);
+    tabStripLayout->addStretch(1);
+
+    breadcrumbBar_ = new QWidget;
+    breadcrumbBar_->setObjectName("breadcrumbBar");
+    breadcrumbBar_->setAttribute(Qt::WA_StyledBackground, true);
+    auto* breadcrumbOuter = new QHBoxLayout(breadcrumbBar_);
+    breadcrumbOuter->setContentsMargins(AppTheme::px(8, uiScale_), 0, AppTheme::px(8, uiScale_), 0);
+    breadcrumbOuter->setSpacing(AppTheme::px(4, uiScale_));
+    auto* bcBack = new QToolButton;
+    bcBack->setObjectName("breadcrumbNav");
+    bcBack->setDefaultAction(returnToParentAction_);
+    bcBack->setAutoRaise(true);
+    auto* bcForward = new QToolButton;
+    bcForward->setObjectName("breadcrumbNav");
+    bcForward->setDefaultAction(forwardToChildAction_);
+    bcForward->setAutoRaise(true);
+    breadcrumbOuter->addWidget(bcBack);
+    breadcrumbOuter->addWidget(bcForward);
+    auto* breadcrumbPathContainer = new QWidget;
+    breadcrumbPathLayout_ = new QHBoxLayout(breadcrumbPathContainer);
+    breadcrumbPathLayout_->setContentsMargins(AppTheme::px(4, uiScale_), 0, 0, 0);
+    breadcrumbPathLayout_->setSpacing(AppTheme::px(2, uiScale_));
+    breadcrumbOuter->addWidget(breadcrumbPathContainer);
+    breadcrumbOuter->addStretch(1);
+
+    auto* viewContainer = new QWidget;
+    auto* editorColumn = new QVBoxLayout(viewContainer);
+    editorColumn->setContentsMargins(0, 0, 0, 0);
+    editorColumn->setSpacing(0);
+    editorColumn->addWidget(tabStrip, 0);
+    editorColumn->addWidget(breadcrumbBar_, 0);
+    editorColumn->addWidget(canvasInner, 1);
 
     preview_ = new PreviewLabel;
     preview_->setObjectName("previewPanel");
@@ -1551,46 +1626,8 @@ void MainWindow::createLayout()
     installDelayedTooltips(headerToolbar_);
 
     addToolBarBreak(Qt::TopToolBarArea);
-    workbookToolbar_ = addToolBar("工作簿");
-    workbookToolbar_->setObjectName("workbookToolbar");
-    workbookToolbar_->setMovable(false);
-    workbookToolbar_->setFloatable(false);
-    newWorkbookAction_ = new QAction(lineIcon("new"), "新建画布标签", this);
-    newWorkbookAction_->setData("new");
-    newWorkbookAction_->setToolTip("新建画布标签");
-    connect(newWorkbookAction_, &QAction::triggered, this, [this] { addWorkbookPage(); });
-    workbookToolbar_->addAction(newWorkbookAction_);
-    workbookTabs_ = new QTabBar;
-    workbookTabs_->setObjectName("workbookTabs");
-    workbookTabs_->setDocumentMode(true);
-    workbookTabs_->setExpanding(false);
-    workbookTabs_->setMovable(true);
-    workbookTabs_->setTabsClosable(true);
-    workbookTabs_->setElideMode(Qt::ElideRight);
-    workbookTabs_->setMinimumWidth(AppTheme::px(220, uiScale_));
-    workbookTabs_->setMaximumWidth(AppTheme::px(520, uiScale_));
-    connect(workbookTabs_, &QTabBar::currentChanged, this, [this](int index) { switchWorkbookPage(index); });
-    connect(workbookTabs_, &QTabBar::tabCloseRequested, this, [this](int index) { closeWorkbookPage(index); });
-    connect(workbookTabs_, &QTabBar::tabMoved, this, [this](int from, int to) {
-        if (from < 0 || from >= workbookPages_.size() || to < 0 || to >= workbookPages_.size()) {
-            return;
-        }
-        workbookPages_.move(from, to);
-        if (currentWorkbookIndex_ == from) {
-            currentWorkbookIndex_ = to;
-        } else if (from < currentWorkbookIndex_ && to >= currentWorkbookIndex_) {
-            --currentWorkbookIndex_;
-        } else if (from > currentWorkbookIndex_ && to <= currentWorkbookIndex_) {
-            ++currentWorkbookIndex_;
-        }
-        refreshWorkbookTabs();
-    });
-    workbookToolbar_->addWidget(workbookTabs_);
-    auto* workbookSpacer = new QWidget;
-    workbookSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    workbookToolbar_->addWidget(workbookSpacer);
-    // 「执行」按钮只保留在 QML 顶部标题栏，工作簿栏不再重复放置（右上角去重）。
-    installDelayedTooltips(workbookToolbar_);
+    // 画布标签条与面包屑已在画布上方组装（见上文 editorColumn），此处只需刷新导航状态
+    //（updateNavigationActions 内部会刷新面包屑）。
     updateNavigationActions();
     updateWindowTitle();
 
@@ -1611,9 +1648,6 @@ void MainWindow::createLayout()
     }
     if (headerToolbar_) {
         headerToolbar_->hide();
-    }
-    if (workbookToolbar_) {
-        workbookToolbar_->hide();
     }
 }
 
@@ -4040,6 +4074,57 @@ void MainWindow::updateNavigationActions()
     }
     if (forwardToChildAction_) {
         forwardToChildAction_->setEnabled(!forwardMacroHistory_.isEmpty());
+    }
+    updateBreadcrumb();
+}
+
+void MainWindow::navigateToDepth(int targetDepth)
+{
+    if (targetDepth < 0) {
+        return;
+    }
+    int guard = 0;
+    while (graphStack_.size() > targetDepth && guard++ < 64) {
+        const int before = graphStack_.size();
+        leaveMacroNode();
+        if (graphStack_.size() >= before) {
+            break;  // 安全兜底，避免死循环
+        }
+    }
+}
+
+void MainWindow::updateBreadcrumb()
+{
+    if (!breadcrumbPathLayout_) {
+        return;
+    }
+    while (QLayoutItem* item = breadcrumbPathLayout_->takeAt(0)) {
+        if (auto* w = item->widget()) {
+            w->deleteLater();
+        }
+        delete item;
+    }
+    const int depth = graphStack_.size();
+    auto addSegment = [this](const QString& text, int targetDepth, bool current) {
+        auto* btn = new QToolButton;
+        btn->setText(text.isEmpty() ? QStringLiteral("未命名") : text);
+        btn->setAutoRaise(true);
+        btn->setObjectName(current ? "breadcrumbCurrent" : "breadcrumbSegment");
+        btn->setCursor(current ? Qt::ArrowCursor : Qt::PointingHandCursor);
+        btn->setEnabled(!current);
+        const int target = targetDepth;
+        connect(btn, &QToolButton::clicked, this, [this, target] { navigateToDepth(target); });
+        breadcrumbPathLayout_->addWidget(btn);
+    };
+    const QString rootName = currentFile_.isEmpty() ? QStringLiteral("主画布")
+                                                    : QFileInfo(currentFile_).completeBaseName();
+    addSegment(rootName, 0, depth == 0);
+    for (int i = 0; i < depth; ++i) {
+        auto* sep = new QLabel(QStringLiteral("›"));
+        sep->setObjectName("breadcrumbSep");
+        breadcrumbPathLayout_->addWidget(sep);
+        const auto node = graphStack_.at(i).graph.node(graphStack_.at(i).macroNodeId);
+        addSegment(node ? node->displayName() : QStringLiteral("宏节点"), i + 1, i == depth - 1);
     }
 }
 

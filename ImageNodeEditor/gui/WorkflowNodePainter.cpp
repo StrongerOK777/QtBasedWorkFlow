@@ -60,6 +60,48 @@ QColor stateAccent(const WorkflowNodeDelegate* delegate, const QColor& normal)
     return normal;
 }
 
+// 不同类别用不同外形（统一大小，靠轮廓+颜色区分）。所有轮廓都画在节点几何矩形内，
+// 不改变节点尺寸；端口仍在左右中点。
+QPainterPath categoryShapePath(const QString& category, const QRectF& r)
+{
+    QPainterPath path;
+    if (category == "输入输出") {
+        // 胶囊：左右两端大圆角
+        const qreal rr = std::min<qreal>(r.height() / 2.0, 24.0);
+        path.addRoundedRect(r, rr, rr);
+    } else if (category == "色彩处理") {
+        // 小圆角，更方正
+        path.addRoundedRect(r, 5.0, 5.0);
+    } else if (category == "滤波处理") {
+        // 切角矩形（八边形感）
+        const qreal c = std::min<qreal>(14.0, std::min(r.width(), r.height()) * 0.22);
+        path.moveTo(r.left() + c, r.top());
+        path.lineTo(r.right() - c, r.top());
+        path.lineTo(r.right(), r.top() + c);
+        path.lineTo(r.right(), r.bottom() - c);
+        path.lineTo(r.right() - c, r.bottom());
+        path.lineTo(r.left() + c, r.bottom());
+        path.lineTo(r.left(), r.bottom() - c);
+        path.lineTo(r.left(), r.top() + c);
+        path.closeSubpath();
+    } else if (category == "合成处理") {
+        // 横向六边形：左右两侧斜边收口到端口高度，呼应「合流」
+        const qreal c = std::min<qreal>(20.0, r.width() * 0.10);
+        const qreal midY = r.center().y();
+        path.moveTo(r.left() + c, r.top());
+        path.lineTo(r.right() - c, r.top());
+        path.lineTo(r.right(), midY);
+        path.lineTo(r.right() - c, r.bottom());
+        path.lineTo(r.left() + c, r.bottom());
+        path.lineTo(r.left(), midY);
+        path.closeSubpath();
+    } else {
+        // 几何变换 / 默认：标准圆角矩形
+        path.addRoundedRect(r, 12.0, 12.0);
+    }
+    return path;
+}
+
 }
 
 void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& graphicsNode) const
@@ -75,14 +117,17 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     const QRectF headerRect(body.left(), body.top(), body.width(), 32.0);
     const bool selected = graphicsNode.isSelected();
 
-    const qreal radius = 12.0;
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
+
+    // 类别专属外形（统一大小，靠轮廓+颜色区分）
+    const QPainterPath shapePath = categoryShapePath(category, borderRect);
+    const QPainterPath shadowPath = categoryShapePath(category, shadowRect);
 
     // 柔和阴影
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor(0, 0, 0, 90));
-    painter->drawRoundedRect(shadowRect, radius, radius);
+    painter->drawPath(shadowPath);
 
     // 主体（轻微竖向渐变）+ hairline 边 / 选中柔化蓝
     QLinearGradient fill(body.topLeft(), body.bottomLeft());
@@ -90,23 +135,23 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     fill.setColorAt(1, QColor("#1f2024"));
     painter->setBrush(fill);
     painter->setPen(QPen(selected ? QColor("#6ea0e0") : QColor("#34363b"), selected ? 1.8 : 1.0));
-    painter->drawRoundedRect(borderRect, radius, radius);
+    painter->drawPath(shapePath);
 
-    // 头部：裁剪到圆角主体内绘制，使上方圆角自然；顶部一抹克制的类别色。
+    // 头部：裁剪到外形内绘制，使顶部跟随轮廓；顶部一抹克制的类别色。
     painter->save();
-    QPainterPath clipPath;
-    clipPath.addRoundedRect(borderRect, radius, radius);
-    painter->setClipPath(clipPath);
+    painter->setClipPath(shapePath);
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor("#2a2c31"));
     painter->drawRect(QRectF(body.left(), body.top(), body.width(), headerRect.height()));
-    painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 150));
+    painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 165));
     painter->drawRect(QRectF(body.left(), body.top(), body.width(), 3));
-    painter->restore();
     painter->setPen(QPen(QColor("#2e2f33"), 1));
-    painter->drawLine(QPointF(body.left() + 1, headerRect.bottom()), QPointF(body.right() - 1, headerRect.bottom()));
+    painter->drawLine(QPointF(body.left(), headerRect.bottom()), QPointF(body.right(), headerRect.bottom()));
+    painter->restore();
 
     if (delegate && delegate->executionState() != NodeExecutionState::NotExecuted) {
+        painter->save();
+        painter->setClipPath(shapePath);
         const QRectF strip(body.left() + 10, body.bottom() - 8, body.width() - 20, 3);
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 72));
@@ -121,11 +166,12 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
             painter->setBrush(categoryColor);
             painter->drawRoundedRect(strip, 1.5, 1.5);
         }
+        painter->restore();
     }
     if (selected) {
         painter->setBrush(Qt::NoBrush);
         painter->setPen(QPen(QColor(110, 160, 224, 70), 4));
-        painter->drawRoundedRect(borderRect.adjusted(2, 2, -2, -2), radius - 2, radius - 2);
+        painter->drawPath(shapePath);
     }
     painter->restore();
 

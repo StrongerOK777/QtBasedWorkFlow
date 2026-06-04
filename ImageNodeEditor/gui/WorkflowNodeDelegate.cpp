@@ -280,7 +280,9 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
         label->setMinimumWidth(AppTheme::px(40, uiScale_));
         form->addRow(label, makeParameterEditor(parameter));
     }
-    panel->setMinimumWidth(AppTheme::px(150, uiScale_));
+    // 固定宽度让所有节点宽度统一（高度随参数行数略变，符合「大小基本一致」）。
+    panel->setFixedWidth(AppTheme::px(184, uiScale_));
+    panel->setMinimumHeight(AppTheme::px(34, uiScale_));
     panel->adjustSize();
     return panel;
 }

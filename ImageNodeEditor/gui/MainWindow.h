@@ -22,6 +22,7 @@ class QListWidget;
 class QListWidgetItem;
 class QMenu;
 class QSplitter;
+class QHBoxLayout;
 class QTabBar;
 class QTabWidget;
 class QThread;
@@ -121,6 +122,8 @@ private:
     bool ensureSavePath();
     void updateWindowTitle();
     void updateNavigationActions();
+    void updateBreadcrumb();
+    void navigateToDepth(int targetDepth);
     void pushGraphEditCommand(const QString& text,
                               const WorkflowGraph& before,
                               const QString& selectedBefore,
@@ -234,6 +237,8 @@ private:
     QToolBar* headerToolbar_ = nullptr;
     QToolBar* workbookToolbar_ = nullptr;
     QTabBar* workbookTabs_ = nullptr;
+    QWidget* breadcrumbBar_ = nullptr;
+    QHBoxLayout* breadcrumbPathLayout_ = nullptr;
     QLabel* documentTitleLabel_ = nullptr;
     QMenu* fileMenu_ = nullptr;
     QMenu* editMenu_ = nullptr;

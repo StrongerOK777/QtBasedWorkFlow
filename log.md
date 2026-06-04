@@ -1118,3 +1118,24 @@ QML：复用组件（CommandButton/ActivityButton/HeaderButton/SidebarHeader/Sea
 
 后续注意：
 QSS 不支持过渡动画，Widgets 部分（设置框/终端/停靠面板/内联参数）只有圆角+配色、hover 仍瞬切；微动效集中在 QML（按钮/命令框 hover 渐变、命令面板登场）。未做：按钮按下缩放、tooltip 淡入（plan 中标为可选）。如某处颜色/圆角想再调，token 集中在 `AppTheme.cpp` 顶部与各 QML 复用组件，便于微调。
+
+---
+
+### 2026-06-04 / 节点拖拽圆角、节点统一大小+异形、画布去黑条+面包屑+多画布标签阶段
+
+类型：修复 / 修改 / 重构
+
+概述：
+画布区 5 项：① 拖动节点圆角毛边；② 节点统一大小、按类别用不同外形+颜色区分；③ 画布顶部黑条；④ 画布上方宏层级面包屑导航；⑤ VS Code 风画布标签条 + 「+」多画布。
+
+影响范围：
+`third_party/QtNodes/src/NodeGraphicsObject.cpp`、`ImageNodeEditor/gui/WorkflowNodePainter.cpp`、`ImageNodeEditor/gui/WorkflowNodeDelegate.cpp`、`ImageNodeEditor/gui/MainWindow.h/.cpp`、`ImageNodeEditor/gui/WorkbenchHostWidget.h/.cpp`、`ImageNodeEditor/gui/AppTheme.cpp`
+
+处理方式：
+req1：节点项原 `setCacheMode(DeviceCoordinateCache)` 把节点缓存成矩形像素图，拖动时圆角/阴影露矩形毛边；改 vendored 第 39 行为 `NoCache`（注释说明），每帧抗锯齿绘制、轮廓干净。req2：`WorkflowNodeDelegate::buildParameterPanel` 把面板 `setMinimumWidth(150)` 改 `setFixedWidth(184)`+`setMinimumHeight(34)`，所有节点宽度统一；`WorkflowNodePainter` 新增 `categoryShapePath(category, rect)` 按类别画异形轮廓（输入输出=胶囊、几何变换=圆角矩形、色彩处理=小圆角、滤波处理=切角八边形、合成处理=横向六边形），阴影/主体/头部裁剪/选中外发光都改用该 `QPainterPath`，类别色继续作头部色带，做到「形状+颜色」区分；端口仍在左右中点、命中用矩形 boundingRect（异形角落略可点，可接受）。req3/4/5：把画布列顶部重构为 C++ 容器——`viewContainer` 改为竖直 `editorColumn[画布标签条 tabStrip, 面包屑 breadcrumbBar_, 画布 canvasInner]`，作为 editor 传给 host；`WorkbenchHostWidget` 删除原 `editorHeaderSurface_`（那个 QML 编辑器头层就是画布顶黑条来源），黑条消失。标签条复用既有工作簿逻辑（`workbookTabs_`/`newWorkbookAction_`/`addWorkbookPage/switchWorkbookPage/closeWorkbookPage/refreshWorkbookTabs`）从隐藏的 `workbookToolbar_` 迁到画布上方，末尾「+」`canvasNewButton` 新建画布；面包屑用 `graphStack_` 生成可点路径（主画布 › 宏A › …），点某段 `navigateToDepth()` 连续 `leaveMacroNode` 回退，`updateBreadcrumb()` 并入 `updateNavigationActions()` 统一刷新。`AppTheme` QSS 补 `#canvasTabStrip/#breadcrumbBar/QTabBar#workbookTabs/#canvasNewButton/#breadcrumb*` 的圆角+token 样式。
+
+当前状态：
+编译通过（Qt 6.11）；CLI `--no-gui` 回归 exit 0；GUI 启动稳定无崩溃（新布局构造正常）。视觉/交互需用户真机确认（computer-use 本轮中途断开，无法自动截图）：拖节点无矩形毛边、节点统一大小且异形区分、画布顶无黑条、标签页「+」可多画布、面包屑可回退。
+
+后续注意：
+`WorkbenchEditorHeader.qml` 已不再被引用（仍留在 qrc，无害），后续可从资源清单移除。`workbookToolbar_` 不再创建（成员保留为 nullptr，相关引用处已有 `if` 守卫）。节点异形仅改自绘 painter，未改 `NodeGraphicsObject::shape()`，故点击命中仍按矩形 boundingRect。

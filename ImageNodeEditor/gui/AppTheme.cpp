@@ -297,6 +297,71 @@ QString styleSheet(double uiScale)
             border-radius: 8px;
             padding: %3px %4px;
         }
+        QWidget#canvasTabStrip {
+            background: #1b1c1e;
+            border-bottom: %1px solid #2e2f33;
+        }
+        QWidget#breadcrumbBar {
+            background: #1b1c1e;
+            border-bottom: %1px solid #2e2f33;
+        }
+        QTabBar#workbookTabs::tab {
+            min-height: %5px;
+            padding: 3px 12px;
+            margin: 0px;
+            border: 0px;
+            border-top-left-radius: 7px;
+            border-top-right-radius: 7px;
+            background: transparent;
+            color: #9aa0a6;
+        }
+        QTabBar#workbookTabs::tab:hover {
+            background: #26282d;
+        }
+        QTabBar#workbookTabs::tab:selected {
+            background: #2a2c31;
+            color: #e8eaed;
+        }
+        QToolButton#canvasNewButton {
+            border: 0px;
+            border-radius: 6px;
+            background: transparent;
+            padding: 2px;
+        }
+        QToolButton#canvasNewButton:hover {
+            background: #26282d;
+        }
+        QToolButton#breadcrumbNav {
+            border: 0px;
+            background: transparent;
+            border-radius: 6px;
+            padding: 2px 5px;
+        }
+        QToolButton#breadcrumbNav:hover {
+            background: #26282d;
+        }
+        QToolButton#breadcrumbSegment {
+            border: 0px;
+            background: transparent;
+            border-radius: 6px;
+            padding: 1px 7px;
+            color: #9aa0a6;
+        }
+        QToolButton#breadcrumbSegment:hover {
+            background: #26282d;
+            color: #c8cace;
+        }
+        QToolButton#breadcrumbCurrent {
+            border: 0px;
+            background: transparent;
+            padding: 1px 7px;
+            color: #e3e4e6;
+            font-weight: 600;
+        }
+        QLabel#breadcrumbSep {
+            color: #565b61;
+            padding: 0px 1px;
+        }
     )")
         .arg(border)
         .arg(itemHeight)
