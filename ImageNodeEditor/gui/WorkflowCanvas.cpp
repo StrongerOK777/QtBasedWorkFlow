@@ -20,6 +20,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsView>
+#include <QContextMenuEvent>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDropEvent>
@@ -95,37 +96,37 @@ void applyQtNodesDarkStyle()
     applied = true;
     QtNodes::NodeStyle::setNodeStyle(QStringLiteral(R"({
         "NodeStyle": {
-            "NormalBoundaryColor": [60, 60, 60],
-            "SelectedBoundaryColor": [55, 148, 255],
-            "GradientColor0": [37, 37, 38],
-            "GradientColor1": [37, 37, 38],
-            "GradientColor2": [31, 31, 31],
-            "GradientColor3": [31, 31, 31],
+            "NormalBoundaryColor": [52, 54, 59],
+            "SelectedBoundaryColor": [110, 160, 224],
+            "GradientColor0": [38, 40, 45],
+            "GradientColor1": [38, 40, 45],
+            "GradientColor2": [31, 32, 36],
+            "GradientColor3": [31, 32, 36],
             "ShadowColor": [0, 0, 0],
             "ShadowEnabled": false,
-            "FontColor": [204, 204, 204],
-            "FontColorFaded": [150, 150, 150],
-            "ConnectionPointColor": [156, 220, 254],
-            "FilledConnectionPointColor": [220, 220, 170],
-            "ErrorColor": [241, 76, 76],
-            "WarningColor": [220, 220, 170],
-            "ToolTipIconColor": [204, 204, 204],
+            "FontColor": [227, 228, 230],
+            "FontColorFaded": [154, 160, 166],
+            "ConnectionPointColor": [156, 198, 240],
+            "FilledConnectionPointColor": [217, 201, 143],
+            "ErrorColor": [214, 138, 132],
+            "WarningColor": [217, 201, 143],
+            "ToolTipIconColor": [227, 228, 230],
             "PenWidth": 1.0,
-            "HoveredPenWidth": 1.5,
-            "ConnectionPointDiameter": 8.0,
+            "HoveredPenWidth": 1.6,
+            "ConnectionPointDiameter": 9.0,
             "Opacity": 1.0
         }
     })"));
     QtNodes::ConnectionStyle::setConnectionStyle(QStringLiteral(R"({
         "ConnectionStyle": {
-            "ConstructionColor": [55, 148, 255],
-            "NormalColor": [110, 110, 110],
-            "SelectedColor": [55, 148, 255],
-            "SelectedHaloColor": [55, 148, 255],
-            "HoveredColor": [117, 190, 255],
+            "ConstructionColor": [110, 160, 224],
+            "NormalColor": [110, 122, 134],
+            "SelectedColor": [110, 160, 224],
+            "SelectedHaloColor": [110, 160, 224],
+            "HoveredColor": [127, 176, 238],
             "LineWidth": 2.0,
             "ConstructionLineWidth": 2.0,
-            "PointDiameter": 8.0,
+            "PointDiameter": 9.0,
             "UseDataDefinedColors": false
         }
     })"));
@@ -139,8 +140,8 @@ void paintCanvasGrid(QPainter* painter, const QRectF& rect, double uiScale)
     gradient.setColorAt(1, colors.canvasBottom);
     painter->fillRect(rect, gradient);
 
-    const qreal step = 26.0 * uiScale;
-    const qreal dotRadius = std::max<qreal>(1.0, 1.15 * uiScale);
+    const qreal step = 30.0 * uiScale;
+    const qreal dotRadius = std::max<qreal>(0.9, 1.0 * uiScale);
     const qreal left = std::floor(rect.left() / step) * step;
     const qreal top = std::floor(rect.top() / step) * step;
     painter->setRenderHint(QPainter::Antialiasing);
@@ -280,6 +281,20 @@ protected:
         }
         clearDropPreview();
         QtNodes::GraphicsView::dropEvent(event);
+    }
+
+    void contextMenuEvent(QContextMenuEvent* event) override
+    {
+        // 让事件传到节点项，触发 nodeContextMenu 信号（弹 App 的中文节点菜单）；
+        // 故意只调用祖父类 QGraphicsView，不调用 QtNodes::GraphicsView::contextMenuEvent
+        // —— 后者在右键节点/组时还会弹出自带的英文 Copy/Cut 菜单，与中文菜单重叠。
+        QGraphicsView::contextMenuEvent(event);
+        // 仅当右键落在空白画布（没有任何 item）时，弹出 App 的中文场景菜单。
+        if (items(event->pos()).isEmpty()) {
+            if (auto* menu = nodeScene()->createSceneMenu(mapToScene(event->pos()))) {
+                menu->exec(event->globalPos());
+            }
+        }
     }
 
 private:

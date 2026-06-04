@@ -1,25 +1,33 @@
 import QtQuick
 
 Rectangle {
-    color: "#007acc"
+    color: "#18191c"
+
+    // 顶部一条 hairline 分隔，融入整体而非刺眼的蓝条。
+    Rectangle {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 1
+        color: "#2e2f33"
+    }
 
     Row {
         anchors.fill: parent
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
         spacing: 16
 
         Text {
             text: workbenchBridge.documentTitle
-            color: "#ffffff"
+            color: "#c8cace"
             font.pixelSize: 12
             verticalAlignment: Text.AlignVCenter
             height: parent.height
         }
         Text {
             text: workbenchBridge.selectedNodeText
-            color: "#ffffff"
-            opacity: 0.9
+            color: "#9aa0a6"
             font.pixelSize: 12
             verticalAlignment: Text.AlignVCenter
             height: parent.height
@@ -31,8 +39,7 @@ Rectangle {
         Text {
             id: statusText
             text: workbenchBridge.statusText
-            color: "#ffffff"
-            opacity: 0.9
+            color: "#9aa0a6"
             font.pixelSize: 12
             verticalAlignment: Text.AlignVCenter
             height: parent.height
@@ -40,7 +47,7 @@ Rectangle {
         Text {
             id: zoomText
             text: workbenchBridge.zoomText
-            color: "#ffffff"
+            color: "#83a9d6"
             font.pixelSize: 12
             verticalAlignment: Text.AlignVCenter
             height: parent.height

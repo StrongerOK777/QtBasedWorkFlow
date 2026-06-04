@@ -139,6 +139,8 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     auto* popupFrame = new QFrame(this);
     popupFrame->setObjectName("quickAccessPopup");
     popupFrame->setAttribute(Qt::WA_StyledBackground, true);
+    // 容器透明，只显示 QML 内部的圆角卡片（避免方角底色露在圆角之外）。
+    popupFrame->setStyleSheet("QFrame#quickAccessPopup { background: transparent; border: 0px; }");
     auto* popupLayout = new QVBoxLayout(popupFrame);
     popupLayout->setContentsMargins(0, 0, 0, 0);
     popupLayout->addWidget(makeQuickSurface(QUrl(kQuickAccessSource), popupFrame));

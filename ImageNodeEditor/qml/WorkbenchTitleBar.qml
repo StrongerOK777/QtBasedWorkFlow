@@ -4,8 +4,8 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
-    color: "#3c3c3c"
-    border.color: "#2b2b2b"
+    color: "#212327"
+    border.color: "#2e2f33"
     border.width: 1
 
     component CommandButton: ToolButton {
@@ -13,7 +13,7 @@ Rectangle {
         required property string iconName
         property string tooltipText: ""
         property bool checkedState: false
-        width: 32
+        width: 34
         height: 28
         padding: 0
         hoverEnabled: true
@@ -24,18 +24,26 @@ Rectangle {
             placement: "bottom"
         }
         background: Rectangle {
-            color: button.checkedState ? "#094771" : button.hovered || button.down ? "#2a2d2e" : "transparent"
-            border.color: button.checkedState ? "#3794ff" : "transparent"
-            border.width: button.checkedState ? 1 : 0
+            color: "transparent"
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 3
+                radius: 6
+                color: button.checkedState ? "#2a313b" : (button.hovered || button.down) ? "#2c2f34" : "transparent"
+                border.color: button.checkedState ? "#3f5163" : "transparent"
+                border.width: button.checkedState ? 1 : 0
+                Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            }
         }
         contentItem: Item {
             WorkbenchIcon {
                 anchors.centerIn: parent
-                width: 20
-                height: 20
+                width: 19
+                height: 19
                 name: button.iconName
-                strokeColor: button.enabled ? "#cccccc" : "#6a6a6a"
+                strokeColor: button.checkedState ? "#d6e4f5" : button.enabled ? (button.hovered ? "#c8cace" : "#aeb3b8") : "#5f6469"
                 strokeWidth: 1.7
+                Behavior on strokeColor { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }
         }
     }
@@ -71,15 +79,18 @@ Rectangle {
 
         Rectangle {
             Layout.preferredWidth: Math.min(520, Math.max(280, root.width * 0.34))
-            Layout.preferredHeight: 24
-            color: "#2f2f2f"
-            border.color: commandCenterMouse.containsMouse ? "#3794ff" : "#555555"
+            Layout.preferredHeight: 26
+            radius: 8
+            color: commandCenterMouse.containsMouse ? "#2c2f34" : "#262a30"
+            border.color: commandCenterMouse.containsMouse ? "#6ea0e0" : "#34363b"
+            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             Text {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 text: workbenchBridge.documentTitle
-                color: "#cccccc"
+                color: "#c2c6cb"
                 font.pixelSize: 12
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter

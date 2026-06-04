@@ -4,10 +4,31 @@ import QtQuick.Layouts
 
 Rectangle {
     id: quickAccess
-    color: "#252526"
-    border.color: "#454545"
+    color: "#212327"
+    border.color: "#34363b"
     border.width: 1
+    radius: 12
+    clip: true
     focus: true
+
+    // 命令面板每次被唤起时淡入 + 轻微放大（从顶部生长），柔和登场。
+    transformOrigin: Item.Top
+    opacity: 0
+    scale: 0.985
+    ParallelAnimation {
+        id: appearAnim
+        NumberAnimation { target: quickAccess; property: "opacity"; to: 1; duration: 150; easing.type: Easing.OutCubic }
+        NumberAnimation { target: quickAccess; property: "scale"; to: 1; duration: 180; easing.type: Easing.OutCubic }
+    }
+    Component.onCompleted: appearAnim.start()
+    Connections {
+        target: workbenchBridge
+        function onQuickAccessRequested() {
+            quickAccess.opacity = 0
+            quickAccess.scale = 0.985
+            appearAnim.restart()
+        }
+    }
 
     Keys.onEscapePressed: workbenchBridge.activateQuickAccess(-1)
 
@@ -20,12 +41,12 @@ Rectangle {
             Layout.fillWidth: true
             height: 42
             placeholderText: "键入命令、节点、问题或最近工作流"
-            placeholderTextColor: "#999999"
-            color: "#f2f2f2"
+            placeholderTextColor: "#6b7178"
+            color: "#e3e4e6"
             selectByMouse: true
             font.pixelSize: 15
-            leftPadding: 12
-            rightPadding: 12
+            leftPadding: 14
+            rightPadding: 14
             text: quickAccessModel.query
             onTextChanged: {
                 quickAccessModel.query = text
@@ -38,9 +59,15 @@ Rectangle {
             Keys.onEnterPressed: workbenchBridge.activateQuickAccess(results.currentIndex)
             Component.onCompleted: forceActiveFocus()
             background: Rectangle {
-                color: "#3c3c3c"
-                border.color: query.activeFocus ? "#3794ff" : "#555555"
-                border.width: 1
+                color: "transparent"
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: query.activeFocus ? "#6ea0e0" : "#2e2f33"
+                    Behavior on color { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }
+                }
             }
         }
 
@@ -60,20 +87,23 @@ Rectangle {
                 required property string detail
                 width: ListView.view.width
                 height: 48
-                color: ListView.isCurrentItem ? "#04395e" : resultMouse.containsMouse ? "#2a2d2e" : "transparent"
+                radius: 7
+                color: ListView.isCurrentItem ? "#303a47" : resultMouse.containsMouse ? "#26282d" : "transparent"
+                Behavior on color { ColorAnimation { duration: 110; easing.type: Easing.OutCubic } }
 
                 Rectangle {
                     width: 68
                     height: 20
+                    radius: 5
                     anchors.left: parent.left
-                    anchors.leftMargin: 10
+                    anchors.leftMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    color: "#333333"
-                    border.color: "#4f4f4f"
+                    color: "#2c2f34"
+                    border.color: "#2e2f33"
                     Text {
                         anchors.fill: parent
                         text: kind
-                        color: "#cfcfcf"
+                        color: "#a7adb3"
                         font.pixelSize: 10
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -89,14 +119,14 @@ Rectangle {
                     spacing: 2
                     Text {
                         text: title
-                        color: "#f2f2f2"
+                        color: "#e3e4e6"
                         font.pixelSize: 13
                         width: parent.width
                         elide: Text.ElideRight
                     }
                     Text {
                         text: detail
-                        color: "#9f9f9f"
+                        color: "#9aa0a6"
                         font.pixelSize: 11
                         width: parent.width
                         elide: Text.ElideMiddle
