@@ -390,34 +390,19 @@ QString styleSheet(double uiScale)
             border-radius: 8px;
             padding: %3px %4px;
         }
+        /* 画布标签条：Chrome 风标签由 CanvasTabBar 自绘，这里只给容器底色 / 底边线。
+           strip 用 panel 底色，激活标签（base 色）凸显并与下方 base 内容融合。 */
         QWidget#canvasTabStrip {
-            background: @base@;
+            background: @panel@;
             border-bottom: %1px solid @hairline@;
         }
         QWidget#breadcrumbBar {
             background: @base@;
             border-bottom: %1px solid @hairline@;
         }
-        QTabBar#workbookTabs::tab {
-            min-height: %5px;
-            padding: 3px 12px;
-            margin: 0px;
-            border: 0px;
-            border-top-left-radius: 7px;
-            border-top-right-radius: 7px;
-            background: transparent;
-            color: @textSecondary@;
-        }
-        QTabBar#workbookTabs::tab:hover {
-            background: @elevated@;
-        }
-        QTabBar#workbookTabs::tab:selected {
-            background: @elevated@;
-            color: @textPrimary@;
-        }
         QToolButton#canvasNewButton {
             border: 0px;
-            border-radius: 6px;
+            border-radius: 7px;
             background: transparent;
             padding: 2px;
         }

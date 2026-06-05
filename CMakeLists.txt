@@ -44,6 +44,11 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/gui/MainWindow.cpp
     ImageNodeEditor/gui/AppIcon.h
     ImageNodeEditor/gui/AppIcon.cpp
+    ImageNodeEditor/gui/CanvasTabBar.h
+    ImageNodeEditor/gui/CanvasTabBar.cpp
+    ImageNodeEditor/gui/MiniMapWidget.h
+    ImageNodeEditor/gui/PreviewWidgets.h
+    ImageNodeEditor/gui/TerminalPanel.h
     ImageNodeEditor/gui/NativeWindowChrome.h
     ImageNodeEditor/gui/NativeWindowChrome.cpp
     ImageNodeEditor/gui/WorkbenchHostWidget.h

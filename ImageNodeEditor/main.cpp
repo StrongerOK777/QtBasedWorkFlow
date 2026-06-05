@@ -1,5 +1,6 @@
 #include "app/CommandLineRunner.h"
 #include "gui/AppIcon.h"
+#include "gui/AppTheme.h"
 #include "gui/MainWindow.h"
 #include "gui/NativeWindowChrome.h"
 #include "nodes/NodeFactory.h"
@@ -8,6 +9,7 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QQuickStyle>
+#include <QSettings>
 
 #include <exception>
 
@@ -66,7 +68,10 @@ int main(int argc, char* argv[])
     QCoreApplication::setOrganizationName("ALPDHomework");
     QCoreApplication::setApplicationVersion("0.1.0");
     app.setWindowIcon(AppIcon::makeAppIcon());
-    NativeWindowChrome::applyGlobalDarkAppearance();
+    // 先按保存的主题设置全局原生外观，确保浅色主题启动时窗口栏/菜单即为浅色
+    // （MainWindow 构造时会再次读取同一设置，幂等）。
+    AppTheme::setThemePreference(QSettings().value("mainWindow/theme", "dark").toString());
+    NativeWindowChrome::applyGlobalAppearance();
     NodeFactory::instance().registerBuiltins();
 
     QCommandLineParser parser;

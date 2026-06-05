@@ -11,7 +11,7 @@ void configure(QWidget* window)
     Q_UNUSED(window);
 }
 
-void applyGlobalDarkAppearance()
+void applyGlobalAppearance()
 {
 }
 

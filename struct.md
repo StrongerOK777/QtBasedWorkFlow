@@ -119,13 +119,16 @@ ImageNodeEditor/app/
 
 ```text
 ImageNodeEditor/core/
-  PortType.h
-  NodeId.h
-  Edge.h
-  NodeParameter.h
-  NodeData.h
-  Result.h
+  PortType.h        # 端口数据类型枚举
+  Edge.h            # 连线模型（fromNode/fromPort/toNode/toPort）
+  NodeParameter.h   # 节点参数元数据
+  NodeData.h        # 节点执行时传递的数据容器
+  NodeLabel.h       # 节点显示标签辅助（中文名 #序号）
+  Result.h          # 统一成功/失败返回类型
 ```
+
+说明：均为 header-only 的轻量类型（枚举、结构体、模板），无对应 `.cpp`。节点 id 直接用
+`QString`，未单独引入 `NodeId` 类型。
 
 ### `PortType.h`
 
@@ -209,35 +212,16 @@ fail(message)
 
 ```text
 ImageNodeEditor/nodes/
-  ImageNode.h
-  ImageNode.cpp
-  NodeFactory.h
-  NodeFactory.cpp
-  ImageInputNode.h
-  ImageInputNode.cpp
-  ImageOutputNode.h
-  ImageOutputNode.cpp
-  PreviewNode.h
-  PreviewNode.cpp
-  CropNode.h
-  CropNode.cpp
-  ResizeNode.h
-  ResizeNode.cpp
-  GrayscaleNode.h
-  GrayscaleNode.cpp
-  BrightnessContrastNode.h
-  BrightnessContrastNode.cpp
-  GaussianBlurNode.h
-  GaussianBlurNode.cpp
-  RotateFlipNode.h
-  RotateFlipNode.cpp
-  TextOverlayNode.h
-  TextOverlayNode.cpp
-  BlendNode.h
-  BlendNode.cpp
-  ImageMergeNode.h
-  ImageMergeNode.cpp
+  ImageNode.h / ImageNode.cpp     # 节点抽象基类
+  NodeFactory.h / NodeFactory.cpp # 节点注册与创建工厂
+  BasicNodes.h / BasicNodes.cpp   # 全部内置基础节点的集中实现
+  MacroNode.h / MacroNode.cpp     # 宏节点（封装子图）
 ```
+
+说明：基础节点（读入图片、导出图片、预览、裁切、缩放、灰度、亮度/对比度、模糊、
+旋转/翻转、文字叠加、双图混合、图片拼接等）统一实现在 `BasicNodes.cpp` 中，而不是每个
+节点一对 `.h/.cpp`，便于集中维护与一处注册到 `NodeFactory`。新增节点时在 `BasicNodes`
+中实现并在 `NodeFactory::registerBuiltins()` 注册；若是复杂可复用算法，再放进 `processing/`。
 
 ### `ImageNode`
 
@@ -298,17 +282,12 @@ ImageNodeEditor/nodes/
 
 ```text
 ImageNodeEditor/processing/
-  CropProcessor.h
-  CropProcessor.cpp
-  ResizeProcessor.h
-  ResizeProcessor.cpp
-  ColorProcessor.h
-  ColorProcessor.cpp
-  BlurProcessor.h
-  BlurProcessor.cpp
-  ComposeProcessor.h
-  ComposeProcessor.cpp
+  ImageProcessors.h / ImageProcessors.cpp  # 裁切/缩放/色彩/滤波/合成等纯算法集中实现
 ```
+
+说明：纯图像算法（裁切、缩放、灰度、亮度/对比度、模糊、旋转/翻转、文字叠加、混合、
+拼接等）统一放在 `ImageProcessors.{h,cpp}`，以无状态函数形式提供，供 `nodes/` 调用，不依赖
+任何 GUI 类型。下面各「Processor」小节描述的是算法职责分类，物理上都在这一对文件里。
 
 ### `CropProcessor`
 
@@ -449,25 +428,20 @@ QMap<NodeId, QMap<QString, NodeData>> nodeOutputs;
 
 ```text
 ImageNodeEditor/gui/
-  AppTheme.h
-  AppTheme.cpp
-  AppIcon.h
-  AppIcon.cpp
-  NativeWindowChrome.h
-  NativeWindowChrome.cpp
-  NativeWindowChrome_mac.mm
-  MainWindow.h
-  MainWindow.cpp
-  WorkbenchHostWidget.h
-  WorkbenchHostWidget.cpp
-  WorkbenchModels.h
-  WorkbenchModels.cpp
-  WorkflowCanvas.h
-  WorkflowCanvas.cpp
-  WorkflowNodeDelegate.h
-  WorkflowNodeDelegate.cpp
-  WorkflowNodePainter.h
-  WorkflowNodePainter.cpp
+  AppTheme.h / AppTheme.cpp            # 主题 palette（深/浅）、QSS、字体、节点配色单一来源
+  AppIcon.h / AppIcon.cpp             # 应用图标 + 运行时矢量线性工具图标 lineIcon()
+  CanvasTabBar.h / CanvasTabBar.cpp   # Chrome 风自绘画布标签栏
+  MiniMapWidget.h                     # 画布左下角小地图（header-only 内部控件）
+  PreviewWidgets.h                    # 预览标签 + 大图弹窗（header-only 内部控件）
+  TerminalPanel.h                     # 底部跨平台命令运行器（header-only 内部控件）
+  NativeWindowChrome.h / .cpp / _mac.mm  # 平台原生窗口栏配置（macOS 跟随主题深/浅）
+  MainWindow.h / MainWindow.cpp       # 主窗口协调层（界面构建、命令、设置页、画布桥接）
+  WorkbenchHostWidget.h / .cpp        # 把 QML 工作台表面嵌入 Widgets 主窗口
+  WorkbenchModels.h / .cpp            # 暴露给 QML 的列表模型、命令注册、桥接与主题对象
+  WorkflowCanvas.h / .cpp             # Qt Nodes 画布桥接（节点/连线/选中/拖放/缩放）
+  WorkflowCommands.h / .cpp           # 撤销/重做的整图快照命令
+  WorkflowNodeDelegate.h / .cpp       # ImageNode → Qt Nodes 节点模型与内联参数控件
+  WorkflowNodePainter.h / .cpp        # Qt Nodes 节点卡片自绘（按类别异形、状态条）
 
 ImageNodeEditor/qml/
   WorkbenchTitleBar.qml
@@ -489,8 +463,8 @@ ImageNodeEditor/qml/
 - 组织 `WorkbenchHostWidget`、Qt Nodes 画布、预览栏和底部诊断面板。
 - 创建跨平台命令入口并把命令交给工作台桥接层复用。
 - 把画布操作转发给 `WorkflowCanvas`，把业务修改落回 `WorkflowGraph`。
-- 强制使用 VS Code Dark 风格深色工作台；不再提供浅色或系统主题入口。
-- 提供 VS Code Dark 风格设置页，集中管理界面缩放、画布缩放、滚轮缩放速度、工作台区域开关和快捷键查询。
+- 支持深色 / 浅色两套主题（默认深色），由 `AppTheme::Palette` 统一驱动 QSS、QML、画布节点与原生窗口栏，可在设置中切换并持久化。
+- 提供设置页，集中管理主题、界面缩放、画布缩放、滚轮缩放速度、工作台区域开关和快捷键查询。
 - 实现“整理画布”命令的 UI 级布局协调：先复用 `WorkflowValidator` 校验图，再按 DAG 层级、同层重心排序和节点尺寸估算更新节点位置。
 
 不应该做：
@@ -589,13 +563,12 @@ ImageNodeEditor/qml/
 
 ```text
 ImageNodeEditor/util/
-  PathUtils.h
-  PathUtils.cpp
-  ImageUtils.h
-  ImageUtils.cpp
-  JsonUtils.h
-  JsonUtils.cpp
+  PathUtils.h / PathUtils.cpp   # 路径解析（相对/绝对、workflow 基准目录、可写性检查）
 ```
+
+说明：当前只有 `PathUtils`。图片辅助（格式转换、空图检查、尺寸限制、安全复制）目前
+内联在 `processing/ImageProcessors` 与各节点中；JSON 安全读取内联在 `WorkflowSerializer`
+里。下面的 `ImageUtils` / `JsonUtils` 小节是后续若复用度变高时可独立出来的方向，尚未单独成文件。
 
 ### `PathUtils`
 

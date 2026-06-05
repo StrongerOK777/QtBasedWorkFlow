@@ -3,7 +3,11 @@
 #include "core/NodeLabel.h"
 #include "gui/AppIcon.h"
 #include "gui/AppTheme.h"
+#include "gui/CanvasTabBar.h"
+#include "gui/MiniMapWidget.h"
 #include "gui/NativeWindowChrome.h"
+#include "gui/PreviewWidgets.h"
+#include "gui/TerminalPanel.h"
 #include "gui/WorkbenchHostWidget.h"
 #include "gui/WorkbenchModels.h"
 #include "gui/WorkflowCanvas.h"
@@ -130,185 +134,6 @@ QString bottomTabsStyleSheet()
     return css;
 }
 
-QIcon lineIcon(const QString& name)
-{
-    constexpr int size = 64;
-    QPixmap pix(size, size);
-    pix.fill(Qt::transparent);
-    QPainter painter(&pix);
-    painter.setRenderHint(QPainter::Antialiasing);
-    const QColor ink = AppTheme::isDarkTheme() ? QColor("#e0e0e0") : QColor("#303030");
-    const QColor accent = AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#505050");
-    const QColor warm = AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#707070");
-    QPen pen(ink, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-    painter.setPen(pen);
-    painter.setBrush(Qt::NoBrush);
-
-    auto page = [&] {
-        painter.drawRect(QRectF(18, 10, 28, 42));
-        painter.drawLine(QPointF(34, 10), QPointF(46, 22));
-        painter.drawLine(QPointF(34, 10), QPointF(34, 22));
-        painter.drawLine(QPointF(34, 22), QPointF(46, 22));
-    };
-    auto folder = [&] {
-        painter.drawPath([] {
-            QPainterPath path;
-            path.moveTo(9, 23);
-            path.lineTo(25, 23);
-            path.lineTo(30, 17);
-            path.lineTo(42, 17);
-            path.quadTo(48, 17, 50, 23);
-            path.lineTo(55, 23);
-            path.lineTo(50, 50);
-            path.lineTo(12, 50);
-            path.closeSubpath();
-            return path;
-        }());
-    };
-
-    if (name == "new") {
-        page();
-        painter.setPen(QPen(accent, 4.8, Qt::SolidLine, Qt::RoundCap));
-        painter.drawLine(QPointF(32, 29), QPointF(32, 43));
-        painter.drawLine(QPointF(25, 36), QPointF(39, 36));
-    } else if (name == "plus") {
-        // 简洁的「+」，用于画布标签条的新建按钮，风格与标签更一致。
-        painter.setPen(QPen(ink, 4.8, Qt::SolidLine, Qt::RoundCap));
-        painter.drawLine(QPointF(32, 20), QPointF(32, 44));
-        painter.drawLine(QPointF(20, 32), QPointF(44, 32));
-    } else if (name == "open") {
-        folder();
-        painter.setPen(QPen(accent, 4.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(QPointF(32, 43), QPointF(32, 28));
-        painter.drawLine(QPointF(24, 35), QPointF(32, 27));
-        painter.drawLine(QPointF(40, 35), QPointF(32, 27));
-    } else if (name == "save") {
-        painter.drawRect(QRectF(13, 11, 38, 42));
-        painter.drawRect(QRectF(21, 11, 22, 14));
-        painter.drawRect(QRectF(22, 35, 20, 14));
-    } else if (name == "saveAs") {
-        painter.drawRect(QRectF(12, 12, 34, 40));
-        painter.drawRect(QRectF(20, 12, 18, 12));
-        painter.setPen(QPen(warm, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(QPointF(40, 41), QPointF(54, 27));
-        painter.drawLine(QPointF(47, 27), QPointF(54, 27));
-        painter.drawLine(QPointF(54, 27), QPointF(54, 34));
-    } else if (name == "run") {
-        painter.setBrush(QColor("#34c759"));
-        painter.setPen(Qt::NoPen);
-        QPainterPath play;
-        play.moveTo(23, 14);
-        play.lineTo(50, 32);
-        play.lineTo(23, 50);
-        play.closeSubpath();
-        painter.drawPath(play);
-    } else if (name == "exportCanvas") {
-        painter.drawRect(QRectF(12, 14, 40, 32));
-        painter.drawLine(QPointF(20, 24), QPointF(44, 24));
-        painter.drawLine(QPointF(20, 32), QPointF(36, 32));
-        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(QPointF(32, 49), QPointF(32, 32));
-        painter.drawLine(QPointF(24, 41), QPointF(32, 49));
-        painter.drawLine(QPointF(40, 41), QPointF(32, 49));
-    } else if (name == "exportWorkflow") {
-        page();
-        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(QPointF(32, 48), QPointF(32, 29));
-        painter.drawLine(QPointF(24, 40), QPointF(32, 48));
-        painter.drawLine(QPointF(40, 40), QPointF(32, 48));
-    } else if (name == "exportPreview") {
-        painter.drawRect(QRectF(12, 14, 40, 30));
-        painter.drawLine(QPointF(18, 38), QPointF(28, 27));
-        painter.drawLine(QPointF(28, 27), QPointF(35, 34));
-        painter.drawLine(QPointF(35, 34), QPointF(44, 23));
-        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawLine(QPointF(32, 51), QPointF(32, 34));
-        painter.drawLine(QPointF(24, 43), QPointF(32, 51));
-        painter.drawLine(QPointF(40, 43), QPointF(32, 51));
-    } else if (name == "zoomIn" || name == "zoomOut") {
-        painter.drawEllipse(QPointF(28, 28), 16, 16);
-        painter.drawLine(QPointF(40, 40), QPointF(52, 52));
-        painter.setPen(QPen(accent, 4.8, Qt::SolidLine, Qt::RoundCap));
-        painter.drawLine(QPointF(20, 28), QPointF(36, 28));
-        if (name == "zoomIn") {
-            painter.drawLine(QPointF(28, 20), QPointF(28, 36));
-        }
-    } else if (name == "scaleReset") {
-        painter.drawArc(QRectF(16, 16, 32, 32), 45 * 16, 285 * 16);
-        painter.drawLine(QPointF(45, 15), QPointF(45, 27));
-        painter.drawLine(QPointF(45, 15), QPointF(33, 15));
-        painter.setFont(QFont("Arial", 14, QFont::Bold));
-        painter.drawText(QRectF(18, 24, 28, 18), Qt::AlignCenter, "1:1");
-    } else if (name == "dockLeft") {
-        painter.drawRect(QRectF(12, 12, 40, 40));
-        painter.fillRect(QRectF(12, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
-        painter.drawLine(QPointF(25, 12), QPointF(25, 52));
-    } else if (name == "dockRight") {
-        painter.drawRect(QRectF(12, 12, 40, 40));
-        painter.fillRect(QRectF(39, 12, 13, 40), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
-        painter.drawLine(QPointF(39, 12), QPointF(39, 52));
-    } else if (name == "dockBottom") {
-        painter.drawRect(QRectF(12, 12, 40, 40));
-        painter.fillRect(QRectF(12, 39, 40, 13), AppTheme::isDarkTheme() ? QColor(238, 238, 238, 62) : QColor(80, 80, 80, 70));
-        painter.drawLine(QPointF(12, 39), QPointF(52, 39));
-    } else if (name == "nodes") {
-        painter.drawRect(QRectF(11, 12, 17, 15));
-        painter.drawRect(QRectF(36, 12, 17, 15));
-        painter.drawRect(QRectF(23, 38, 18, 15));
-        painter.drawLine(QPointF(20, 27), QPointF(29, 38));
-        painter.drawLine(QPointF(45, 27), QPointF(35, 38));
-    } else if (name == "workflow") {
-        painter.drawRect(QRectF(13, 12, 16, 13));
-        painter.drawRect(QRectF(35, 26, 16, 13));
-        painter.drawRect(QRectF(13, 41, 16, 13));
-        painter.drawLine(QPointF(29, 18), QPointF(35, 31));
-        painter.drawLine(QPointF(35, 35), QPointF(29, 47));
-    } else if (name == "layoutReset") {
-        painter.drawRect(QRectF(12, 12, 40, 40));
-        painter.drawLine(QPointF(25, 12), QPointF(25, 52));
-        painter.drawLine(QPointF(12, 39), QPointF(52, 39));
-        painter.setPen(QPen(accent, 4.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawArc(QRectF(22, 22, 20, 20), 40 * 16, 260 * 16);
-    } else if (name == "fullscreen") {
-        painter.drawLine(QPointF(14, 26), QPointF(14, 14));
-        painter.drawLine(QPointF(14, 14), QPointF(26, 14));
-        painter.drawLine(QPointF(38, 14), QPointF(50, 14));
-        painter.drawLine(QPointF(50, 14), QPointF(50, 26));
-        painter.drawLine(QPointF(50, 38), QPointF(50, 50));
-        painter.drawLine(QPointF(50, 50), QPointF(38, 50));
-        painter.drawLine(QPointF(26, 50), QPointF(14, 50));
-        painter.drawLine(QPointF(14, 50), QPointF(14, 38));
-    } else if (name == "settings") {
-        painter.drawEllipse(QPointF(32, 32), 8, 8);
-        constexpr double pi = 3.14159265358979323846;
-        for (int i = 0; i < 8; ++i) {
-            const double a = i * pi / 4.0;
-            const QPointF inner(32 + std::cos(a) * 16, 32 + std::sin(a) * 16);
-            const QPointF outer(32 + std::cos(a) * 23, 32 + std::sin(a) * 23);
-            painter.drawLine(inner, outer);
-        }
-    } else if (name == "clearLog") {
-        painter.drawRect(QRectF(16, 14, 32, 38));
-        painter.drawLine(QPointF(22, 24), QPointF(42, 24));
-        painter.drawLine(QPointF(22, 32), QPointF(38, 32));
-        painter.drawLine(QPointF(22, 40), QPointF(34, 40));
-        painter.setPen(QPen(warm, 4.8, Qt::SolidLine, Qt::RoundCap));
-        painter.drawLine(QPointF(44, 14), QPointF(54, 24));
-        painter.drawLine(QPointF(54, 14), QPointF(44, 24));
-    } else if (name == "back" || name == "forward") {
-        const qreal start = name == "back" ? 42 : 22;
-        const qreal tip = name == "back" ? 20 : 44;
-        painter.drawLine(QPointF(start, 18), QPointF(tip, 32));
-        painter.drawLine(QPointF(tip, 32), QPointF(start, 46));
-    } else if (name == "more") {
-        painter.setBrush(ink);
-        painter.setPen(Qt::NoPen);
-        painter.drawEllipse(QPointF(20, 32), 4.2, 4.2);
-        painter.drawEllipse(QPointF(32, 32), 4.2, 4.2);
-        painter.drawEllipse(QPointF(44, 32), 4.2, 4.2);
-    }
-    return QIcon(pix);
-}
 
 class DelayedToolTipFilter final : public QObject {
 public:
@@ -463,239 +288,6 @@ Result<WorkflowGraph> builtInTemplateGraph(const QString& id)
     }
     return Result<WorkflowGraph>::fail("未知内置模板");
 }
-
-class ImagePopupWindow final : public QWidget {
-public:
-    explicit ImagePopupWindow(const QImage& image, QWidget* parent = nullptr)
-        : QWidget(parent, Qt::Window), image_(image)
-    {
-        setAttribute(Qt::WA_DeleteOnClose);
-        setWindowTitle("图片预览");
-        setCursor(Qt::PointingHandCursor);
-
-        auto* layout = new QVBoxLayout(this);
-        layout->setContentsMargins(8, 8, 8, 8);
-        imageLabel_ = new QLabel;
-        imageLabel_->setAlignment(Qt::AlignCenter);
-        imageLabel_->setStyleSheet(QString("background:%1;").arg(AppTheme::palette().base.name()));
-        layout->addWidget(imageLabel_);
-
-        QSize targetSize = image_.size();
-        if (auto* screen = QGuiApplication::primaryScreen()) {
-            const QSize maxSize = screen->availableGeometry().size() * 0.82;
-            targetSize.scale(maxSize, Qt::KeepAspectRatio);
-        }
-        resize(targetSize.expandedTo(QSize(320, 240)));
-        updatePixmap();
-    }
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        event->accept();
-        close();
-    }
-
-    void resizeEvent(QResizeEvent* event) override
-    {
-        QWidget::resizeEvent(event);
-        updatePixmap();
-    }
-
-private:
-    void updatePixmap()
-    {
-        if (!imageLabel_ || image_.isNull()) {
-            return;
-        }
-        imageLabel_->setPixmap(QPixmap::fromImage(image_).scaled(imageLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    }
-
-    QImage image_;
-    QLabel* imageLabel_ = nullptr;
-};
-
-class PreviewLabel final : public QLabel {
-public:
-    explicit PreviewLabel(QWidget* parent = nullptr) : QLabel(parent)
-    {
-        setCursor(Qt::ArrowCursor);
-    }
-
-    void setSourceImage(const QImage& image)
-    {
-        image_ = image;
-        setCursor(image_.isNull() ? Qt::ArrowCursor : Qt::PointingHandCursor);
-        if (image_.isNull()) {
-            setText("暂无预览");
-            setPixmap({});
-            return;
-        }
-        setText({});
-        updatePixmap();
-    }
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        if (!image_.isNull()) {
-            auto* popup = new ImagePopupWindow(image_, window());
-            popup->show();
-            event->accept();
-            return;
-        }
-        QLabel::mousePressEvent(event);
-    }
-
-    void resizeEvent(QResizeEvent* event) override
-    {
-        QLabel::resizeEvent(event);
-        updatePixmap();
-    }
-
-private:
-    void updatePixmap()
-    {
-        if (image_.isNull()) {
-            return;
-        }
-        setPixmap(QPixmap::fromImage(image_).scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    }
-
-    QImage image_;
-};
-
-class MiniMapWidget final : public QWidget {
-public:
-    MiniMapWidget(WorkflowGraph* graph, QGraphicsView* view, double* uiScale, QWidget* parent = nullptr)
-        : QWidget(parent), graph_(graph), view_(view), uiScale_(uiScale)
-    {
-        setObjectName("miniMap");
-        setCursor(Qt::PointingHandCursor);
-        setToolTip("小地图：点击或拖拽快速定位画布");
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        Q_UNUSED(event);
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
-        const QRectF box = rect().adjusted(1, 1, -1, -1);
-        painter.setPen(QPen(QColor(128, 128, 128, 120), 1));
-        painter.setBrush(QColor(255, 255, 255, AppTheme::isDarkTheme() ? 36 : 190));
-        painter.drawRect(box);
-
-        const QRectF world = worldRect();
-        if (!world.isValid() || world.isEmpty()) {
-            return;
-        }
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(AppTheme::isDarkTheme() ? QColor("#b8b8b8") : QColor("#505050"));
-        for (const auto& record : graph_->nodes()) {
-            QRectF nodeRect(record.position, QSizeF(AppTheme::nodeMetrics(scale()).width, AppTheme::nodeMetrics(scale()).headerHeight + 78 * scale()));
-            painter.drawRect(mapWorldRect(nodeRect, world));
-        }
-
-        painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(AppTheme::isDarkTheme() ? QColor("#f2f2f2") : QColor("#202020"), 1.6));
-        painter.drawRect(mapWorldRect(viewSceneRect(), world));
-    }
-
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        centerAt(event->position());
-        event->accept();
-    }
-
-    void mouseMoveEvent(QMouseEvent* event) override
-    {
-        if (event->buttons().testFlag(Qt::LeftButton)) {
-            centerAt(event->position());
-            event->accept();
-            return;
-        }
-        QWidget::mouseMoveEvent(event);
-    }
-
-private:
-    double scale() const
-    {
-        return uiScale_ ? *uiScale_ : 1.0;
-    }
-
-    QRectF viewSceneRect() const
-    {
-        if (!view_) {
-            return {};
-        }
-        return view_->mapToScene(view_->viewport()->rect()).boundingRect();
-    }
-
-    QRectF worldRect() const
-    {
-        QRectF world = viewSceneRect();
-        const auto metrics = AppTheme::nodeMetrics(scale());
-        for (const auto& record : graph_->nodes()) {
-            QRectF nodeRect(record.position, QSizeF(metrics.width, metrics.headerHeight + 78 * scale()));
-            world = world.united(nodeRect);
-        }
-        return world.adjusted(-120 * scale(), -120 * scale(), 120 * scale(), 120 * scale());
-    }
-
-    QRectF contentRect() const
-    {
-        return rect().adjusted(10, 10, -10, -10);
-    }
-
-    QPointF mapWorldPoint(const QPointF& point, const QRectF& world) const
-    {
-        const QRectF content = contentRect();
-        const double sx = content.width() / std::max<qreal>(1.0, world.width());
-        const double sy = content.height() / std::max<qreal>(1.0, world.height());
-        const double s = std::min(sx, sy);
-        const QSizeF mappedSize(world.width() * s, world.height() * s);
-        const QPointF offset(content.center().x() - mappedSize.width() / 2.0,
-                             content.center().y() - mappedSize.height() / 2.0);
-        return QPointF(offset.x() + (point.x() - world.left()) * s,
-                       offset.y() + (point.y() - world.top()) * s);
-    }
-
-    QRectF mapWorldRect(const QRectF& source, const QRectF& world) const
-    {
-        const QPointF topLeft = mapWorldPoint(source.topLeft(), world);
-        const QPointF bottomRight = mapWorldPoint(source.bottomRight(), world);
-        return QRectF(topLeft, bottomRight).normalized();
-    }
-
-    QPointF unmapWorldPoint(const QPointF& point, const QRectF& world) const
-    {
-        const QRectF content = contentRect();
-        const double sx = content.width() / std::max<qreal>(1.0, world.width());
-        const double sy = content.height() / std::max<qreal>(1.0, world.height());
-        const double s = std::min(sx, sy);
-        const QSizeF mappedSize(world.width() * s, world.height() * s);
-        const QPointF offset(content.center().x() - mappedSize.width() / 2.0,
-                             content.center().y() - mappedSize.height() / 2.0);
-        return QPointF(world.left() + (point.x() - offset.x()) / s,
-                       world.top() + (point.y() - offset.y()) / s);
-    }
-
-    void centerAt(const QPointF& widgetPosition)
-    {
-        const QRectF world = worldRect();
-        if (!view_ || !world.isValid()) {
-            return;
-        }
-        view_->centerOn(unmapWorldPoint(widgetPosition, world));
-        update();
-    }
-
-    WorkflowGraph* graph_ = nullptr;
-    QGraphicsView* view_ = nullptr;
-    double* uiScale_ = nullptr;
-};
 
 class QuickNodePalettePopup final : public QDialog {
 public:
@@ -889,134 +481,6 @@ void computeMacroPortMappings(const WorkflowGraph& subgraph,
 
 }
 
-class TerminalPanel final : public QWidget {
-public:
-    explicit TerminalPanel(double uiScale, QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        setObjectName("terminalPanel");
-        auto* root = new QVBoxLayout(this);
-        root->setContentsMargins(AppTheme::px(8, uiScale), AppTheme::px(8, uiScale),
-                                 AppTheme::px(8, uiScale), AppTheme::px(8, uiScale));
-        root->setSpacing(AppTheme::px(6, uiScale));
-
-        output_ = new QPlainTextEdit;
-        output_->setObjectName("terminalOutput");
-        output_->setReadOnly(true);
-        output_->setLineWrapMode(QPlainTextEdit::NoWrap);
-        QFont mono("Menlo");
-        mono.setStyleHint(QFont::Monospace);
-        mono.setPointSizeF(std::max(10.0, 11.5 * uiScale));
-        output_->setFont(mono);
-        root->addWidget(output_, 1);
-
-        auto* controls = new QWidget;
-        auto* controlsLayout = new QHBoxLayout(controls);
-        controlsLayout->setContentsMargins(0, 0, 0, 0);
-        controlsLayout->setSpacing(AppTheme::px(6, uiScale));
-        input_ = new QLineEdit;
-        input_->setPlaceholderText("输入命令后按 Enter");
-        auto* runButton = new QPushButton("运行");
-        auto* clearButton = new QPushButton("清空");
-        auto* restartButton = new QPushButton("重启");
-        controlsLayout->addWidget(input_, 1);
-        controlsLayout->addWidget(runButton);
-        controlsLayout->addWidget(clearButton);
-        controlsLayout->addWidget(restartButton);
-        root->addWidget(controls);
-
-        process_.setProcessChannelMode(QProcess::MergedChannels);
-        process_.setWorkingDirectory(QDir::currentPath());
-        connect(&process_, &QProcess::readyReadStandardOutput, this, [this] {
-            append(QString::fromLocal8Bit(process_.readAllStandardOutput()));
-        });
-        connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
-            Q_UNUSED(error);
-            append(QString("终端错误：%1\n").arg(process_.errorString()));
-        });
-        connect(&process_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this](int code, QProcess::ExitStatus status) {
-            Q_UNUSED(status);
-            append(QString("\n[进程结束，退出码 %1]\n").arg(code));
-        });
-        connect(input_, &QLineEdit::returnPressed, this, [this] { submitCommand(); });
-        connect(runButton, &QPushButton::clicked, this, [this] { submitCommand(); });
-        connect(clearButton, &QPushButton::clicked, output_, &QPlainTextEdit::clear);
-        connect(restartButton, &QPushButton::clicked, this, [this] { restartShell(); });
-
-        startShell();
-    }
-
-    ~TerminalPanel() override
-    {
-        // 退出时先结束内嵌 shell 子进程，避免 QProcess 析构时仍在运行而报警告。
-        if (process_.state() != QProcess::NotRunning) {
-            process_.kill();
-            process_.waitForFinished(500);
-        }
-    }
-
-    void restartShell()
-    {
-        if (process_.state() != QProcess::NotRunning) {
-            process_.kill();
-            process_.waitForFinished(800);
-        }
-        startShell();
-    }
-
-private:
-    void append(const QString& text)
-    {
-        output_->moveCursor(QTextCursor::End);
-        output_->insertPlainText(text);
-        output_->moveCursor(QTextCursor::End);
-    }
-
-    void startShell()
-    {
-        QString program;
-        QStringList args;
-#ifdef Q_OS_WIN
-        program = QStandardPaths::findExecutable("powershell.exe");
-        if (!program.isEmpty()) {
-            args << "-NoLogo" << "-NoExit";
-        } else {
-            program = QStandardPaths::findExecutable("cmd.exe");
-        }
-#else
-        program = qEnvironmentVariable("SHELL");
-        if (program.isEmpty()) {
-            program = QStandardPaths::findExecutable("bash");
-        }
-        if (program.isEmpty()) {
-            program = "/bin/bash";
-        }
-        args << "-i";
-#endif
-        append(QString("[启动终端] %1 %2\n").arg(program, args.join(' ')).trimmed() + "\n");
-        process_.start(program, args);
-    }
-
-    void submitCommand()
-    {
-        const QString command = input_->text();
-        if (command.trimmed().isEmpty()) {
-            return;
-        }
-        if (process_.state() == QProcess::NotRunning) {
-            startShell();
-        }
-        append(QString("> %1\n").arg(command));
-        process_.write(command.toLocal8Bit());
-        process_.write("\n");
-        input_->clear();
-    }
-
-    QProcess process_;
-    QPlainTextEdit* output_ = nullptr;
-    QLineEdit* input_ = nullptr;
-};
-
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
@@ -1102,7 +566,7 @@ void MainWindow::createActions()
     mainToolbar_->setFloatable(false);
     auto makeAction = [&](const QString& text, const QString& iconName, auto slot) {
         auto* action = new QAction(text, this);
-        action->setIcon(lineIcon(iconName));
+        action->setIcon(AppIcon::lineIcon(iconName));
         action->setData(iconName);
         action->setToolTip(text);
         action->setStatusTip(text);
@@ -1148,13 +612,13 @@ void MainWindow::createActions()
     mainToolbar_->addAction(exportWorkflowCopyAction_);
     mainToolbar_->addAction(exportPreviewAction_);
 
-    returnToParentAction_ = new QAction(lineIcon("back"), "返回上一级视图", this);
+    returnToParentAction_ = new QAction(AppIcon::lineIcon("back"), "返回上一级视图", this);
     returnToParentAction_->setData("back");
     returnToParentAction_->setToolTip("返回上级图");
     returnToParentAction_->setStatusTip("返回宏节点外层图");
     connect(returnToParentAction_, &QAction::triggered, this, [this] { leaveMacroNode(); });
     returnToParentAction_->setEnabled(false);
-    forwardToChildAction_ = new QAction(lineIcon("forward"), "前往下一级视图", this);
+    forwardToChildAction_ = new QAction(AppIcon::lineIcon("forward"), "前往下一级视图", this);
     forwardToChildAction_->setData("forward");
     forwardToChildAction_->setToolTip("前往刚离开的子图");
     forwardToChildAction_->setStatusTip("按导航历史前进");
@@ -1187,14 +651,14 @@ void MainWindow::createActions()
 
     nodeOperationMenu_ = menuBar()->addMenu("节点操作");
     commandCenterMenu_ = new QMenu("更多操作", this);
-    commandCenterAction_ = new QAction(lineIcon("more"), "更多操作", this);
+    commandCenterAction_ = new QAction(AppIcon::lineIcon("more"), "更多操作", this);
     commandCenterAction_->setData("more");
     commandCenterAction_->setToolTip("更多操作");
 
     viewMenu_ = menuBar()->addMenu("视图");
     auto addViewAction = [&](const QString& text, const QString& iconName, const QList<QKeySequence>& shortcuts, auto slot) {
         auto* action = new QAction(text, this);
-        action->setIcon(lineIcon(iconName));
+        action->setIcon(AppIcon::lineIcon(iconName));
         action->setData(iconName);
         action->setToolTip(text);
         action->setStatusTip(text);
@@ -1223,7 +687,7 @@ void MainWindow::createActions()
     mainToolbar_->addAction(resetScaleAction);
 
     settingsMenu_ = menuBar()->addMenu("设置");
-    settingsAction_ = new QAction(lineIcon("settings"), "打开设置", this);
+    settingsAction_ = new QAction(AppIcon::lineIcon("settings"), "打开设置", this);
     settingsAction_->setData("settings");
     settingsAction_->setToolTip("打开设置");
     settingsAction_->setStatusTip("打开设置");
@@ -1305,10 +769,10 @@ void MainWindow::createLayout()
     auto* zoomLayout = new QVBoxLayout(canvasZoomOverlay_);
     zoomLayout->setContentsMargins(0, 0, 0, 0);
     canvasZoomInButton_ = new QToolButton;
-    canvasZoomInButton_->setIcon(lineIcon("zoomIn"));
+    canvasZoomInButton_->setIcon(AppIcon::lineIcon("zoomIn"));
     canvasZoomInButton_->setToolTip("放大画布");
     canvasZoomOutButton_ = new QToolButton;
-    canvasZoomOutButton_->setIcon(lineIcon("zoomOut"));
+    canvasZoomOutButton_->setIcon(AppIcon::lineIcon("zoomOut"));
     canvasZoomOutButton_->setToolTip("缩小画布");
     zoomLayout->addWidget(canvasZoomInButton_, 0, Qt::AlignRight);
     zoomLayout->addWidget(canvasZoomOutButton_, 0, Qt::AlignRight);
@@ -1326,10 +790,9 @@ void MainWindow::createLayout()
     connect(canvasZoomOutButton_, &QToolButton::clicked, this, [this] { zoomOut(); });
 
     // ===== 画布顶部：VS Code 风画布标签条 + 宏层级面包屑（在画布之上）=====
-    workbookTabs_ = new QTabBar;
+    workbookTabs_ = new CanvasTabBar;  // Chrome 风自绘标签栏
     workbookTabs_->setObjectName("workbookTabs");
     workbookTabs_->setDocumentMode(true);
-    workbookTabs_->setDrawBase(false);  // 不画标签条基线，避免顶部出现多余色块
     workbookTabs_->setExpanding(false);
     workbookTabs_->setMovable(true);
     workbookTabs_->setTabsClosable(true);
@@ -1351,7 +814,7 @@ void MainWindow::createLayout()
         }
         refreshWorkbookTabs();
     });
-    newWorkbookAction_ = new QAction(lineIcon("plus"), "新建画布", this);
+    newWorkbookAction_ = new QAction(AppIcon::lineIcon("plus"), "新建画布", this);
     newWorkbookAction_->setData("plus");
     newWorkbookAction_->setToolTip("新建画布");
     connect(newWorkbookAction_, &QAction::triggered, this, [this] { addWorkbookPage(); });
@@ -1435,7 +898,7 @@ void MainWindow::createLayout()
         headerLayout->setContentsMargins(0, 0, 0, 0);
         auto* title = new QLabel(titleText);
         auto* clearButton = new QToolButton;
-        clearButton->setIcon(lineIcon("clearLog"));
+        clearButton->setIcon(AppIcon::lineIcon("clearLog"));
         clearButton->setToolTip(QString("清空%1").arg(titleText));
         clearButton->setAutoRaise(true);
         connect(clearButton, &QToolButton::clicked, this, [this, list] {
@@ -1462,10 +925,10 @@ void MainWindow::createLayout()
     bottomTabs_->addTab(makeLogPage(log_, "输出"), "输出");
 
     layoutMenu_ = menuBar()->addMenu("布局");
-    previewToggleAction_ = new QAction(lineIcon("dockRight"), "显示预览", this);
+    previewToggleAction_ = new QAction(AppIcon::lineIcon("dockRight"), "显示预览", this);
     previewToggleAction_->setCheckable(true);
     previewToggleAction_->setChecked(true);
-    bottomToggleAction_ = new QAction(lineIcon("dockBottom"), "显示底部面板", this);
+    bottomToggleAction_ = new QAction(AppIcon::lineIcon("dockBottom"), "显示底部面板", this);
     bottomToggleAction_->setCheckable(true);
     bottomToggleAction_->setChecked(true);
     layoutMenu_->addAction(previewToggleAction_);
@@ -1477,19 +940,19 @@ void MainWindow::createLayout()
     connect(autoLayoutAction, &QAction::triggered, this, [this] { autoLayoutWorkflow(); });
     auto* fullScreenAction = layoutMenu_->addAction("全屏切换");
     connect(fullScreenAction, &QAction::triggered, this, [this] { toggleFullScreenMode(); });
-    previewToggleAction_->setIcon(lineIcon("dockRight"));
+    previewToggleAction_->setIcon(AppIcon::lineIcon("dockRight"));
     previewToggleAction_->setData("dockRight");
     previewToggleAction_->setToolTip("显示或隐藏预览");
-    bottomToggleAction_->setIcon(lineIcon("dockBottom"));
+    bottomToggleAction_->setIcon(AppIcon::lineIcon("dockBottom"));
     bottomToggleAction_->setData("dockBottom");
     bottomToggleAction_->setToolTip("显示或隐藏底部面板");
-    resetAction->setIcon(lineIcon("layoutReset"));
+    resetAction->setIcon(AppIcon::lineIcon("layoutReset"));
     resetAction->setData("layoutReset");
     resetAction->setToolTip("重置布局");
-    autoLayoutAction->setIcon(lineIcon("layoutReset"));
+    autoLayoutAction->setIcon(AppIcon::lineIcon("layoutReset"));
     autoLayoutAction->setData("layoutReset");
     autoLayoutAction->setToolTip("按拓扑顺序整理当前画布");
-    fullScreenAction->setIcon(lineIcon("fullscreen"));
+    fullScreenAction->setIcon(AppIcon::lineIcon("fullscreen"));
     fullScreenAction->setData("fullscreen");
     fullScreenAction->setToolTip("全屏切换");
     workbenchCommands_->addAction("workbench.preview", "布局", previewToggleAction_);
@@ -4690,6 +4153,11 @@ void MainWindow::showSettingsDialog()
         setUiScale(uiScaleSpin->value() / 100.0);
         applyUiScale();
         applyDialogStyle();  // 主题切换后即时重绘设置对话框自身
+        // 主题切换后让 macOS 原生标题栏/红绿灯与全局外观跟随新主题（守卫销毁期/不可见）。
+        if (isVisible() && !shuttingDown_) {
+            NativeWindowChrome::applyGlobalAppearance();
+            NativeWindowChrome::configure(this);
+        }
         const double requestedZoom = canvasZoomSlider->value() / 100.0;
         if (!qFuzzyCompare(requestedZoom, zoomScale_)) {
             applyZoomFactor(requestedZoom / zoomScale_);
@@ -4777,7 +4245,7 @@ void MainWindow::applyUiScale()
         for (auto* action : toolbar->actions()) {
             const QString iconName = action->data().toString();
             if (!iconName.isEmpty()) {
-                action->setIcon(lineIcon(iconName));
+                action->setIcon(AppIcon::lineIcon(iconName));
             }
         }
     };
@@ -4787,7 +4255,7 @@ void MainWindow::applyUiScale()
         }
         const QString iconName = action->data().toString();
         if (!iconName.isEmpty()) {
-            action->setIcon(lineIcon(iconName));
+            action->setIcon(AppIcon::lineIcon(iconName));
         }
     };
 
@@ -4826,12 +4294,12 @@ void MainWindow::applyUiScale()
     if (canvasZoomInButton_) {
         canvasZoomInButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
         canvasZoomInButton_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        canvasZoomInButton_->setIcon(lineIcon("zoomIn"));
+        canvasZoomInButton_->setIcon(AppIcon::lineIcon("zoomIn"));
     }
     if (canvasZoomOutButton_) {
         canvasZoomOutButton_->setFixedSize(metrics.canvasZoomButtonW, metrics.canvasZoomButtonH);
         canvasZoomOutButton_->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
-        canvasZoomOutButton_->setIcon(lineIcon("zoomOut"));
+        canvasZoomOutButton_->setIcon(AppIcon::lineIcon("zoomOut"));
     }
     if (miniMap_) {
         miniMap_->setFixedSize(AppTheme::px(180, uiScale_), AppTheme::px(126, uiScale_));
@@ -4854,7 +4322,7 @@ void MainWindow::applyUiScale()
             button->setFixedSize(AppTheme::px(50, uiScale_), AppTheme::px(50, uiScale_));
             button->setIconSize(QSize(metrics.toolbarIcon, metrics.toolbarIcon));
             const QString tooltip = button->toolTip();
-            button->setIcon(lineIcon(tooltip == "工作流" ? "workflow" : "nodes"));
+            button->setIcon(AppIcon::lineIcon(tooltip == "工作流" ? "workflow" : "nodes"));
         }
     }
     if (primarySidebar_) {

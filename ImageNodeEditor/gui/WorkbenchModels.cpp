@@ -768,32 +768,18 @@ void WorkbenchBridge::startNodeDrag(const QString& typeName, const QString& titl
     if (typeName.trimmed().isEmpty()) {
         return;
     }
+    Q_UNUSED(title);
+    Q_UNUSED(category);
     auto* drag = new QDrag(QApplication::activeWindow());
     auto* mime = new QMimeData;
     mime->setData("application/x-imagenode-type", typeName.toUtf8());
-    mime->setText(typeName);
     drag->setMimeData(mime);
 
-    QPixmap pixmap(220, 44);
-    pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(QRect(0, 0, pixmap.width(), pixmap.height()), QColor("#2a2d2e"));
-    painter.fillRect(QRect(0, 0, 3, pixmap.height()), QColor("#3794ff"));
-    painter.setPen(QColor("#cccccc"));
-    QFont titleFont = qApp ? qApp->font() : QFont();
-    titleFont.setPointSize(11);
-    titleFont.setWeight(QFont::DemiBold);
-    painter.setFont(titleFont);
-    painter.drawText(QRect(12, 5, 198, 18), Qt::AlignLeft | Qt::AlignVCenter, title.isEmpty() ? typeName : title);
-    painter.setPen(QColor("#969696"));
-    QFont detailFont = qApp ? qApp->font() : QFont();
-    detailFont.setPointSize(9);
-    painter.setFont(detailFont);
-    painter.drawText(QRect(12, 24, 198, 16), Qt::AlignLeft | Qt::AlignVCenter, category);
-    painter.end();
-    drag->setPixmap(pixmap);
-    drag->setHotSpot(QPoint(20, 20));
+    // 不再绘制跟随光标的预览节点块（按用户要求彻底删除）。用 1x1 全透明拖拽图，
+    // 既避免深色残影，也阻止平台把 mime 文本渲染成默认拖影。
+    QPixmap empty(1, 1);
+    empty.fill(Qt::transparent);
+    drag->setPixmap(empty);
     drag->exec(Qt::CopyAction);
 }
 
