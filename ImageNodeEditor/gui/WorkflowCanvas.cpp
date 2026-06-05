@@ -87,49 +87,56 @@ bool isKnownNodeType(const QString& typeName)
     return false;
 }
 
-void applyQtNodesDarkStyle()
+// 按当前主题 palette 生成 Qt Nodes 全局样式。无 static 守卫，主题切换时 rebuild()
+// 会重新调用，使节点边框 / 渐变 / 连线 / 端口颜色跟随深色 / 浅色切换。
+void applyQtNodesStyle()
 {
-    static bool applied = false;
-    if (applied) {
-        return;
-    }
-    applied = true;
-    QtNodes::NodeStyle::setNodeStyle(QStringLiteral(R"({
+    const AppTheme::Palette p = AppTheme::palette();
+    auto arr = [](const QColor& c) {
+        return QString("[%1, %2, %3]").arg(c.red()).arg(c.green()).arg(c.blue());
+    };
+    QtNodes::NodeStyle::setNodeStyle(QString(R"({
         "NodeStyle": {
-            "NormalBoundaryColor": [52, 54, 59],
-            "SelectedBoundaryColor": [110, 160, 224],
-            "GradientColor0": [38, 40, 45],
-            "GradientColor1": [38, 40, 45],
-            "GradientColor2": [31, 32, 36],
-            "GradientColor3": [31, 32, 36],
+            "NormalBoundaryColor": %1,
+            "SelectedBoundaryColor": %2,
+            "GradientColor0": %3,
+            "GradientColor1": %3,
+            "GradientColor2": %4,
+            "GradientColor3": %4,
             "ShadowColor": [0, 0, 0],
             "ShadowEnabled": false,
-            "FontColor": [227, 228, 230],
-            "FontColorFaded": [154, 160, 166],
-            "ConnectionPointColor": [156, 198, 240],
-            "FilledConnectionPointColor": [217, 201, 143],
-            "ErrorColor": [214, 138, 132],
-            "WarningColor": [217, 201, 143],
-            "ToolTipIconColor": [227, 228, 230],
+            "FontColor": %5,
+            "FontColorFaded": %6,
+            "ConnectionPointColor": %7,
+            "FilledConnectionPointColor": %8,
+            "ErrorColor": %9,
+            "WarningColor": %10,
+            "ToolTipIconColor": %5,
             "PenWidth": 1.0,
             "HoveredPenWidth": 1.6,
             "ConnectionPointDiameter": 9.0,
             "Opacity": 1.0
         }
-    })"));
-    QtNodes::ConnectionStyle::setConnectionStyle(QStringLiteral(R"({
+    })")
+                                         .arg(arr(p.nodeBorder), arr(p.nodeSelected), arr(p.nodeTop), arr(p.nodeBottom),
+                                              arr(p.nodeText), arr(p.nodeTextFaded), arr(p.inputPort), arr(p.outputPort),
+                                              arr(p.danger))
+                                         .arg(arr(p.warning)));
+    QtNodes::ConnectionStyle::setConnectionStyle(QString(R"({
         "ConnectionStyle": {
-            "ConstructionColor": [110, 160, 224],
-            "NormalColor": [110, 122, 134],
-            "SelectedColor": [110, 160, 224],
-            "SelectedHaloColor": [110, 160, 224],
-            "HoveredColor": [127, 176, 238],
+            "ConstructionColor": %1,
+            "NormalColor": %2,
+            "SelectedColor": %3,
+            "SelectedHaloColor": %3,
+            "HoveredColor": %4,
             "LineWidth": 2.0,
             "ConstructionLineWidth": 2.0,
             "PointDiameter": 9.0,
             "UseDataDefinedColors": false
         }
-    })"));
+    })")
+                                                     .arg(arr(p.pendingEdge), arr(p.edge), arr(p.edgeSelected),
+                                                          arr(p.accentHover)));
 }
 
 void paintCanvasGrid(QPainter* painter, const QRectF& rect, double uiScale)
@@ -191,7 +198,7 @@ public:
 
     void clearTransientItems()
     {
-        clearDropPreview();
+        // 已无落点预测框等临时图元，保留为空操作以兼容 rebuild() 的调用点。
     }
 
 protected:
@@ -235,8 +242,8 @@ protected:
 
     void dragEnterEvent(QDragEnterEvent* event) override
     {
+        // 仅接受拖放，不再绘制落点预测框（按用户要求彻底删除拖拽预测位置）。
         if (event->mimeData()->hasFormat("application/x-imagenode-type")) {
-            updateDropPreview(event->position().toPoint());
             event->acceptProposedAction();
             return;
         }
@@ -246,17 +253,10 @@ protected:
     void dragMoveEvent(QDragMoveEvent* event) override
     {
         if (event->mimeData()->hasFormat("application/x-imagenode-type")) {
-            updateDropPreview(event->position().toPoint());
             event->acceptProposedAction();
             return;
         }
         QtNodes::GraphicsView::dragMoveEvent(event);
-    }
-
-    void dragLeaveEvent(QDragLeaveEvent* event) override
-    {
-        clearDropPreview();
-        QtNodes::GraphicsView::dragLeaveEvent(event);
     }
 
     void dropEvent(QDropEvent* event) override
@@ -264,13 +264,11 @@ protected:
         if (event->mimeData()->hasFormat("application/x-imagenode-type") && nodeDropped_) {
             const QString typeName = QString::fromUtf8(event->mimeData()->data("application/x-imagenode-type"));
             if (typeName.trimmed().isEmpty() || !isKnownNodeType(typeName)) {
-                clearDropPreview();
                 event->ignore();
                 return;
             }
             const QPointF scenePos = mapToScene(event->position().toPoint());
             auto callback = nodeDropped_;
-            clearDropPreview();
             event->acceptProposedAction();
             QTimer::singleShot(0, this, [callback = std::move(callback), typeName, scenePos] {
                 if (callback) {
@@ -279,7 +277,6 @@ protected:
             });
             return;
         }
-        clearDropPreview();
         QtNodes::GraphicsView::dropEvent(event);
     }
 
@@ -298,39 +295,12 @@ protected:
     }
 
 private:
-    void updateDropPreview(const QPoint& viewPos)
-    {
-        if (!scene()) {
-            return;
-        }
-        if (!dropPreview_) {
-            dropPreview_ = scene()->addRect(QRectF(-120, -42, 240, 84),
-                                            QPen(QColor("#3794ff"), 1, Qt::DashLine),
-                                            QBrush(QColor(55, 148, 255, 24)));
-            dropPreview_->setZValue(10000);
-        }
-        dropPreview_->setPos(mapToScene(viewPos));
-    }
-
-    void clearDropPreview()
-    {
-        if (!dropPreview_) {
-            return;
-        }
-        if (dropPreview_->scene() == scene()) {
-            scene()->removeItem(dropPreview_);
-        }
-        delete dropPreview_;
-        dropPreview_ = nullptr;
-    }
-
     double* uiScale_ = nullptr;
     std::function<void()> deleteSelection_;
     std::function<void()> copySelection_;
     std::function<void(const QPointF&)> quickPalette_;
     std::function<void(const QString&, const QPointF&)> nodeDropped_;
     std::function<void(double)> wheelZoomRequested_;
-    QGraphicsRectItem* dropPreview_ = nullptr;
 };
 
 class WorkflowGraphicsScene final : public QtNodes::DataFlowGraphicsScene {
@@ -367,7 +337,7 @@ private:
 WorkflowCanvas::WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbacks)
     : owner_(owner), uiScale_(uiScale), callbacks_(std::move(callbacks))
 {
-    applyQtNodesDarkStyle();
+    applyQtNodesStyle();
     view_ = new WorkflowGraphicsView(nullptr,
                                      &uiScale_,
                                      callbacks_.deleteSelection,
@@ -408,6 +378,8 @@ void WorkflowCanvas::rebuild(WorkflowGraph& graph,
 {
     graph_ = &graph;
     syncing_ = true;
+    // 主题可能已切换，重建场景时按当前 palette 重新应用 Qt Nodes 全局样式。
+    applyQtNodesStyle();
     workflowToQtNode_.clear();
     qtToWorkflowNode_.clear();
     registry_ = std::make_shared<QtNodes::NodeDelegateModelRegistry>();

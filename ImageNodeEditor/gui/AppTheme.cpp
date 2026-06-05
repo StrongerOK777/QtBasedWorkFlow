@@ -7,14 +7,108 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace {
 
 AppTheme::ThemePreference g_themePreference = AppTheme::ThemePreference::Dark;
 
+QString rgba(const QColor& c)
+{
+    return QString("rgba(%1, %2, %3, %4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(c.alpha());
+}
+
 }
 
 namespace AppTheme {
+
+Palette darkPalette()
+{
+    // 冷静中性深底 + 柔化蓝点缀（沿用既有 VS Code Dark token，避免深色回归）。
+    Palette p;
+    p.base = QColor("#1b1c1e");
+    p.panel = QColor("#212327");
+    p.elevated = QColor("#26282d");
+    p.elevatedHover = QColor("#303237");
+    p.input = QColor("#2c2f34");
+    p.hairline = QColor("#2e2f33");
+    p.border = QColor("#3b3d42");
+    p.textPrimary = QColor("#e3e4e6");
+    p.textSecondary = QColor("#9aa0a6");
+    p.textMuted = QColor("#6b7178");
+    p.accent = QColor("#6ea0e0");
+    p.accentHover = QColor("#7fb0ee");
+    p.selection = QColor("#303a47");
+    p.selectionText = QColor("#ffffff");
+    p.onAccent = QColor("#ffffff");
+    p.warning = QColor("#d9c98f");
+    p.danger = QColor("#e0918c");
+    p.scrollHandle = QColor("#3a3c40");
+    p.scrollHandleHover = QColor("#4a4d52");
+    p.canvasBg = QColor("#1b1c1e");
+    p.canvasDot = QColor(255, 255, 255, 16);
+    p.nodeTop = QColor("#26282d");
+    p.nodeBottom = QColor("#1f2024");
+    p.nodeHeader = QColor("#2a2c31");
+    p.nodeBorder = QColor("#34363b");
+    p.nodeSelected = QColor("#6ea0e0");
+    p.nodeShadow = QColor(0, 0, 0, 110);
+    p.nodeText = QColor("#e3e4e6");
+    p.nodeTextFaded = QColor("#9aa0a6");
+    p.inputPort = QColor("#9cc6f0");
+    p.outputPort = QColor("#d9c98f");
+    p.edge = QColor("#6e7a86");
+    p.edgeSelected = QColor("#6ea0e0");
+    p.pendingEdge = QColor("#6ea0e0");
+    return p;
+}
+
+Palette lightPalette()
+{
+    // 浅色主题：背景 #F8F8F6 / 文字 #0A0A0A，绿色为主强调、暗黄为次强调。
+    Palette p;
+    p.base = QColor("#f8f8f6");
+    p.panel = QColor("#efeee9");
+    p.elevated = QColor("#e7e6e0");
+    p.elevatedHover = QColor("#dfded7");
+    p.input = QColor("#ffffff");
+    p.hairline = QColor("#dedcd3");
+    p.border = QColor("#cdcbc1");
+    p.textPrimary = QColor("#0a0a0a");
+    p.textSecondary = QColor("#55554f");
+    p.textMuted = QColor("#8a897f");
+    p.accent = QColor("#2e9e5b");
+    p.accentHover = QColor("#38b069");
+    p.selection = QColor("#ddefe2");
+    p.selectionText = QColor("#0a0a0a");
+    p.onAccent = QColor("#ffffff");
+    p.warning = QColor("#b58a0c");
+    p.danger = QColor("#c0392b");
+    p.scrollHandle = QColor("#cbcac0");
+    p.scrollHandleHover = QColor("#b5b4a9");
+    p.canvasBg = QColor("#f8f8f6");
+    p.canvasDot = QColor(10, 10, 10, 22);
+    p.nodeTop = QColor("#ffffff");
+    p.nodeBottom = QColor("#f2f1eb");
+    p.nodeHeader = QColor("#efefe9");
+    p.nodeBorder = QColor("#d5d3c9");
+    p.nodeSelected = QColor("#2e9e5b");
+    p.nodeShadow = QColor(0, 0, 0, 38);
+    p.nodeText = QColor("#0a0a0a");
+    p.nodeTextFaded = QColor("#6e6d65");
+    p.inputPort = QColor("#3e8e5e");
+    p.outputPort = QColor("#b58a0c");
+    p.edge = QColor("#8c8b80");
+    p.edgeSelected = QColor("#2e9e5b");
+    p.pendingEdge = QColor("#2e9e5b");
+    return p;
+}
+
+Palette palette()
+{
+    return g_themePreference == ThemePreference::Light ? lightPalette() : darkPalette();
+}
 
 double clampedScale(double uiScale)
 {
@@ -56,37 +150,38 @@ NodeMetrics nodeMetrics(double uiScale)
     m.bottomPadding = 22.0 * s;
     m.portRadius = 7.5 * s;
     m.cornerRadius = 12.0 * s;
-    m.titleSize = 15.0 * s;
-    m.labelSize = 13.0 * s;
+    m.titleSize = 16.0 * s;
+    m.labelSize = 14.0 * s;
     return m;
 }
 
 Colors colors()
 {
-    // 冷静中性深底 + 柔化蓝点缀（与全局 QSS token 保持一致）。
+    const Palette p = palette();
     Colors c;
-    c.canvasTop = QColor("#1b1c1e");
-    c.canvasBottom = QColor("#1b1c1e");
-    c.canvasDot = QColor(255, 255, 255, 16);
-    c.nodeTop = QColor("#26282d");
-    c.nodeBottom = QColor("#1f2024");
-    c.nodeBorder = QColor("#34363b");
-    c.nodeSelected = QColor("#6ea0e0");
-    c.nodeShadow = QColor(0, 0, 0, 110);
-    c.textPrimary = QColor("#e3e4e6");
-    c.textSecondary = QColor("#9aa0a6");
-    c.inputPort = QColor("#9cc6f0");
-    c.outputPort = QColor("#d9c98f");
-    c.edge = QColor("#6e7a86");
-    c.edgeSelected = QColor("#6ea0e0");
-    c.pendingEdge = QColor("#6ea0e0");
+    c.canvasTop = p.canvasBg;
+    c.canvasBottom = p.canvasBg;
+    c.canvasDot = p.canvasDot;
+    c.nodeTop = p.nodeTop;
+    c.nodeBottom = p.nodeBottom;
+    c.nodeHeader = p.nodeHeader;
+    c.nodeBorder = p.nodeBorder;
+    c.nodeSelected = p.nodeSelected;
+    c.nodeShadow = p.nodeShadow;
+    c.textPrimary = p.nodeText;
+    c.textSecondary = p.nodeTextFaded;
+    c.inputPort = p.inputPort;
+    c.outputPort = p.outputPort;
+    c.edge = p.edge;
+    c.edgeSelected = p.edgeSelected;
+    c.pendingEdge = p.pendingEdge;
     return c;
 }
 
 QFont appFont(double uiScale)
 {
     QFont font = QApplication::font();
-    font.setPointSizeF(std::max(9.0, 12.0 * clampedScale(uiScale)));
+    font.setPointSizeF(std::max(10.0, 13.0 * clampedScale(uiScale)));
     return font;
 }
 
@@ -98,39 +193,37 @@ QString styleSheet(double uiScale)
     const int tabHeight = px(32, uiScale);
     const int border = std::max(1, px(1, uiScale));
 
-    // 设计 token：冷静中性深底（base #1b1c1e / panel #212327 / elevated #26282d /
-    // input #2c2f34），hairline 边 #2e2f33，柔化蓝点缀 #6ea0e0，选中染色 #303a47，
-    // 圆角 sm6 / md8 / lg12。
-    return QString(R"(
+    // 设计 token 由活动 palette 提供，深色 / 浅色共用同一份 QSS 模板，只换 token 取值。
+    QString sheet = QString(R"(
         QMainWindow, QWidget#workbenchHost, QWidget#editorShell {
-            background: #1b1c1e;
-            color: #e3e4e6;
+            background: @base@;
+            color: @textPrimary@;
         }
         QMainWindow::separator, QSplitter::handle {
-            background: #2e2f33;
+            background: @hairline@;
         }
         QDialog, QFrame, QWidget#canvasContainer, QWidget#bottomPanel, QWidget#bottomTabPage {
-            background: #1b1c1e;
-            color: #e3e4e6;
+            background: @base@;
+            color: @textPrimary@;
             border: 0px;
         }
         QWidget#previewSidebar {
-            background: #212327;
-            border-left: %1px solid #2e2f33;
-            color: #e3e4e6;
+            background: @panel@;
+            border-left: %1px solid @hairline@;
+            color: @textPrimary@;
         }
         QLabel#workbenchPanelTitle {
-            color: #c8cace;
+            color: @textPrimary@;
             font-weight: 600;
         }
         QAbstractScrollArea, QGraphicsView, QGraphicsView > QWidget {
-            background: #1b1c1e;
-            color: #e3e4e6;
+            background: @base@;
+            color: @textPrimary@;
             border: 0px;
         }
         QMenuBar {
-            background: #1b1c1e;
-            color: #e3e4e6;
+            background: @base@;
+            color: @textPrimary@;
             border: 0px;
         }
         QMenuBar::item {
@@ -139,12 +232,12 @@ QString styleSheet(double uiScale)
             border-radius: 6px;
         }
         QMenuBar::item:selected {
-            background: #26282d;
+            background: @elevated@;
         }
         QMenu {
-            background: #212327;
-            color: #e3e4e6;
-            border: %1px solid #2e2f33;
+            background: @panel@;
+            color: @textPrimary@;
+            border: %1px solid @hairline@;
             border-radius: 8px;
             padding: 4px;
         }
@@ -155,44 +248,44 @@ QString styleSheet(double uiScale)
             border-radius: 6px;
         }
         QMenu::item:selected {
-            background: #303a47;
-            color: #ffffff;
+            background: @selection@;
+            color: @selectionText@;
         }
         QMenu::separator {
             height: 1px;
-            background: #2e2f33;
+            background: @hairline@;
             margin: 4px 8px;
         }
         QToolBar {
-            background: #1b1c1e;
+            background: @base@;
             border: 0px;
-            border-bottom: %1px solid #2e2f33;
+            border-bottom: %1px solid @hairline@;
             spacing: 2px;
             padding: 2px;
         }
         QToolButton, QPushButton {
             min-height: %2px;
             padding: %3px %4px;
-            border: %1px solid #2e2f33;
+            border: %1px solid @hairline@;
             border-radius: 8px;
-            background: #26282d;
-            color: #e3e4e6;
+            background: @elevated@;
+            color: @textPrimary@;
         }
         QToolButton:hover, QPushButton:hover {
-            background: #303237;
-            border-color: #3b3d42;
+            background: @elevatedHover@;
+            border-color: @border@;
         }
         QToolButton:pressed, QPushButton:pressed {
-            background: #303a47;
-            border-color: #6ea0e0;
+            background: @selection@;
+            border-color: @accent@;
         }
         QToolButton:disabled, QPushButton:disabled {
-            color: #6b7178;
-            background: #212327;
+            color: @textMuted@;
+            background: @panel@;
         }
         QTabWidget::pane {
-            border-top: %1px solid #2e2f33;
-            background: #1b1c1e;
+            border-top: %1px solid @hairline@;
+            background: @base@;
         }
         QTabBar::tab {
             min-height: %5px;
@@ -202,33 +295,33 @@ QString styleSheet(double uiScale)
             border-top-left-radius: 6px;
             border-top-right-radius: 6px;
             background: transparent;
-            color: #9aa0a6;
+            color: @textSecondary@;
         }
         QTabBar::tab:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QTabBar::tab:selected {
-            background: #26282d;
-            color: #ffffff;
+            background: @elevated@;
+            color: @selectionText@;
         }
         QLabel#previewPanel {
-            background: #1b1c1e;
-            border: %1px solid #2e2f33;
+            background: @base@;
+            border: %1px solid @hairline@;
             border-radius: 10px;
-            color: #9aa0a6;
+            color: @textSecondary@;
         }
         QListWidget#logPanel, QListWidget#problemPanel, QPlainTextEdit#terminalOutput {
-            background: #1b1c1e;
+            background: @base@;
             border: 0px;
-            color: #d6d8db;
+            color: @textPrimary@;
         }
         QListWidget, QTextEdit, QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
-            border: %1px solid #2e2f33;
+            border: %1px solid @hairline@;
             border-radius: 6px;
-            background: #2c2f34;
-            selection-background-color: #35506e;
-            selection-color: #ffffff;
-            color: #e3e4e6;
+            background: @input@;
+            selection-background-color: @selection@;
+            selection-color: @selectionText@;
+            color: @textPrimary@;
         }
         QListWidget::item {
             min-height: %2px;
@@ -236,11 +329,11 @@ QString styleSheet(double uiScale)
             border-radius: 6px;
         }
         QListWidget::item:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QListWidget::item:selected {
-            background: #303a47;
-            color: #ffffff;
+            background: @selection@;
+            color: @selectionText@;
         }
         QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
             min-height: %2px;
@@ -251,11 +344,11 @@ QString styleSheet(double uiScale)
             width: 18px;
         }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
-            border-color: #6ea0e0;
-            background: #2c2f34;
+            border-color: @accent@;
+            background: @input@;
         }
         QCheckBox, QLabel {
-            color: #e3e4e6;
+            color: @textPrimary@;
         }
         QScrollBar:vertical {
             background: transparent;
@@ -270,13 +363,13 @@ QString styleSheet(double uiScale)
             margin: 2px;
         }
         QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-            background: #3a3c40;
+            background: @scrollHandle@;
             border-radius: 4px;
             min-height: %2px;
             min-width: %2px;
         }
         QScrollBar::handle:hover {
-            background: #4a4d52;
+            background: @scrollHandleHover@;
         }
         QScrollBar::add-line, QScrollBar::sub-line {
             width: 0px;
@@ -286,24 +379,24 @@ QString styleSheet(double uiScale)
             background: transparent;
         }
         QWidget#canvasZoomOverlay {
-            background: rgba(33, 35, 39, 235);
-            border: %1px solid #2e2f33;
+            background: @overlayBg@;
+            border: %1px solid @hairline@;
             border-radius: 12px;
         }
         QToolTip {
-            background: #26282d;
-            color: #e3e4e6;
-            border: %1px solid #34363b;
+            background: @elevated@;
+            color: @textPrimary@;
+            border: %1px solid @border@;
             border-radius: 8px;
             padding: %3px %4px;
         }
         QWidget#canvasTabStrip {
-            background: #1b1c1e;
-            border-bottom: %1px solid #2e2f33;
+            background: @base@;
+            border-bottom: %1px solid @hairline@;
         }
         QWidget#breadcrumbBar {
-            background: #1b1c1e;
-            border-bottom: %1px solid #2e2f33;
+            background: @base@;
+            border-bottom: %1px solid @hairline@;
         }
         QTabBar#workbookTabs::tab {
             min-height: %5px;
@@ -313,14 +406,14 @@ QString styleSheet(double uiScale)
             border-top-left-radius: 7px;
             border-top-right-radius: 7px;
             background: transparent;
-            color: #9aa0a6;
+            color: @textSecondary@;
         }
         QTabBar#workbookTabs::tab:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QTabBar#workbookTabs::tab:selected {
-            background: #2a2c31;
-            color: #e8eaed;
+            background: @elevated@;
+            color: @textPrimary@;
         }
         QToolButton#canvasNewButton {
             border: 0px;
@@ -329,7 +422,7 @@ QString styleSheet(double uiScale)
             padding: 2px;
         }
         QToolButton#canvasNewButton:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QToolButton#breadcrumbNav {
             border: 0px;
@@ -338,28 +431,28 @@ QString styleSheet(double uiScale)
             padding: 2px 5px;
         }
         QToolButton#breadcrumbNav:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QToolButton#breadcrumbSegment {
             border: 0px;
             background: transparent;
             border-radius: 6px;
             padding: 1px 7px;
-            color: #9aa0a6;
+            color: @textSecondary@;
         }
         QToolButton#breadcrumbSegment:hover {
-            background: #26282d;
-            color: #c8cace;
+            background: @elevated@;
+            color: @textPrimary@;
         }
         QToolButton#breadcrumbCurrent {
             border: 0px;
             background: transparent;
             padding: 1px 7px;
-            color: #e3e4e6;
+            color: @textPrimary@;
             font-weight: 600;
         }
         QLabel#breadcrumbSep {
-            color: #565b61;
+            color: @textMuted@;
             padding: 0px 1px;
         }
     )")
@@ -368,6 +461,30 @@ QString styleSheet(double uiScale)
         .arg(padV)
         .arg(padH)
         .arg(tabHeight);
+
+    const Palette p = palette();
+    const std::vector<std::pair<QString, QString>> tokens = {
+        {"@base@", p.base.name()},
+        {"@panel@", p.panel.name()},
+        {"@elevated@", p.elevated.name()},
+        {"@elevatedHover@", p.elevatedHover.name()},
+        {"@input@", p.input.name()},
+        {"@hairline@", p.hairline.name()},
+        {"@border@", p.border.name()},
+        {"@textPrimary@", p.textPrimary.name()},
+        {"@textSecondary@", p.textSecondary.name()},
+        {"@textMuted@", p.textMuted.name()},
+        {"@accent@", p.accent.name()},
+        {"@selection@", p.selection.name()},
+        {"@selectionText@", p.selectionText.name()},
+        {"@scrollHandle@", p.scrollHandle.name()},
+        {"@scrollHandleHover@", p.scrollHandleHover.name()},
+        {"@overlayBg@", rgba(QColor(p.panel.red(), p.panel.green(), p.panel.blue(), 235))},
+    };
+    for (const auto& [key, value] : tokens) {
+        sheet.replace(key, value);
+    }
+    return sheet;
 }
 
 ThemePreference themePreference()
@@ -377,24 +494,24 @@ ThemePreference themePreference()
 
 QString themePreferenceName()
 {
-    return "dark";
+    return g_themePreference == ThemePreference::Light ? "light" : "dark";
 }
 
 void setThemePreference(const QString& preference)
 {
-    Q_UNUSED(preference);
-    setThemePreference(ThemePreference::Dark);
+    setThemePreference(preference.compare("light", Qt::CaseInsensitive) == 0
+                           ? ThemePreference::Light
+                           : ThemePreference::Dark);
 }
 
 void setThemePreference(ThemePreference preference)
 {
-    Q_UNUSED(preference);
-    g_themePreference = ThemePreference::Dark;
+    g_themePreference = preference;
 }
 
 bool isDarkTheme()
 {
-    return true;
+    return g_themePreference == ThemePreference::Dark;
 }
 
 void apply(QApplication& app, double uiScale)
@@ -402,23 +519,24 @@ void apply(QApplication& app, double uiScale)
     app.setFont(appFont(uiScale));
     app.setStyleSheet(styleSheet(uiScale));
 
-    QPalette palette = app.palette();
-    palette.setColor(QPalette::Window, QColor("#1b1c1e"));
-    palette.setColor(QPalette::WindowText, QColor("#e3e4e6"));
-    palette.setColor(QPalette::Button, QColor("#26282d"));
-    palette.setColor(QPalette::Base, QColor("#1b1c1e"));
-    palette.setColor(QPalette::AlternateBase, QColor("#212327"));
-    palette.setColor(QPalette::Text, QColor("#e3e4e6"));
-    palette.setColor(QPalette::ButtonText, QColor("#e3e4e6"));
-    palette.setColor(QPalette::BrightText, QColor("#ffffff"));
-    palette.setColor(QPalette::Highlight, QColor("#35506e"));
-    palette.setColor(QPalette::HighlightedText, QColor("#ffffff"));
-    palette.setColor(QPalette::ToolTipBase, QColor("#26282d"));
-    palette.setColor(QPalette::ToolTipText, QColor("#e3e4e6"));
+    const Palette p = palette();
+    QPalette qtPalette = app.palette();
+    qtPalette.setColor(QPalette::Window, p.base);
+    qtPalette.setColor(QPalette::WindowText, p.textPrimary);
+    qtPalette.setColor(QPalette::Button, p.elevated);
+    qtPalette.setColor(QPalette::Base, p.base);
+    qtPalette.setColor(QPalette::AlternateBase, p.panel);
+    qtPalette.setColor(QPalette::Text, p.textPrimary);
+    qtPalette.setColor(QPalette::ButtonText, p.textPrimary);
+    qtPalette.setColor(QPalette::BrightText, isDarkTheme() ? QColor("#ffffff") : QColor("#000000"));
+    qtPalette.setColor(QPalette::Highlight, p.selection);
+    qtPalette.setColor(QPalette::HighlightedText, p.selectionText);
+    qtPalette.setColor(QPalette::ToolTipBase, p.elevated);
+    qtPalette.setColor(QPalette::ToolTipText, p.textPrimary);
 #if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
-    palette.setColor(QPalette::PlaceholderText, QColor("#6b7178"));
+    qtPalette.setColor(QPalette::PlaceholderText, p.textMuted);
 #endif
-    app.setPalette(palette);
+    app.setPalette(qtPalette);
 }
 
 QGraphicsDropShadowEffect* makeShadow(QWidget* parent, double uiScale, int alpha)

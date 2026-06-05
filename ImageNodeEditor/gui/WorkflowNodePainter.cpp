@@ -1,5 +1,6 @@
 #include "gui/WorkflowNodePainter.h"
 
+#include "gui/AppTheme.h"
 #include "gui/WorkflowNodeDelegate.h"
 
 #include <QtNodes/DataFlowGraphModel>
@@ -110,6 +111,7 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     auto* delegate = graph ? graph->delegateModel<WorkflowNodeDelegate>(graphicsNode.nodeId()) : nullptr;
     const QString category = delegate ? delegate->category() : QString();
     const CategoryVisual visual = categoryVisual(category);
+    const AppTheme::Colors colors = AppTheme::colors();
     const QRectF body(QPointF(0, 0), graphicsNode.nodeScene()->nodeGeometry().size(graphicsNode.nodeId()));
     const QColor categoryColor = stateAccent(delegate, visual.accent);
     const QRectF shadowRect = body.translated(0, 4);
@@ -126,26 +128,26 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
 
     // 柔和阴影
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(0, 0, 0, 90));
+    painter->setBrush(colors.nodeShadow);
     painter->drawPath(shadowPath);
 
-    // 主体（轻微竖向渐变）+ hairline 边 / 选中柔化蓝
+    // 主体（轻微竖向渐变）+ hairline 边 / 选中强调（深色=蓝、浅色=绿）
     QLinearGradient fill(body.topLeft(), body.bottomLeft());
-    fill.setColorAt(0, QColor("#26282d"));
-    fill.setColorAt(1, QColor("#1f2024"));
+    fill.setColorAt(0, colors.nodeTop);
+    fill.setColorAt(1, colors.nodeBottom);
     painter->setBrush(fill);
-    painter->setPen(QPen(selected ? QColor("#6ea0e0") : QColor("#34363b"), selected ? 1.8 : 1.0));
+    painter->setPen(QPen(selected ? colors.nodeSelected : colors.nodeBorder, selected ? 1.8 : 1.0));
     painter->drawPath(shapePath);
 
     // 头部：裁剪到外形内绘制，使顶部跟随轮廓；顶部一抹克制的类别色。
     painter->save();
     painter->setClipPath(shapePath);
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor("#2a2c31"));
+    painter->setBrush(colors.nodeHeader);
     painter->drawRect(QRectF(body.left(), body.top(), body.width(), headerRect.height()));
     painter->setBrush(QColor(categoryColor.red(), categoryColor.green(), categoryColor.blue(), 165));
     painter->drawRect(QRectF(body.left(), body.top(), body.width(), 3));
-    painter->setPen(QPen(QColor("#2e2f33"), 1));
+    painter->setPen(QPen(colors.nodeBorder, 1));
     painter->drawLine(QPointF(body.left(), headerRect.bottom()), QPointF(body.right(), headerRect.bottom()));
     painter->restore();
 
@@ -169,8 +171,10 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
         painter->restore();
     }
     if (selected) {
+        QColor glow = colors.nodeSelected;
+        glow.setAlpha(70);
         painter->setBrush(Qt::NoBrush);
-        painter->setPen(QPen(QColor(110, 160, 224, 70), 4));
+        painter->setPen(QPen(glow, 4));
         painter->drawPath(shapePath);
     }
     painter->restore();

@@ -8,6 +8,7 @@ class QSplitter;
 class QuickAccessModel;
 class WorkbenchBridge;
 class WorkbenchCommandRegistry;
+class WorkbenchTheme;
 class NodeCatalogModel;
 class WorkflowCheckpointModel;
 class WorkflowOutlineModel;
@@ -25,6 +26,7 @@ public:
                         WorkflowCheckpointModel* checkpoints,
                         WorkflowCheckpointModel* timeline,
                         QuickAccessModel* quickAccess,
+                        WorkbenchTheme* theme,
                         QWidget* editor,
                         QWidget* preview,
                         QWidget* bottomPanel,
@@ -58,6 +60,7 @@ private:
     WorkflowCheckpointModel* checkpoints_ = nullptr;
     WorkflowCheckpointModel* timeline_ = nullptr;
     QuickAccessModel* quickAccess_ = nullptr;
+    WorkbenchTheme* theme_ = nullptr;
     QQuickWidget* activitySurface_ = nullptr;
     QQuickWidget* titleSurface_ = nullptr;
     QQuickWidget* sidebarSurface_ = nullptr;

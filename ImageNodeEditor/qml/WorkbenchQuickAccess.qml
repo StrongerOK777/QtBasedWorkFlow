@@ -4,12 +4,14 @@ import QtQuick.Layouts
 
 Rectangle {
     id: quickAccess
-    color: "#212327"
-    border.color: "#34363b"
+    color: theme.panel
+    border.color: theme.border
     border.width: 1
     radius: 12
     clip: true
     focus: true
+
+    function fs(px) { return Math.round(px * theme.scale) }
 
     // 命令面板每次被唤起时淡入 + 轻微放大（从顶部生长），柔和登场。
     transformOrigin: Item.Top
@@ -41,10 +43,10 @@ Rectangle {
             Layout.fillWidth: true
             height: 42
             placeholderText: "键入命令、节点、问题或最近工作流"
-            placeholderTextColor: "#6b7178"
-            color: "#e3e4e6"
+            placeholderTextColor: theme.textMuted
+            color: theme.textPrimary
             selectByMouse: true
-            font.pixelSize: 15
+            font.pixelSize: quickAccess.fs(16)
             leftPadding: 14
             rightPadding: 14
             text: quickAccessModel.query
@@ -65,7 +67,7 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 1
-                    color: query.activeFocus ? "#6ea0e0" : "#2e2f33"
+                    color: query.activeFocus ? theme.accent : theme.hairline
                     Behavior on color { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }
                 }
             }
@@ -88,7 +90,7 @@ Rectangle {
                 width: ListView.view.width
                 height: 48
                 radius: 7
-                color: ListView.isCurrentItem ? "#303a47" : resultMouse.containsMouse ? "#26282d" : "transparent"
+                color: ListView.isCurrentItem ? theme.selection : resultMouse.containsMouse ? theme.elevated : "transparent"
                 Behavior on color { ColorAnimation { duration: 110; easing.type: Easing.OutCubic } }
 
                 Rectangle {
@@ -98,13 +100,13 @@ Rectangle {
                     anchors.left: parent.left
                     anchors.leftMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    color: "#2c2f34"
-                    border.color: "#2e2f33"
+                    color: theme.input
+                    border.color: theme.hairline
                     Text {
                         anchors.fill: parent
                         text: kind
-                        color: "#a7adb3"
-                        font.pixelSize: 10
+                        color: theme.textSecondary
+                        font.pixelSize: quickAccess.fs(11)
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         elide: Text.ElideRight
@@ -119,15 +121,15 @@ Rectangle {
                     spacing: 2
                     Text {
                         text: title
-                        color: "#e3e4e6"
-                        font.pixelSize: 13
+                        color: theme.textPrimary
+                        font.pixelSize: quickAccess.fs(14)
                         width: parent.width
                         elide: Text.ElideRight
                     }
                     Text {
                         text: detail
-                        color: "#9aa0a6"
-                        font.pixelSize: 11
+                        color: theme.textSecondary
+                        font.pixelSize: quickAccess.fs(12)
                         width: parent.width
                         elide: Text.ElideMiddle
                     }

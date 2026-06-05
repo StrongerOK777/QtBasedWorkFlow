@@ -55,6 +55,7 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
                                          WorkflowCheckpointModel* checkpoints,
                                          WorkflowCheckpointModel* timeline,
                                          QuickAccessModel* quickAccess,
+                                         WorkbenchTheme* theme,
                                          QWidget* editor,
                                          QWidget* preview,
                                          QWidget* bottomPanel,
@@ -70,6 +71,7 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
       checkpoints_(checkpoints),
       timeline_(timeline),
       quickAccess_(quickAccess),
+      theme_(theme),
       bottomPanel_(bottomPanel),
       uiScale_(uiScale)
 {
@@ -259,6 +261,7 @@ QQuickWidget* WorkbenchHostWidget::makeQuickSurface(const QUrl& source, QWidget*
     surface->setClearColor(Qt::transparent);
     surface->setAttribute(Qt::WA_AlwaysStackOnTop, false);
     surface->rootContext()->setContextProperty("workbenchBridge", bridge_);
+    surface->rootContext()->setContextProperty("theme", theme_);
     surface->rootContext()->setContextProperty("commandRegistry", commands_);
     surface->rootContext()->setContextProperty("nodeCatalogModel", nodes_);
     surface->rootContext()->setContextProperty("workflowOutlineModel", outline_);

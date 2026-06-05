@@ -95,6 +95,41 @@
 
 namespace {
 
+// 底部「终端/问题/输出」标签条样式，按当前主题 palette 生成，供创建与主题切换时复用。
+QString bottomTabsStyleSheet()
+{
+    const AppTheme::Palette p = AppTheme::palette();
+    QString css = QString(R"(
+        QTabWidget#bottomTabs::pane {
+            border: 0px;
+            background: @base@;
+        }
+        QTabWidget#bottomTabs QTabBar::tab {
+            min-height: 26px;
+            padding: 0px 12px;
+            margin: 3px 2px 0px 2px;
+            border: 0px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            background: transparent;
+            color: @textSecondary@;
+        }
+        QTabWidget#bottomTabs QTabBar::tab:selected {
+            background: @elevated@;
+            color: @textPrimary@;
+        }
+        QTabWidget#bottomTabs QTabBar::tab:hover {
+            background: @elevated@;
+            color: @textPrimary@;
+        }
+    )");
+    css.replace("@base@", p.base.name())
+        .replace("@elevated@", p.elevated.name())
+        .replace("@textSecondary@", p.textSecondary.name())
+        .replace("@textPrimary@", p.textPrimary.name());
+    return css;
+}
+
 QIcon lineIcon(const QString& name)
 {
     constexpr int size = 64;
@@ -136,6 +171,11 @@ QIcon lineIcon(const QString& name)
         painter.setPen(QPen(accent, 4.8, Qt::SolidLine, Qt::RoundCap));
         painter.drawLine(QPointF(32, 29), QPointF(32, 43));
         painter.drawLine(QPointF(25, 36), QPointF(39, 36));
+    } else if (name == "plus") {
+        // 简洁的「+」，用于画布标签条的新建按钮，风格与标签更一致。
+        painter.setPen(QPen(ink, 4.8, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(QPointF(32, 20), QPointF(32, 44));
+        painter.drawLine(QPointF(20, 32), QPointF(44, 32));
     } else if (name == "open") {
         folder();
         painter.setPen(QPen(accent, 4.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -437,7 +477,7 @@ public:
         layout->setContentsMargins(8, 8, 8, 8);
         imageLabel_ = new QLabel;
         imageLabel_->setAlignment(Qt::AlignCenter);
-        imageLabel_->setStyleSheet("background:#111;");
+        imageLabel_->setStyleSheet(QString("background:%1;").arg(AppTheme::palette().base.name()));
         layout->addWidget(imageLabel_);
 
         QSize targetSize = image_.size();
@@ -999,8 +1039,9 @@ MainWindow::MainWindow(QWidget* parent)
     QSettings settings;
     uiScale_ = AppTheme::clampedScale(settings.value("mainWindow/uiScale", 1.0).toDouble());
     wheelZoomStep_ = std::clamp(settings.value("mainWindow/wheelZoomStep", 1.04).toDouble(), 1.015, 1.08);
-    AppTheme::setThemePreference(AppTheme::ThemePreference::Dark);
-    settings.setValue("mainWindow/theme", "dark");
+    // 启动时恢复上次保存的主题（深色 / 浅色），默认深色。
+    AppTheme::setThemePreference(settings.value("mainWindow/theme", "dark").toString());
+    settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
     if (auto* app = qobject_cast<QApplication*>(QApplication::instance())) {
         AppTheme::apply(*app, uiScale_);
     }
@@ -1288,6 +1329,7 @@ void MainWindow::createLayout()
     workbookTabs_ = new QTabBar;
     workbookTabs_->setObjectName("workbookTabs");
     workbookTabs_->setDocumentMode(true);
+    workbookTabs_->setDrawBase(false);  // 不画标签条基线，避免顶部出现多余色块
     workbookTabs_->setExpanding(false);
     workbookTabs_->setMovable(true);
     workbookTabs_->setTabsClosable(true);
@@ -1309,8 +1351,8 @@ void MainWindow::createLayout()
         }
         refreshWorkbookTabs();
     });
-    newWorkbookAction_ = new QAction(lineIcon("new"), "新建画布", this);
-    newWorkbookAction_->setData("new");
+    newWorkbookAction_ = new QAction(lineIcon("plus"), "新建画布", this);
+    newWorkbookAction_->setData("plus");
     newWorkbookAction_->setToolTip("新建画布");
     connect(newWorkbookAction_, &QAction::triggered, this, [this] { addWorkbookPage(); });
     auto* newCanvasButton = new QToolButton;
@@ -1414,30 +1456,7 @@ void MainWindow::createLayout()
     bottomTabs_->setObjectName("bottomTabs");
     bottomTabs_->setDocumentMode(true);
     bottomTabs_->tabBar()->setDrawBase(false);
-    bottomTabs_->setStyleSheet(R"(
-        QTabWidget#bottomTabs::pane {
-            border: 0px;
-            background: #1b1c1e;
-        }
-        QTabWidget#bottomTabs QTabBar::tab {
-            min-height: 26px;
-            padding: 0px 12px;
-            margin: 3px 2px 0px 2px;
-            border: 0px;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
-            background: transparent;
-            color: #9aa0a6;
-        }
-        QTabWidget#bottomTabs QTabBar::tab:selected {
-            background: #26282d;
-            color: #ffffff;
-        }
-        QTabWidget#bottomTabs QTabBar::tab:hover {
-            background: #26282d;
-            color: #c8cace;
-        }
-    )");
+    bottomTabs_->setStyleSheet(bottomTabsStyleSheet());
     bottomTabs_->addTab(terminalPanel_, "终端");
     bottomTabs_->addTab(makeLogPage(problemLog_, "问题"), "问题");
     bottomTabs_->addTab(makeLogPage(log_, "输出"), "输出");
@@ -1497,6 +1516,8 @@ void MainWindow::createLayout()
     workbenchBridge_ = new WorkbenchBridge(workbenchCommands_, quickAccessModel_, this);
     workbenchBridge_->setPreviewVisible(previewToggleAction_->isChecked());
     workbenchBridge_->setPanelVisible(bottomToggleAction_->isChecked());
+    workbenchTheme_ = new WorkbenchTheme(this);
+    workbenchTheme_->setScale(uiScale_);
     workbenchHost_ = new WorkbenchHostWidget(workbenchBridge_,
                                              workbenchCommands_,
                                              nodeCatalogModel_,
@@ -1506,6 +1527,7 @@ void MainWindow::createLayout()
                                              workflowCheckpointModel_,
                                              workflowTimelineModel_,
                                              quickAccessModel_,
+                                             workbenchTheme_,
                                              viewContainer,
                                              preview_,
                                              bottomPanel_,
@@ -2368,12 +2390,14 @@ QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
 {
     auto* menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
-    menu->setStyleSheet(R"(
+    {
+        const AppTheme::Palette p = AppTheme::palette();
+        QString css = QString(R"(
         QMenu {
-            background: #212327;
-            border: 1px solid #2e2f33;
+            background: @panel@;
+            border: 1px solid @hairline@;
             border-radius: 10px;
-            color: #e3e4e6;
+            color: @textPrimary@;
             padding: 5px;
         }
         QMenu::item {
@@ -2382,18 +2406,26 @@ QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
             border-radius: 6px;
         }
         QMenu::item:selected {
-            background: #303a47;
-            color: #ffffff;
+            background: @selection@;
+            color: @selectionText@;
         }
         QMenu::item:disabled {
-            color: #6b7178;
+            color: @textMuted@;
         }
         QMenu::separator {
             height: 1px;
-            background: #2e2f33;
+            background: @hairline@;
             margin: 5px 10px;
         }
     )");
+        css.replace("@panel@", p.panel.name())
+            .replace("@hairline@", p.hairline.name())
+            .replace("@textPrimary@", p.textPrimary.name())
+            .replace("@selectionText@", p.selectionText.name())
+            .replace("@selection@", p.selection.name())
+            .replace("@textMuted@", p.textMuted.name());
+        menu->setStyleSheet(css);
+    }
 
     auto* quickAdd = menu->addAction("快捷添加节点");
     quickAdd->setEnabled(!executionBusy_);
@@ -2654,7 +2686,7 @@ void MainWindow::appendProblem(const QString& message, const QString& nodeId)
     }
     auto* item = new QListWidgetItem(message);
     item->setData(Qt::UserRole, nodeId);
-    item->setForeground(QBrush(QColor("#ff453a")));
+    item->setForeground(QBrush(AppTheme::palette().danger));
     if (!nodeId.isEmpty()) {
         item->setToolTip("双击定位对应节点");
     }
@@ -2821,19 +2853,6 @@ void MainWindow::showWorkbenchTooltip(const QString& text, const QString& placem
         tooltipPopup_->setAttribute(Qt::WA_TransparentForMouseEvents);
         // 透明窗口背景，让 8px 圆角真正显示出来（否则四角会露出方形底色）。
         tooltipPopup_->setAttribute(Qt::WA_TranslucentBackground);
-        tooltipPopup_->setStyleSheet(R"(
-            QFrame#workbenchTooltip {
-                background: #26282d;
-                border: 1px solid #34363b;
-                border-radius: 8px;
-                color: #e3e4e6;
-            }
-            QLabel {
-                color: #e3e4e6;
-                font-size: 12px;
-                padding: 7px 10px;
-            }
-        )");
         auto* shadow = new QGraphicsDropShadowEffect(tooltipPopup_);
         shadow->setBlurRadius(20);
         shadow->setOffset(0, 4);
@@ -2845,6 +2864,27 @@ void MainWindow::showWorkbenchTooltip(const QString& text, const QString& placem
         tooltipLabel_->setWordWrap(true);
         tooltipLabel_->setMaximumWidth(AppTheme::px(280, uiScale_));
         layout->addWidget(tooltipLabel_);
+    }
+    // 每次显示都按当前主题 palette 设样式，主题切换后无需重建即可生效。
+    {
+        const AppTheme::Palette p = AppTheme::palette();
+        QString css = QString(R"(
+            QFrame#workbenchTooltip {
+                background: @elevated@;
+                border: 1px solid @border@;
+                border-radius: 8px;
+                color: @textPrimary@;
+            }
+            QLabel {
+                color: @textPrimary@;
+                font-size: %1px;
+                padding: 7px 10px;
+            }
+        )").arg(AppTheme::px(13, uiScale_));
+        css.replace("@elevated@", p.elevated.name())
+            .replace("@border@", p.border.name())
+            .replace("@textPrimary@", p.textPrimary.name());
+        tooltipPopup_->setStyleSheet(css);
     }
 
     tooltipLabel_->setText(text);
@@ -4209,43 +4249,46 @@ void MainWindow::showSettingsDialog()
     dialog.setObjectName("settingsDialog");
     dialog.setMinimumSize(AppTheme::px(860, uiScale_), AppTheme::px(600, uiScale_));
     dialog.resize(AppTheme::px(900, uiScale_), AppTheme::px(620, uiScale_));
-    dialog.setStyleSheet(R"(
+    // 设置对话框配色跟随当前主题 palette；点「应用」切换主题后可再次调用即时重绘对话框本身。
+    auto applyDialogStyle = [&dialog] {
+        const AppTheme::Palette p = AppTheme::palette();
+        QString css = QString(R"(
         QDialog#settingsDialog {
-            background: #1b1c1e;
-            color: #e3e4e6;
+            background: @base@;
+            color: @textPrimary@;
         }
         QLabel#settingsTitle {
-            color: #f1f2f3;
+            color: @textPrimary@;
             font-size: 20px;
             font-weight: 600;
         }
         QLabel#settingsSubtitle,
         QLabel#settingsHint {
-            color: #9aa0a6;
+            color: @textSecondary@;
         }
         QLabel#settingsSectionTitle {
-            color: #e8eaed;
+            color: @textPrimary@;
             font-size: 13px;
             font-weight: 600;
         }
         QWidget#settingsSection {
-            background: #212327;
-            border: 1px solid #2e2f33;
+            background: @panel@;
+            border: 1px solid @hairline@;
             border-radius: 12px;
         }
         QScrollArea#settingsScroll {
-            background: #1b1c1e;
+            background: @base@;
             border: 0px;
         }
         QScrollArea#settingsScroll > QWidget > QWidget {
-            background: #1b1c1e;
+            background: @base@;
         }
         QListWidget#settingsNav,
         QListWidget#shortcutList {
-            background: #212327;
-            border: 1px solid #2e2f33;
+            background: @panel@;
+            border: 1px solid @hairline@;
             border-radius: 10px;
-            color: #e3e4e6;
+            color: @textPrimary@;
             outline: 0px;
             padding: 4px;
         }
@@ -4255,19 +4298,19 @@ void MainWindow::showSettingsDialog()
             border-radius: 7px;
         }
         QListWidget#settingsNav::item:selected {
-            background: #303a47;
-            color: #ffffff;
+            background: @selection@;
+            color: @selectionText@;
         }
         QListWidget#settingsNav::item:hover,
         QListWidget#shortcutList::item:hover {
-            background: #26282d;
+            background: @elevated@;
         }
         QListWidget#shortcutList::item {
             min-height: 34px;
             padding: 5px 8px;
         }
-        QLineEdit, QDoubleSpinBox, QSlider, QCheckBox {
-            color: #cccccc;
+        QLineEdit, QDoubleSpinBox, QComboBox, QSlider, QCheckBox {
+            color: @textPrimary@;
         }
         QCheckBox {
             min-height: 32px;
@@ -4277,46 +4320,72 @@ void MainWindow::showSettingsDialog()
         QCheckBox::indicator {
             width: 18px;
             height: 18px;
-            border: 1px solid #6a6a6a;
-            background: #313131;
+            border-radius: 4px;
+            border: 1px solid @border@;
+            background: @input@;
         }
         QCheckBox::indicator:hover {
-            border: 1px solid #cccccc;
-            background: #3c3c3c;
+            border: 1px solid @accent@;
+            background: @elevatedHover@;
         }
         QCheckBox::indicator:checked {
             image: none;
-            background: #0e639c;
-            border: 1px solid #3794ff;
+            background: @accent@;
+            border: 1px solid @accent@;
         }
-        QLineEdit, QDoubleSpinBox {
-            background: #3c3c3c;
-            border: 1px solid #555555;
+        QLineEdit, QDoubleSpinBox, QComboBox {
+            background: @input@;
+            border: 1px solid @border@;
+            border-radius: 6px;
             padding: 5px 7px;
-            selection-background-color: #264f78;
+            selection-background-color: @selection@;
+            selection-color: @selectionText@;
         }
-        QLineEdit:focus, QDoubleSpinBox:focus {
-            border: 1px solid #3794ff;
+        QLineEdit:focus, QDoubleSpinBox:focus, QComboBox:focus {
+            border: 1px solid @accent@;
+        }
+        QComboBox QAbstractItemView {
+            background: @panel@;
+            border: 1px solid @hairline@;
+            selection-background-color: @selection@;
+            selection-color: @selectionText@;
+            color: @textPrimary@;
         }
         QPushButton {
-            background: #2d2d30;
-            border: 1px solid #3c3c3c;
-            color: #cccccc;
+            background: @elevated@;
+            border: 1px solid @border@;
+            border-radius: 6px;
+            color: @textPrimary@;
             padding: 6px 12px;
             min-height: 36px;
             min-width: 108px;
         }
         QPushButton:hover {
-            background: #3a3d41;
+            background: @elevatedHover@;
         }
         QPushButton:pressed {
-            background: #094771;
+            background: @selection@;
         }
         QDialogButtonBox QPushButton {
             min-width: 112px;
             min-height: 38px;
         }
     )");
+        css.replace("@base@", p.base.name())
+            .replace("@panel@", p.panel.name())
+            .replace("@elevatedHover@", p.elevatedHover.name())
+            .replace("@elevated@", p.elevated.name())
+            .replace("@input@", p.input.name())
+            .replace("@hairline@", p.hairline.name())
+            .replace("@border@", p.border.name())
+            .replace("@textPrimary@", p.textPrimary.name())
+            .replace("@textSecondary@", p.textSecondary.name())
+            .replace("@selectionText@", p.selectionText.name())
+            .replace("@selection@", p.selection.name())
+            .replace("@accent@", p.accent.name());
+        dialog.setStyleSheet(css);
+    };
+    applyDialogStyle();
 
     auto* root = new QVBoxLayout(&dialog);
     root->setContentsMargins(AppTheme::px(18, uiScale_), AppTheme::px(16, uiScale_),
@@ -4325,7 +4394,7 @@ void MainWindow::showSettingsDialog()
 
     auto* title = new QLabel("设置");
     title->setObjectName("settingsTitle");
-    auto* subtitle = new QLabel("调整工作台、画布和快捷键查看方式。所有改动保持深色工作台风格。");
+    auto* subtitle = new QLabel("调整主题、工作台、画布和快捷键查看方式。");
     subtitle->setObjectName("settingsSubtitle");
     root->addWidget(title);
     root->addWidget(subtitle);
@@ -4426,6 +4495,13 @@ void MainWindow::showSettingsDialog()
     uiScaleSpin->setFixedWidth(AppTheme::px(112, uiScale_));
     uiScaleSpin->setToolTip("调整工作台整体缩放比例");
 
+    auto* themeCombo = new QComboBox;
+    themeCombo->addItem("深色", "dark");
+    themeCombo->addItem("浅色", "light");
+    themeCombo->setCurrentIndex(AppTheme::isDarkTheme() ? 0 : 1);
+    themeCombo->setFixedWidth(AppTheme::px(140, uiScale_));
+    themeCombo->setToolTip("切换深色 / 浅色主题");
+
     auto* canvasRow = new QWidget;
     auto* canvasLayout = new QHBoxLayout(canvasRow);
     canvasLayout->setContentsMargins(0, 0, 0, 0);
@@ -4466,8 +4542,9 @@ void MainWindow::showSettingsDialog()
     miniMapVisible->setToolTip("显示或隐藏画布左下角小地图");
 
     auto* generalPage = makePage();
-    auto* generalAppearance = makeSection(generalPage, "外观", "当前版本固定使用深色工作台风格，避免浅色主题和工作台视觉分叉。");
-    makeRow(generalAppearance, "界面大小", uiScaleSpin, "控制菜单、侧栏、按钮和节点参数控件的整体缩放。");
+    auto* generalAppearance = makeSection(generalPage, "外观", "选择深色或浅色主题，并调整工作台整体缩放。");
+    makeRow(generalAppearance, "主题", themeCombo, "深色为默认；浅色采用 #F8F8F6 背景、#0A0A0A 文字，绿色与暗黄作强调色。");
+    makeRow(generalAppearance, "界面大小", uiScaleSpin, "控制菜单、侧栏、按钮、节点参数控件和各处文字的整体缩放。");
     // 设置页按钮统一尺寸策略：固定大小、显式最小高度，放进带末尾弹簧的行里，
     // 既不会被挤压重叠，也不会随窗口拉伸变形。
     auto styleActionButton = [this](QPushButton* button) {
@@ -4606,12 +4683,13 @@ void MainWindow::showSettingsDialog()
 
     auto applySettings = [&] {
         QSettings settings;
-        AppTheme::setThemePreference(AppTheme::ThemePreference::Dark);
-        settings.setValue("mainWindow/theme", "dark");
+        AppTheme::setThemePreference(themeCombo->currentData().toString());
+        settings.setValue("mainWindow/theme", AppTheme::themePreferenceName());
         wheelZoomStep_ = 1.0 + wheelZoomSpin->value() / 100.0;
         settings.setValue("mainWindow/wheelZoomStep", wheelZoomStep_);
         setUiScale(uiScaleSpin->value() / 100.0);
         applyUiScale();
+        applyDialogStyle();  // 主题切换后即时重绘设置对话框自身
         const double requestedZoom = canvasZoomSlider->value() / 100.0;
         if (!qFuzzyCompare(requestedZoom, zoomScale_)) {
             applyZoomFactor(requestedZoom / zoomScale_);
@@ -4734,8 +4812,10 @@ void MainWindow::applyUiScale()
     refreshActionIcon(previewToggleAction_);
     refreshActionIcon(bottomToggleAction_);
     refreshActionIcon(settingsAction_);
+    refreshActionIcon(newWorkbookAction_);
     if (workbookTabs_) {
-        workbookTabs_->setMinimumWidth(AppTheme::px(220, uiScale_));
+        // 不再强制最小宽度：标签条按内容自适应，消除标签与「+」之间的空白色块。
+        workbookTabs_->setMinimumWidth(0);
         workbookTabs_->setMaximumWidth(AppTheme::px(520, uiScale_));
     }
 
@@ -4785,6 +4865,15 @@ void MainWindow::applyUiScale()
     }
     if (workbenchHost_) {
         workbenchHost_->setUiScale(uiScale_);
+    }
+    // 把当前缩放与主题 palette 同步给 QML 工作台表面：字号跟随缩放、配色跟随主题。
+    if (workbenchTheme_) {
+        workbenchTheme_->setScale(uiScale_);
+        workbenchTheme_->refresh();
+    }
+    // 底部标签条 QSS 不受全局样式表覆盖，主题切换时单独重设。
+    if (bottomTabs_) {
+        bottomTabs_->setStyleSheet(bottomTabsStyleSheet());
     }
     if (workbenchBridge_) {
         workbenchBridge_->setZoomText(QString("%1%").arg(int(std::lround(zoomScale_ * 100.0))));

@@ -1,14 +1,74 @@
 #pragma once
 
+#include "gui/AppTheme.h"
 #include "nodes/NodeFactory.h"
 
 #include <QAbstractListModel>
+#include <QColor>
+#include <QObject>
 #include <QPointer>
 #include <QStringList>
 #include <QVector>
 
 class QAction;
 class WorkflowGraph;
+
+// 把活动主题 palette 与界面缩放暴露给 QML 工作台表面。QML 通过 `theme.*` 绑定颜色，
+// 通过 `theme.scale` 让字号跟随界面缩放；切换主题或缩放时调用 refresh()/setScale()
+// 触发 QML 重新绑定，使深色 / 浅色与放大字体在 QML 侧实时生效。
+class WorkbenchTheme final : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(QColor base READ base NOTIFY changed)
+    Q_PROPERTY(QColor panel READ panel NOTIFY changed)
+    Q_PROPERTY(QColor elevated READ elevated NOTIFY changed)
+    Q_PROPERTY(QColor elevatedHover READ elevatedHover NOTIFY changed)
+    Q_PROPERTY(QColor input READ input NOTIFY changed)
+    Q_PROPERTY(QColor hairline READ hairline NOTIFY changed)
+    Q_PROPERTY(QColor border READ border NOTIFY changed)
+    Q_PROPERTY(QColor textPrimary READ textPrimary NOTIFY changed)
+    Q_PROPERTY(QColor textSecondary READ textSecondary NOTIFY changed)
+    Q_PROPERTY(QColor textMuted READ textMuted NOTIFY changed)
+    Q_PROPERTY(QColor accent READ accent NOTIFY changed)
+    Q_PROPERTY(QColor accentHover READ accentHover NOTIFY changed)
+    Q_PROPERTY(QColor selection READ selection NOTIFY changed)
+    Q_PROPERTY(QColor selectionText READ selectionText NOTIFY changed)
+    Q_PROPERTY(QColor onAccent READ onAccent NOTIFY changed)
+    Q_PROPERTY(QColor warning READ warning NOTIFY changed)
+    Q_PROPERTY(QColor danger READ danger NOTIFY changed)
+    Q_PROPERTY(double scale READ scale NOTIFY scaleChanged)
+public:
+    explicit WorkbenchTheme(QObject* parent = nullptr);
+
+    QColor base() const { return palette_.base; }
+    QColor panel() const { return palette_.panel; }
+    QColor elevated() const { return palette_.elevated; }
+    QColor elevatedHover() const { return palette_.elevatedHover; }
+    QColor input() const { return palette_.input; }
+    QColor hairline() const { return palette_.hairline; }
+    QColor border() const { return palette_.border; }
+    QColor textPrimary() const { return palette_.textPrimary; }
+    QColor textSecondary() const { return palette_.textSecondary; }
+    QColor textMuted() const { return palette_.textMuted; }
+    QColor accent() const { return palette_.accent; }
+    QColor accentHover() const { return palette_.accentHover; }
+    QColor selection() const { return palette_.selection; }
+    QColor selectionText() const { return palette_.selectionText; }
+    QColor onAccent() const { return palette_.onAccent; }
+    QColor warning() const { return palette_.warning; }
+    QColor danger() const { return palette_.danger; }
+    double scale() const { return scale_; }
+
+    void setScale(double scale);
+    void refresh();
+
+signals:
+    void changed();
+    void scaleChanged();
+
+private:
+    AppTheme::Palette palette_;
+    double scale_ = 1.0;
+};
 
 class WorkflowTemplateModel final : public QAbstractListModel {
     Q_OBJECT

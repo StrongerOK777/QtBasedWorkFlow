@@ -16,6 +16,26 @@
 #include <QWidget>
 #include <algorithm>
 
+WorkbenchTheme::WorkbenchTheme(QObject* parent)
+    : QObject(parent), palette_(AppTheme::palette())
+{
+}
+
+void WorkbenchTheme::setScale(double scale)
+{
+    if (qFuzzyCompare(scale_, scale)) {
+        return;
+    }
+    scale_ = scale;
+    Q_EMIT scaleChanged();
+}
+
+void WorkbenchTheme::refresh()
+{
+    palette_ = AppTheme::palette();
+    Q_EMIT changed();
+}
+
 namespace {
 
 bool matchesTerms(const QString& text, const QString& query)

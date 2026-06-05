@@ -3,8 +3,8 @@ import QtQuick.Controls
 
 Rectangle {
     id: activityBar
-    color: "#1b1c1e"
-    border.color: "#2e2f33"
+    color: theme.base
+    border.color: theme.hairline
     border.width: 1
 
     component ActivityButton: ToolButton {
@@ -36,7 +36,7 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 6
                 radius: 9
-                color: button.checkedState ? "#2a313b" : button.hovered ? "#26282d" : "transparent"
+                color: button.checkedState ? theme.selection : button.hovered ? theme.elevated : "transparent"
                 Behavior on color { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }
             }
             Rectangle {
@@ -46,7 +46,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 x: 1
                 visible: button.checkedState
-                color: "#6ea0e0"
+                color: theme.accent
             }
         }
         contentItem: Item {
@@ -55,7 +55,7 @@ Rectangle {
                 width: 28
                 height: 28
                 name: button.iconName
-                strokeColor: button.checkedState ? "#e8eaed" : button.hovered ? "#c8cace" : "#8d9298"
+                strokeColor: button.checkedState ? theme.textPrimary : button.hovered ? theme.textPrimary : theme.textSecondary
                 fillColor: "transparent"
                 strokeWidth: 1.7
                 Behavior on strokeColor { ColorAnimation { duration: 130; easing.type: Easing.OutCubic } }

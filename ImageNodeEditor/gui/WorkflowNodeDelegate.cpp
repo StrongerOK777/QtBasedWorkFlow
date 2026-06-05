@@ -217,57 +217,70 @@ QWidget* WorkflowNodeDelegate::buildParameterPanel()
 {
     auto* panel = new QWidget;
     panel->setObjectName("nodeInlineParameters");
-    panel->setStyleSheet(QString(R"(
+    // 内联参数面板配色跟随当前主题 palette（深色 / 浅色一致）。
+    const AppTheme::Palette p = AppTheme::palette();
+    QString css = QString(R"(
         QWidget#nodeInlineParameters {
-            background: #23252a;
-            border: 1px solid #34363b;
+            background: @elevated@;
+            border: 1px solid @border@;
             border-radius: 10px;
         }
         QLabel {
-            color: #9aa0a6;
+            color: @textSecondary@;
             font-weight: 500;
         }
         QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
             min-height: 22px;
             padding: 1px 6px;
-            color: #e3e4e6;
-            background: #2c2f34;
-            border: 1px solid #2e2f33;
+            color: @textPrimary@;
+            background: @input@;
+            border: 1px solid @hairline@;
             border-radius: 6px;
-            selection-background-color: #35506e;
-            selection-color: #ffffff;
+            selection-background-color: @selection@;
+            selection-color: @selectionText@;
         }
         QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-            border-color: #6ea0e0;
+            border-color: @accent@;
         }
         QCheckBox {
-            color: #e3e4e6;
+            color: @textPrimary@;
             spacing: 6px;
         }
         QCheckBox::indicator {
             width: 14px;
             height: 14px;
-            border: 1px solid #4a4d52;
+            border: 1px solid @border@;
             border-radius: 4px;
-            background: #2c2f34;
+            background: @input@;
         }
         QCheckBox::indicator:checked {
-            background: #6ea0e0;
-            border-color: #6ea0e0;
+            background: @accent@;
+            border-color: @accent@;
         }
         QPushButton {
             min-height: 22px;
-            color: #e3e4e6;
-            background: #2c2f34;
-            border: 1px solid #2e2f33;
+            color: @textPrimary@;
+            background: @input@;
+            border: 1px solid @hairline@;
             border-radius: 6px;
             padding: 1px 8px;
         }
         QPushButton:hover {
-            background: #34373d;
-            border-color: #3b3d42;
+            background: @elevatedHover@;
+            border-color: @border@;
         }
-    )"));
+    )");
+    css.replace("@elevated@", p.elevated.name())
+        .replace("@elevatedHover@", p.elevatedHover.name())
+        .replace("@input@", p.input.name())
+        .replace("@hairline@", p.hairline.name())
+        .replace("@border@", p.border.name())
+        .replace("@textPrimary@", p.textPrimary.name())
+        .replace("@textSecondary@", p.textSecondary.name())
+        .replace("@selectionText@", p.selectionText.name())
+        .replace("@selection@", p.selection.name())
+        .replace("@accent@", p.accent.name());
+    panel->setStyleSheet(css);
 
     auto* form = new QFormLayout(panel);
     form->setContentsMargins(AppTheme::px(6, uiScale_), AppTheme::px(4, uiScale_),

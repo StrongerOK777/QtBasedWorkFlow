@@ -4,29 +4,32 @@ import QtQuick.Layouts
 
 Rectangle {
     id: sidebar
-    color: "#1d1e21"
-    border.color: "#2e2f33"
+    color: theme.panel
+    border.color: theme.hairline
     border.width: 1
 
+    // 字号统一跟随界面缩放：基准值已整体上调，避免文字过小看不清。
+    function fs(px) { return Math.round(px * theme.scale) }
+
     component SidebarHeader: Text {
-        color: "#8b9097"
-        font.pixelSize: 12
+        color: theme.textMuted
+        font.pixelSize: sidebar.fs(13)
         font.weight: Font.DemiBold
         font.letterSpacing: 0.4
         elide: Text.ElideRight
     }
 
     component SearchField: TextField {
-        color: "#e3e4e6"
-        placeholderTextColor: "#6b7178"
+        color: theme.textPrimary
+        placeholderTextColor: theme.textMuted
         selectByMouse: true
-        font.pixelSize: 13
+        font.pixelSize: sidebar.fs(14)
         leftPadding: 10
         rightPadding: 10
         background: Rectangle {
             radius: 8
-            color: "#2c2f34"
-            border.color: parent.activeFocus ? "#6ea0e0" : "#2e2f33"
+            color: theme.input
+            border.color: parent.activeFocus ? theme.accent : theme.hairline
             border.width: 1
             Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
         }
@@ -34,7 +37,7 @@ Rectangle {
 
     component ResultList: ListView {
         clip: true
-        spacing: 2
+        spacing: 4
         ScrollBar.vertical: ScrollBar {}
     }
 
@@ -69,6 +72,7 @@ Rectangle {
                     model: nodeCatalogModel
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // 节点选择按钮：统一风格的圆角矩形卡片（任务1c）。
                     delegate: Rectangle {
                         required property int index
                         required property string typeName
@@ -76,37 +80,42 @@ Rectangle {
                         required property string category
                         required property string provider
                         required property string iconName
-                        width: ListView.view.width
-                        height: 46
-                        color: ListView.isCurrentItem ? "#303a47"
-                               : mouse.containsMouse ? "#26282d" : "transparent"
+                        x: 2
+                        width: ListView.view.width - 4
+                        height: sidebar.fs(48)
+                        radius: 8
+                        color: ListView.isCurrentItem ? theme.selection
+                               : mouse.containsMouse ? theme.elevatedHover : theme.elevated
+                        border.color: ListView.isCurrentItem ? theme.accent : theme.hairline
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 110; easing.type: Easing.OutCubic } }
                         property real pressX: 0
                         property real pressY: 0
                         property bool dragStarted: false
                         Column {
                             anchors.left: parent.left
-                            anchors.leftMargin: 34
+                            anchors.leftMargin: 36
                             anchors.right: parent.right
-                            anchors.rightMargin: 6
+                            anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
                             Text {
                                 text: title
-                                color: "#dddddd"
-                                font.pixelSize: 13
+                                color: theme.textPrimary
+                                font.pixelSize: sidebar.fs(14)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
                             Text {
                                 text: category + "  " + provider
-                                color: "#969696"
-                                font.pixelSize: 11
+                                color: theme.textMuted
+                                font.pixelSize: sidebar.fs(12)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
                         }
                         Rectangle {
-                            x: 8
+                            x: 10
                             width: 18
                             height: 18
                             anchors.verticalCenter: parent.verticalCenter
@@ -117,7 +126,7 @@ Rectangle {
                                 width: 14
                                 height: 14
                                 name: iconName
-                                strokeColor: "#cccccc"
+                                strokeColor: theme.textSecondary
                                 strokeWidth: 1.4
                             }
                         }
@@ -168,21 +177,22 @@ Rectangle {
                 }
                 Text {
                     text: "预设方案类似扩展面板入口，但只保存可直接套用的图像处理流程。"
-                    color: "#969696"
-                    font.pixelSize: 12
+                    color: theme.textMuted
+                    font.pixelSize: sidebar.fs(13)
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 34
-                    color: templateSaveMouse.containsMouse ? "#26282d" : "#212327"
-                    border.color: "#3c3c3c"
+                    height: sidebar.fs(34)
+                    radius: 8
+                    color: templateSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                    border.color: theme.border
                     Text {
                         anchors.centerIn: parent
                         text: "保存当前为模板"
-                        color: "#cccccc"
-                        font.pixelSize: 13
+                        color: theme.textPrimary
+                        font.pixelSize: sidebar.fs(14)
                     }
                     MouseArea {
                         id: templateSaveMouse
@@ -203,32 +213,34 @@ Rectangle {
                         required property bool builtIn
                         width: ListView.view.width
                         height: 72
-                        color: templateMouse.containsMouse ? "#26282d" : "transparent"
+                        radius: 8
+                        color: templateMouse.containsMouse ? theme.elevated : "transparent"
                         Rectangle {
                             x: 0
-                            width: 2
+                            width: 3
                             height: parent.height
-                            color: builtIn ? "#6ea0e0" : "#858585"
+                            radius: 1.5
+                            color: builtIn ? theme.accent : theme.textMuted
                         }
                         Column {
                             anchors.left: parent.left
-                            anchors.leftMargin: 8
+                            anchors.leftMargin: 10
                             anchors.right: applyTemplateButton.left
                             anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 3
                             Text {
                                 text: title
-                                color: "#dddddd"
-                                font.pixelSize: 13
+                                color: theme.textPrimary
+                                font.pixelSize: sidebar.fs(14)
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
                             Text {
                                 text: detail
-                                color: "#a8a8a8"
-                                font.pixelSize: 11
+                                color: theme.textSecondary
+                                font.pixelSize: sidebar.fs(12)
                                 maximumLineCount: 2
                                 wrapMode: Text.Wrap
                                 elide: Text.ElideRight
@@ -236,8 +248,8 @@ Rectangle {
                             }
                             Text {
                                 text: source
-                                color: "#6f6f6f"
-                                font.pixelSize: 10
+                                color: theme.textMuted
+                                font.pixelSize: sidebar.fs(11)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
@@ -247,15 +259,15 @@ Rectangle {
                             anchors.right: parent.right
                             anchors.rightMargin: 4
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 44
-                            height: 26
-                            color: applyTemplateMouse.containsMouse ? "#43617f" : "#2c2f34"
-                            border.color: applyTemplateMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
+                            width: sidebar.fs(46)
+                            height: sidebar.fs(26)
+                            radius: 7
+                            color: applyTemplateMouse.containsMouse ? theme.accentHover : theme.accent
                             Text {
                                 anchors.centerIn: parent
                                 text: "套用"
-                                color: "#ffffff"
-                                font.pixelSize: 12
+                                color: theme.onAccent
+                                font.pixelSize: sidebar.fs(13)
                             }
                             MouseArea {
                                 id: applyTemplateMouse
@@ -287,8 +299,8 @@ Rectangle {
                 }
                 Text {
                     text: "像轻量版本管理一样保存当前画布、恢复旧版本，或从旧保存点创建新分支。"
-                    color: "#969696"
-                    font.pixelSize: 12
+                    color: theme.textMuted
+                    font.pixelSize: sidebar.fs(13)
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
@@ -299,8 +311,8 @@ Rectangle {
                 }
                 Text {
                     text: "每次保存（Ctrl+S）自动记录，可点「恢复」回到那次保存。"
-                    color: "#969696"
-                    font.pixelSize: 11
+                    color: theme.textMuted
+                    font.pixelSize: sidebar.fs(12)
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
@@ -314,7 +326,8 @@ Rectangle {
                         required property string detail
                         width: ListView.view.width
                         height: 50
-                        color: timelineRowMouse.containsMouse ? "#26282d" : "transparent"
+                        radius: 8
+                        color: timelineRowMouse.containsMouse ? theme.elevated : "transparent"
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 8
@@ -324,16 +337,16 @@ Rectangle {
                             spacing: 2
                             Text {
                                 text: title
-                                color: "#dddddd"
-                                font.pixelSize: 12
+                                color: theme.textPrimary
+                                font.pixelSize: sidebar.fs(13)
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
                             Text {
                                 text: detail
-                                color: "#969696"
-                                font.pixelSize: 11
+                                color: theme.textMuted
+                                font.pixelSize: sidebar.fs(12)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
@@ -343,11 +356,11 @@ Rectangle {
                             anchors.right: parent.right
                             anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 52
-                            height: 24
-                            color: timelineRestoreMouse.containsMouse ? "#43617f" : "#2c2f34"
-                            border.color: timelineRestoreMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
-                            Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
+                            width: sidebar.fs(52)
+                            height: sidebar.fs(24)
+                            radius: 7
+                            color: timelineRestoreMouse.containsMouse ? theme.accentHover : theme.accent
+                            Text { anchors.centerIn: parent; text: "恢复"; color: theme.onAccent; font.pixelSize: sidebar.fs(13) }
                             MouseArea {
                                 id: timelineRestoreMouse
                                 anchors.fill: parent
@@ -366,7 +379,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#2e2f33"
+                    color: theme.hairline
                 }
 
                 SidebarHeader {
@@ -375,14 +388,15 @@ Rectangle {
                 }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 34
-                    color: checkpointSaveMouse.containsMouse ? "#26282d" : "#212327"
-                    border.color: "#3c3c3c"
+                    height: sidebar.fs(34)
+                    radius: 8
+                    color: checkpointSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                    border.color: theme.border
                     Text {
                         anchors.centerIn: parent
                         text: "保存当前进度"
-                        color: "#cccccc"
-                        font.pixelSize: 13
+                        color: theme.textPrimary
+                        font.pixelSize: sidebar.fs(14)
                     }
                     MouseArea {
                         id: checkpointSaveMouse
@@ -402,7 +416,8 @@ Rectangle {
                         required property string branch
                         width: ListView.view.width
                         height: 82
-                        color: checkpointMouse.containsMouse ? "#26282d" : "transparent"
+                        radius: 8
+                        color: checkpointMouse.containsMouse ? theme.elevated : "transparent"
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 8
@@ -413,16 +428,16 @@ Rectangle {
                             spacing: 3
                             Text {
                                 text: title
-                                color: "#dddddd"
-                                font.pixelSize: 13
+                                color: theme.textPrimary
+                                font.pixelSize: sidebar.fs(14)
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
                             Text {
                                 text: branch + "  ·  " + detail
-                                color: "#969696"
-                                font.pixelSize: 11
+                                color: theme.textMuted
+                                font.pixelSize: sidebar.fs(12)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
@@ -434,11 +449,11 @@ Rectangle {
                             anchors.bottomMargin: 6
                             spacing: 6
                             Rectangle {
-                                width: 52
-                                height: 24
-                                color: restoreMouse.containsMouse ? "#43617f" : "#2c2f34"
-                                border.color: restoreMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
-                                Text { anchors.centerIn: parent; text: "恢复"; color: "#ffffff"; font.pixelSize: 12 }
+                                width: sidebar.fs(52)
+                                height: sidebar.fs(24)
+                                radius: 7
+                                color: restoreMouse.containsMouse ? theme.accentHover : theme.accent
+                                Text { anchors.centerIn: parent; text: "恢复"; color: theme.onAccent; font.pixelSize: sidebar.fs(13) }
                                 MouseArea {
                                     id: restoreMouse
                                     anchors.fill: parent
@@ -447,11 +462,12 @@ Rectangle {
                                 }
                             }
                             Rectangle {
-                                width: 52
-                                height: 24
-                                color: branchMouse.containsMouse ? "#303237" : "#212327"
-                                border.color: "#2e2f33"
-                                Text { anchors.centerIn: parent; text: "分支"; color: "#cccccc"; font.pixelSize: 12 }
+                                width: sidebar.fs(52)
+                                height: sidebar.fs(24)
+                                radius: 7
+                                color: branchMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                                border.color: theme.border
+                                Text { anchors.centerIn: parent; text: "分支"; color: theme.textPrimary; font.pixelSize: sidebar.fs(13) }
                                 MouseArea {
                                     id: branchMouse
                                     anchors.fill: parent
@@ -496,20 +512,22 @@ Rectangle {
                         required property string title
                         required property string typeName
                         required property string category
-                        width: ListView.view.width
-                        height: 46
-                        color: outlineMouse.containsMouse ? "#26282d" : "transparent"
+                        x: 2
+                        width: ListView.view.width - 4
+                        height: sidebar.fs(46)
+                        radius: 8
+                        color: outlineMouse.containsMouse ? theme.elevated : "transparent"
                         Column {
                             anchors.left: parent.left
-                            anchors.leftMargin: 6
+                            anchors.leftMargin: 8
                             anchors.right: parent.right
-                            anchors.rightMargin: 6
+                            anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
                             Text {
                                 text: title
-                                color: "#dddddd"
-                                font.pixelSize: 13
+                                color: theme.textPrimary
+                                font.pixelSize: sidebar.fs(14)
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
@@ -518,8 +536,8 @@ Rectangle {
                                     var i = nodeId.lastIndexOf("_");
                                     return i >= 0 ? category + "  #" + nodeId.substring(i + 1) : category;
                                 }
-                                color: "#969696"
-                                font.pixelSize: 11
+                                color: theme.textMuted
+                                font.pixelSize: sidebar.fs(12)
                                 elide: Text.ElideMiddle
                                 width: parent.width
                             }
@@ -553,15 +571,16 @@ Rectangle {
                 }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 34
-                    color: "#2c2f34"
-                    border.color: quickMouse.containsMouse ? "#6ea0e0" : "#2e2f33"
+                    height: sidebar.fs(34)
+                    radius: 8
+                    color: theme.input
+                    border.color: quickMouse.containsMouse ? theme.accent : theme.hairline
                     Text {
                         anchors.fill: parent
                         anchors.leftMargin: 9
                         text: "打开命令面板"
-                        color: "#dddddd"
-                        font.pixelSize: 13
+                        color: theme.textPrimary
+                        font.pixelSize: sidebar.fs(14)
                         verticalAlignment: Text.AlignVCenter
                     }
                     MouseArea {
@@ -584,15 +603,18 @@ Rectangle {
                         required property string nodeId
                         required property string title
                         required property string category
-                        width: ListView.view.width
-                        height: 44
-                        color: searchMouse.containsMouse ? "#26282d" : "transparent"
+                        x: 2
+                        width: ListView.view.width - 4
+                        height: sidebar.fs(44)
+                        radius: 8
+                        color: searchMouse.containsMouse ? theme.elevated : "transparent"
                         Text {
                             anchors.fill: parent
-                            anchors.margins: 6
+                            anchors.margins: 8
                             text: title + "  ·  " + category
-                            color: "#dddddd"
-                            font.pixelSize: 12
+                            color: theme.textPrimary
+                            font.pixelSize: sidebar.fs(13)
+                            verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
                         MouseArea {
@@ -624,15 +646,17 @@ Rectangle {
                     delegate: Rectangle {
                         required property string message
                         required property string nodeId
-                        width: ListView.view.width
-                        height: 54
-                        color: problemMouse.containsMouse ? "#26282d" : "transparent"
+                        x: 2
+                        width: ListView.view.width - 4
+                        height: sidebar.fs(54)
+                        radius: 8
+                        color: problemMouse.containsMouse ? theme.elevated : "transparent"
                         Text {
                             anchors.fill: parent
-                            anchors.margins: 6
+                            anchors.margins: 8
                             text: message
-                            color: "#f1b2ae"
-                            font.pixelSize: 12
+                            color: theme.danger
+                            font.pixelSize: sidebar.fs(13)
                             wrapMode: Text.Wrap
                             maximumLineCount: 2
                             elide: Text.ElideRight
@@ -663,28 +687,29 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 74
-                    color: "#212327"
-                    border.color: "#3c3c3c"
+                    radius: 8
+                    color: theme.panel
+                    border.color: theme.border
                     Text {
                         anchors.fill: parent
                         anchors.margins: 8
                         text: workbenchBridge.statusText + "\n" + workbenchBridge.selectedNodeText + "\n" + workbenchBridge.zoomText
-                        color: "#cccccc"
-                        font.pixelSize: 12
+                        color: theme.textSecondary
+                        font.pixelSize: sidebar.fs(13)
                         lineHeight: 1.15
                     }
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 34
-                    color: runDiagMouse.containsMouse ? "#43617f" : "#303a47"
-                    border.color: "#6ea0e0"
+                    height: sidebar.fs(34)
+                    radius: 8
+                    color: runDiagMouse.containsMouse ? theme.accentHover : theme.accent
                     Text {
                         anchors.centerIn: parent
                         text: "执行工作流"
-                        color: "#ffffff"
-                        font.pixelSize: 13
+                        color: theme.onAccent
+                        font.pixelSize: sidebar.fs(14)
                         font.weight: Font.DemiBold
                     }
                     MouseArea {
@@ -697,14 +722,15 @@ Rectangle {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 34
-                    color: layoutDiagMouse.containsMouse ? "#26282d" : "#212327"
-                    border.color: "#3c3c3c"
+                    height: sidebar.fs(34)
+                    radius: 8
+                    color: layoutDiagMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                    border.color: theme.border
                     Text {
                         anchors.centerIn: parent
                         text: "整理画布"
-                        color: "#cccccc"
-                        font.pixelSize: 13
+                        color: theme.textPrimary
+                        font.pixelSize: sidebar.fs(14)
                     }
                     MouseArea {
                         id: layoutDiagMouse
@@ -726,15 +752,17 @@ Rectangle {
                     delegate: Rectangle {
                         required property string message
                         required property string nodeId
-                        width: ListView.view.width
-                        height: 48
-                        color: diagProblemMouse.containsMouse ? "#26282d" : "transparent"
+                        x: 2
+                        width: ListView.view.width - 4
+                        height: sidebar.fs(48)
+                        radius: 8
+                        color: diagProblemMouse.containsMouse ? theme.elevated : "transparent"
                         Text {
                             anchors.fill: parent
-                            anchors.margins: 6
+                            anchors.margins: 8
                             text: message
-                            color: "#f1b2ae"
-                            font.pixelSize: 12
+                            color: theme.danger
+                            font.pixelSize: sidebar.fs(13)
                             wrapMode: Text.Wrap
                             maximumLineCount: 2
                             elide: Text.ElideRight

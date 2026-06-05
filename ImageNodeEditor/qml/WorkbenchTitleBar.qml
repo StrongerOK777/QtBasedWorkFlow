@@ -4,9 +4,11 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
-    color: "#212327"
-    border.color: "#2e2f33"
+    color: theme.panel
+    border.color: theme.hairline
     border.width: 1
+
+    function fs(px) { return Math.round(px * theme.scale) }
 
     component CommandButton: ToolButton {
         id: button
@@ -29,8 +31,8 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 3
                 radius: 6
-                color: button.checkedState ? "#2a313b" : (button.hovered || button.down) ? "#2c2f34" : "transparent"
-                border.color: button.checkedState ? "#3f5163" : "transparent"
+                color: button.checkedState ? theme.selection : (button.hovered || button.down) ? theme.elevated : "transparent"
+                border.color: button.checkedState ? theme.accent : "transparent"
                 border.width: button.checkedState ? 1 : 0
                 Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }
@@ -41,7 +43,7 @@ Rectangle {
                 width: 19
                 height: 19
                 name: button.iconName
-                strokeColor: button.checkedState ? "#d6e4f5" : button.enabled ? (button.hovered ? "#c8cace" : "#aeb3b8") : "#5f6469"
+                strokeColor: button.checkedState ? theme.accent : button.enabled ? (button.hovered ? theme.textPrimary : theme.textSecondary) : theme.textMuted
                 strokeWidth: 1.7
                 Behavior on strokeColor { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }
@@ -81,8 +83,8 @@ Rectangle {
             Layout.preferredWidth: Math.min(520, Math.max(280, root.width * 0.34))
             Layout.preferredHeight: 26
             radius: 8
-            color: commandCenterMouse.containsMouse ? "#2c2f34" : "#262a30"
-            border.color: commandCenterMouse.containsMouse ? "#6ea0e0" : "#34363b"
+            color: commandCenterMouse.containsMouse ? theme.input : theme.elevated
+            border.color: commandCenterMouse.containsMouse ? theme.accent : theme.border
             Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
             Text {
@@ -90,8 +92,8 @@ Rectangle {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 text: workbenchBridge.documentTitle
-                color: "#c2c6cb"
-                font.pixelSize: 12
+                color: theme.textSecondary
+                font.pixelSize: root.fs(13)
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideMiddle

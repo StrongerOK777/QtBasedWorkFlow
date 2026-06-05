@@ -1,7 +1,10 @@
 import QtQuick
 
 Rectangle {
-    color: "#18191c"
+    id: root
+    color: theme.base
+
+    function fs(px) { return Math.round(px * theme.scale) }
 
     // 顶部一条 hairline 分隔，融入整体而非刺眼的蓝条。
     Rectangle {
@@ -9,7 +12,7 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: "#2e2f33"
+        color: theme.hairline
     }
 
     Row {
@@ -20,15 +23,15 @@ Rectangle {
 
         Text {
             text: workbenchBridge.documentTitle
-            color: "#c8cace"
-            font.pixelSize: 12
+            color: theme.textSecondary
+            font.pixelSize: root.fs(13)
             verticalAlignment: Text.AlignVCenter
             height: parent.height
         }
         Text {
             text: workbenchBridge.selectedNodeText
-            color: "#9aa0a6"
-            font.pixelSize: 12
+            color: theme.textSecondary
+            font.pixelSize: root.fs(13)
             verticalAlignment: Text.AlignVCenter
             height: parent.height
         }
@@ -39,16 +42,16 @@ Rectangle {
         Text {
             id: statusText
             text: workbenchBridge.statusText
-            color: "#9aa0a6"
-            font.pixelSize: 12
+            color: theme.textSecondary
+            font.pixelSize: root.fs(13)
             verticalAlignment: Text.AlignVCenter
             height: parent.height
         }
         Text {
             id: zoomText
             text: workbenchBridge.zoomText
-            color: "#83a9d6"
-            font.pixelSize: 12
+            color: theme.accent
+            font.pixelSize: root.fs(13)
             verticalAlignment: Text.AlignVCenter
             height: parent.height
         }

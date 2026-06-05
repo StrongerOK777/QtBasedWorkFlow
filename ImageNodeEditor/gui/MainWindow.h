@@ -34,6 +34,7 @@ class QWidget;
 class QShowEvent;
 class TerminalPanel;
 class WorkbenchBridge;
+class WorkbenchTheme;
 class WorkflowCheckpointModel;
 class WorkbenchCommandRegistry;
 class WorkbenchHostWidget;
@@ -223,6 +224,7 @@ private:
     WorkflowCheckpointModel* workflowCheckpointModel_ = nullptr;
     WorkflowCheckpointModel* workflowTimelineModel_ = nullptr;
     WorkbenchBridge* workbenchBridge_ = nullptr;
+    WorkbenchTheme* workbenchTheme_ = nullptr;
     QWidget* primarySidebar_ = nullptr;
     QWidget* previewSidebar_ = nullptr;
     QWidget* bottomPanel_ = nullptr;
