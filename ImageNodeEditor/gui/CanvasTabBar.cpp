@@ -3,6 +3,8 @@
 #include "gui/AppTheme.h"
 
 #include <QEvent>
+#include <QFont>
+#include <QFontMetrics>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -21,10 +23,10 @@ QSize CanvasTabBar::tabSizeHint(int index) const
 {
     const QSize base = QTabBar::tabSizeHint(index);
     const QFontMetrics fm = fontMetrics();
-    // 文本 + 左右内边距 + close 按钮预留宽度；高度按当前（已缩放）字体走。
-    const int width = fm.horizontalAdvance(tabText(index)) + 52;
-    const int height = fm.height() + 14;
-    return QSize(std::max(width, 120), std::max(base.height(), height));
+    // 文本 + 左右内边距 + close 按钮预留宽度；高度按当前（已缩放）字体走，给更舒展的留白。
+    const int width = fm.horizontalAdvance(tabText(index)) + 64;
+    const int height = fm.height() + 24;
+    return QSize(std::max(width, 150), std::max(base.height(), height));
 }
 
 void CanvasTabBar::setHoverIndex(int index)
@@ -65,14 +67,18 @@ void CanvasTabBar::paintEvent(QPaintEvent* event)
 
     const int current = currentIndex();
 
+    // 标签文字：略大一点、清晰；激活标签用半粗体强调。
+    QFont labelFont = font();
+    labelFont.setPointSizeF(labelFont.pointSizeF() + 0.5);
+
     auto drawInactive = [&](int index) {
         const QRect r = tabRect(index);
         const bool hovered = index == hoverIndex_;
         if (hovered) {
             QRectF rf(r);
-            rf.adjust(3.0, 5.0, -3.0, 0.0);
+            rf.adjust(4.0, 6.0, -4.0, 0.0);
             QPainterPath path;
-            path.addRoundedRect(rf.adjusted(0, 0, 0, 10), 8, 8);  // 圆角顶、底部延伸到条外被裁掉
+            path.addRoundedRect(rf.adjusted(0, 0, 0, 12), 9, 9);  // 圆角顶、底部延伸到条外被裁掉
             painter.setPen(Qt::NoPen);
             painter.setBrush(p.elevated);
             painter.setClipRect(r.adjusted(0, 0, 0, 1));
@@ -84,22 +90,24 @@ void CanvasTabBar::paintEvent(QPaintEvent* event)
             && (index - 1 < 0 || index - 1 != current)) {
             const int sx = r.right();
             painter.setPen(QPen(p.hairline, 1));
-            painter.drawLine(QPointF(sx + 0.5, r.top() + r.height() * 0.28),
-                             QPointF(sx + 0.5, r.bottom() - r.height() * 0.28));
+            painter.drawLine(QPointF(sx + 0.5, r.top() + r.height() * 0.30),
+                             QPointF(sx + 0.5, r.bottom() - r.height() * 0.26));
         }
-        const QRect textRect = r.adjusted(14, 0, -26, 0);
+        const QRect textRect = r.adjusted(16, 2, -28, 0);
+        labelFont.setWeight(QFont::Normal);
+        painter.setFont(labelFont);
         painter.setPen(p.textSecondary);
-        const QString label = fontMetrics().elidedText(tabText(index), Qt::ElideRight, textRect.width());
+        const QString label = QFontMetrics(labelFont).elidedText(tabText(index), Qt::ElideRight, textRect.width());
         painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, label);
     };
 
     auto drawActive = [&](int index) {
         const QRect r = tabRect(index);
-        const qreal topR = 10.0;   // 顶部圆角
-        const qreal flare = 9.0;   // 底部外扩弧
+        const qreal topR = 12.0;   // 顶部圆角
+        const qreal flare = 11.0;  // 底部外扩弧
         const qreal l = r.left() + 0.5;
         const qreal rt = r.right() - 0.5;
-        const qreal top = r.top() + 4.5;
+        const qreal top = r.top() + 6.0;
         const qreal bot = r.bottom() + 1.0;  // 一直画到条底，盖住底部 hairline
 
         QPainterPath path;
@@ -130,9 +138,11 @@ void CanvasTabBar::paintEvent(QPaintEvent* event)
         stroke.quadTo(rt, bot, rt + flare, bot);
         painter.drawPath(stroke);
 
-        const QRect textRect = r.adjusted(14, 0, -26, 0);
+        const QRect textRect = r.adjusted(16, 2, -28, 0);
+        labelFont.setWeight(QFont::DemiBold);
+        painter.setFont(labelFont);
         painter.setPen(p.textPrimary);
-        const QString label = fontMetrics().elidedText(tabText(index), Qt::ElideRight, textRect.width());
+        const QString label = QFontMetrics(labelFont).elidedText(tabText(index), Qt::ElideRight, textRect.width());
         painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, label);
     };
 

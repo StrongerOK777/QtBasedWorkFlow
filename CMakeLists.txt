@@ -30,6 +30,8 @@ qt_add_executable(ImageNodeEditor
     WIN32
     MACOSX_BUNDLE
     ImageNodeEditor/main.cpp
+    ImageNodeEditor/app/CommandLineApp.h
+    ImageNodeEditor/app/CommandLineApp.cpp
     ImageNodeEditor/app/CommandLineRunner.h
     ImageNodeEditor/app/CommandLineRunner.cpp
     ImageNodeEditor/core/Edge.h
@@ -83,6 +85,8 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/workflow/WorkflowSerializer.cpp
     ImageNodeEditor/workflow/WorkflowValidator.h
     ImageNodeEditor/workflow/WorkflowValidator.cpp
+    ImageNodeEditor/workflow/WorkflowHistory.h
+    ImageNodeEditor/workflow/WorkflowHistory.cpp
 )
 
 target_include_directories(ImageNodeEditor PRIVATE ImageNodeEditor)
@@ -139,4 +143,18 @@ if(MSVC)
     target_compile_options(ImageNodeEditor PRIVATE /permissive- /W4)
 else()
     target_compile_options(ImageNodeEditor PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# 在构建根目录生成便捷的 picdeal 命令（同一二进制，直接 `./build/picdeal <子命令>`）。
+# 非 Windows 用符号链接指向可执行（macOS 指向 .app 内的真实二进制）；Windows 复制一份 picdeal.exe。
+if(WIN32)
+    add_custom_command(TARGET ImageNodeEditor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ImageNodeEditor>" "${CMAKE_BINARY_DIR}/picdeal.exe"
+        VERBATIM
+        COMMENT "生成 picdeal.exe 便捷命令")
+else()
+    add_custom_command(TARGET ImageNodeEditor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink "$<TARGET_FILE:ImageNodeEditor>" "${CMAKE_BINARY_DIR}/picdeal"
+        VERBATIM
+        COMMENT "生成 picdeal 便捷命令（符号链接）")
 endif()

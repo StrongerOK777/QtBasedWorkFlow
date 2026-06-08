@@ -74,40 +74,33 @@ ImageNodeEditor/
 
 ```text
 ImageNodeEditor/app/
-  AppController.h
-  AppController.cpp
-  CommandLineRunner.h
-  CommandLineRunner.cpp
+  CommandLineRunner.h / CommandLineRunner.cpp  # 执行单个 workflow.json（--no-gui / run 复用）
+  CommandLineApp.h / CommandLineApp.cpp        # picdeal 子命令调度（ffmpeg 式流水线 + 历史回溯）
 ```
 
-### `AppController`
-
-职责：
-
-- 作为 GUI 层和核心 workflow 层之间的协调者。
-- 维护当前打开的 workflow 文件路径。
-- 处理新建、打开、保存、另存为、执行等高层操作。
-- 把执行结果、错误信息、日志事件传给 `MainWindow`。
-
-不应该做：
-
-- 不实现具体节点算法。
-- 不直接操作 `QGraphicsItem` 的绘制细节。
+说明：当前未单独实现 `AppController`，GUI 的协调职责直接在 `gui/MainWindow` 中承担。
 
 ### `CommandLineRunner`
 
 职责：
 
-- 实现 `ImageNodeEditor --workflow workflow.json --no-gui`。
-- 读取 workflow JSON。
-- 调用 `WorkflowValidator` 和 `ExecutionEngine`。
-- 把错误输出到 stderr。
-- 根据结果返回退出码。
+- 实现「加载 workflow JSON → 校验 → 执行 → 退出码」最小路径，供 `--no-gui` 与 `picdeal run` 复用。
+- 把错误输出到 stderr，绝不弹 `QMessageBox`。
+
+### `CommandLineApp`（picdeal 命令行）
+
+职责：
+
+- 解析并调度 picdeal 子命令：`pipe`（ffmpeg 式线性流水线并执行）、`build`（构建并存为 workflow.json）、
+  `run`、`validate`、`nodes`（列出节点与参数）、`save`/`log`/`restore`（类 git 的保存历史回溯）、`help`/`version`。
+- 把 `--操作 [键=值|值]` 映射为节点并用 `setParameter` 设参；ImageInput/Output 文件路径转绝对路径再存。
+- 与 GUI 共用核心（`NodeFactory`/`WorkflowGraph`/`ExecutionEngine`/`WorkflowSerializer`/`WorkflowValidator`）
+  与保存历史（`WorkflowHistory`），不依赖任何 GUI / Widgets。
 
 重点：
 
-- 命令行模式和 GUI 模式必须共用 `workflow/`、`nodes/`、`processing/`。
-- 命令行模式不能弹出 `QMessageBox`。
+- 命令行模式和 GUI 模式共用 `workflow/`、`nodes/`、`processing/`，绝不弹窗。
+- `main.cpp` 识别首个参数为子命令时进入命令行模式；构建时在 `build/` 生成 `picdeal` 便捷可执行链接。
 
 ---
 
@@ -346,15 +339,16 @@ processing 层不应该依赖：
 
 ```text
 ImageNodeEditor/workflow/
-  WorkflowGraph.h
-  WorkflowGraph.cpp
-  WorkflowSerializer.h
-  WorkflowSerializer.cpp
-  WorkflowValidator.h
-  WorkflowValidator.cpp
-  ExecutionEngine.h
-  ExecutionEngine.cpp
+  WorkflowGraph.h / WorkflowGraph.cpp           # 节点/连线图结构
+  WorkflowSerializer.h / WorkflowSerializer.cpp # workflow JSON 读写（含相对路径解析）
+  WorkflowValidator.h / WorkflowValidator.cpp   # 端口/类型/DAG 校验
+  ExecutionEngine.h / ExecutionEngine.cpp       # 拓扑执行 + 缓存
+  WorkflowHistory.h / WorkflowHistory.cpp       # 保存历史共享存储（GUI 与 CLI 共用、互通）
 ```
+
+`WorkflowHistory` 把保存快照（AppData/<group>/<id>.json）与元数据（QSettings 组
+`workflowTimeline`/`workflowCheckpoints`）封装为 `dataDir/list/save/load`，GUI 的「进度记录」
+与命令行的 `save/log/restore` 共用它，保证两端互相可见、单一事实源。
 
 ### `WorkflowGraph`
 

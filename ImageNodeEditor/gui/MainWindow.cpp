@@ -16,6 +16,7 @@
 #include "nodes/MacroNode.h"
 #include "nodes/NodeFactory.h"
 #include "workflow/ExecutionEngine.h"
+#include "workflow/WorkflowHistory.h"
 #include "workflow/WorkflowSerializer.h"
 #include "workflow/WorkflowValidator.h"
 
@@ -205,15 +206,8 @@ void suppressMenuIcons(QMenu* menu)
 
 QString workflowDataDir(const QString& child)
 {
-    const QString root = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir(root.isEmpty() ? QDir::homePath() + "/.imagenodeeditor" : root);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
-    if (!child.isEmpty() && !dir.exists(child)) {
-        dir.mkpath(child);
-    }
-    return child.isEmpty() ? dir.absolutePath() : dir.absoluteFilePath(child);
+    // 与命令行共用同一套保存历史的存储位置（单一事实源）。
+    return WorkflowHistory::dataDir(child);
 }
 
 QString workflowSnapshotPath(const QString& group, const QString& id)
@@ -2975,23 +2969,13 @@ void MainWindow::refreshWorkflowCheckpointModel()
         return;
     }
     QVector<WorkflowCheckpointModel::Entry> entries;
-    QSettings settings;
-    settings.beginGroup("workflowCheckpoints");
-    const QStringList ids = settings.value("ids").toStringList();
-    for (const QString& id : ids) {
-        const QString path = settings.value("file/" + id).toString();
-        if (!QFileInfo::exists(path)) {
-            continue;
-        }
-        const QFileInfo info(path);
-        const QString branch = settings.value("branch/" + id, "main").toString();
-        const QString title = settings.value("title/" + id, QString("保存点 %1").arg(id)).toString();
-        entries.append({id,
-                        title,
-                        QString("保存于 %1").arg(info.lastModified().toString("yyyy-MM-dd HH:mm")),
+    for (const auto& e : WorkflowHistory::list(WorkflowHistory::kCheckpoints)) {
+        const QString branch = e.meta.value("branch", "main");
+        const QString title = e.meta.value("title", QString("保存点 %1").arg(e.id));
+        entries.append({e.id, title,
+                        QString("保存于 %1").arg(e.when.toString("yyyy-MM-dd HH:mm")),
                         branch});
     }
-    settings.endGroup();
     workflowCheckpointModel_->setEntries(entries);
 }
 
@@ -3001,29 +2985,12 @@ void MainWindow::recordSaveTimeline()
         return;
     }
     // 每次保存自动存一份快照并记一条时间线，供「进度记录」面板按时间回溯/恢复。
-    const QString id = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
-    const QString path = workflowSnapshotPath("timeline", id);
-    WorkflowSerializer serializer;
-    if (serializer.saveFile(graphForPersistence(), path).isFail()) {
+    // 与命令行共用同一套历史存储（WorkflowHistory），保证 GUI / CLI 互通且单一事实源。
+    const auto saved = WorkflowHistory::save(WorkflowHistory::kTimeline, graphForPersistence(),
+                                             {{"label", QFileInfo(currentFile_).fileName()}}, 30);
+    if (saved.isFail()) {
         return;  // 时间线属辅助记录，写失败不打断保存主流程
     }
-    QSettings settings;
-    settings.beginGroup("workflowTimeline");
-    QStringList ids = settings.value("ids").toStringList();
-    ids.prepend(id);
-    while (ids.size() > 30) {
-        const QString stale = ids.takeLast();
-        const QString stalePath = settings.value("file/" + stale).toString();
-        if (!stalePath.isEmpty()) {
-            QFile::remove(stalePath);
-        }
-        settings.remove("file/" + stale);
-        settings.remove("label/" + stale);
-    }
-    settings.setValue("ids", ids);
-    settings.setValue("file/" + id, path);
-    settings.setValue("label/" + id, QFileInfo(currentFile_).fileName());
-    settings.endGroup();
     refreshWorkflowTimelineModel();
 }
 
@@ -3033,16 +3000,9 @@ void MainWindow::refreshWorkflowTimelineModel()
         return;
     }
     QVector<WorkflowCheckpointModel::Entry> entries;
-    QSettings settings;
-    settings.beginGroup("workflowTimeline");
-    const QStringList ids = settings.value("ids").toStringList();
     const QDate today = QDate::currentDate();
-    for (const QString& id : ids) {
-        const QString path = settings.value("file/" + id).toString();
-        if (!QFileInfo::exists(path)) {
-            continue;
-        }
-        const QDateTime when = QFileInfo(path).lastModified();
+    for (const auto& e : WorkflowHistory::list(WorkflowHistory::kTimeline)) {
+        const QDateTime when = e.when;
         QString timeLabel;
         if (when.date() == today) {
             timeLabel = QString("今天 %1").arg(when.toString("HH:mm"));
@@ -3051,13 +3011,12 @@ void MainWindow::refreshWorkflowTimelineModel()
         } else {
             timeLabel = when.toString("MM-dd HH:mm");
         }
-        const QString label = settings.value("label/" + id).toString();
+        const QString label = e.meta.value("label");
         const QString detail = label.isEmpty()
                                    ? QString("保存于 %1").arg(when.toString("HH:mm:ss"))
                                    : QString("%1 · %2").arg(label, when.toString("HH:mm:ss"));
-        entries.append({id, timeLabel, detail, QString()});
+        entries.append({e.id, timeLabel, detail, QString()});
     }
-    settings.endGroup();
     workflowTimelineModel_->setEntries(entries);
 }
 
@@ -3204,29 +3163,13 @@ void MainWindow::createWorkflowCheckpoint()
     if (title.trimmed().isEmpty()) {
         return;
     }
-    const QString id = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
-    const QString path = workflowSnapshotPath("checkpoints", id);
-    WorkflowSerializer serializer;
-    auto saved = serializer.saveFile(graphForPersistence(), path);
+    const auto saved = WorkflowHistory::save(WorkflowHistory::kCheckpoints, graphForPersistence(),
+                                             {{"title", title.trimmed()}, {"branch", currentWorkflowBranch_}}, 40);
     if (saved.isFail()) {
         appendProblem(QString("进度保存失败：%1").arg(saved.error()));
         QMessageBox::warning(this, "进度保存失败", saved.error());
         return;
     }
-
-    QSettings settings;
-    settings.beginGroup("workflowCheckpoints");
-    QStringList ids = settings.value("ids").toStringList();
-    ids.removeAll(id);
-    ids.prepend(id);
-    while (ids.size() > 40) {
-        ids.removeLast();
-    }
-    settings.setValue("ids", ids);
-    settings.setValue("title/" + id, title.trimmed());
-    settings.setValue("branch/" + id, currentWorkflowBranch_);
-    settings.setValue("file/" + id, path);
-    settings.endGroup();
     refreshWorkflowCheckpointModel();
     appendLog(QString("已保存进度：%1 [%2]").arg(title.trimmed(), currentWorkflowBranch_));
 }
