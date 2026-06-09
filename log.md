@@ -20,6 +20,29 @@
 
 ## 记录条目
 
+### 2026-06-09 / Windows 无边框窗口阶段
+
+类型：修改
+
+概述：
+Windows 上原生标题栏与程序自带的 QML 标题栏同时出现，右上角出现两套最小化/最大化/关闭按钮。实现 Windows 无边框窗口，隐藏原生标题栏，只保留程序自带操作区。
+
+影响范围：
+`ImageNodeEditor/gui/NativeWindowChrome.cpp`（仅 Windows 分支）。未改 `MainWindow`、`NativeWindowChrome_mac.mm`、QML 标题栏与 `WorkbenchBridge`。
+
+处理方式：
+此前 `NativeWindowChrome::configure()` 在非 macOS 上是空实现，故 Windows 原生标题栏没被隐藏。改为：在 Windows 分支用 `QAbstractNativeEventFilter` 处理 `WM_NCCALCSIZE`（把整窗作为客户区以去掉可见标题栏；最大化时按外框内缩，避免裁切并让任务栏可见）与 `WM_NCHITTEST`（在窗口边缘返回 HTLEFT/HTTOP… 实现拖边缩放）。保留窗口原生样式（不设 `FramelessWindowHint`），因此 Aero 贴边、最大化动画、投影都保持原生；投影另用 `DwmExtendFrameIntoClientArea` 保证。窗口拖动、最小化、最大化、关闭沿用既有 `WorkbenchBridge -> MainWindow`（`startSystemMove` / `showMinimized` / `showMaximized` / `close`）接线，无需改动。`dwmapi.lib` 用 `#pragma comment(lib, ...)` 自动链接，CMake 与原生 vcxproj 都无需改构建配置。
+
+当前状态：
+已解决。原生 VS 构建实测：原生标题栏消失、右上角仅剩程序自带按钮；拖动、最大化/还原、缩放均正常，最大化无裁切、任务栏可见。
+
+后续注意：
+- 仅 Windows 生效；macOS 仍由 `NativeWindowChrome_mac.mm` 处理，Linux 为空实现，三端均可编译。
+- 自定义标题栏顶部约 6px 为缩放抓取带，与按钮的极窄重叠可接受；如需可在 QML 标题栏顶部留出对应留白。
+- 自动隐藏任务栏在最大化时的弹出未特殊处理（少见场景）。
+
+---
+
 ### 2026-06-09 / 原生 VS 工程改为由 VS 直接编译源码阶段
 
 类型：修改
