@@ -20,6 +20,82 @@
 
 ## 记录条目
 
+### 2026-06-09 / 原生 VS 工程改为由 VS 直接编译源码阶段
+
+类型：修改
+
+概述：
+按用户要求，把根目录 VS 工程从“委托 CMake 的 Makefile 壳”改为**真正由 VS/MSVC 直接编译本项目源码**的原生 Application 工程。双击根目录 `ImageNodeEditor.slnx` → F5 即可编译运行，全程不经过 CMake、不需要 Qt VS Tools 扩展。
+
+影响范围：
+`ImageNodeEditor/ImageNodeEditor.vcxproj`（重写为 Application）、`.vcxproj.filters`、`.vcxproj.user`；新增 `ImageNodeEditor/qml/workbench.qrc`、`third_party/codicons/codicons.qrc`、`ImageNodeEditor/GeneratedFiles/`（预生成 moc/rcc + `regen.bat`）、`third_party/QtNodes/prebuilt/QtNodes.lib`；`README.md`。未改动任何 `ImageNodeEditor/` 业务源码与 `CMakeLists.txt`。
+
+处理方式：
+- moc/rcc 采用**预生成**策略：用 Qt 6.8.3 的 moc 处理 3 个含 `Q_OBJECT` 的头（`CanvasTabBar.h`、`WorkbenchHostWidget.h`、`WorkbenchModels.h`），rcc 处理两份资源（`/workbench` QML、`/codicons` 字体），产物放入 `GeneratedFiles/` 作为普通 `.cpp` 编译，使 VS 构建不依赖命令行 Qt 工具。`regen.bat` 供改动后刷新。
+- 第三方 QtNodes 用 CMake 预编译的 `QtNodes.lib` 链接（放 `third_party/QtNodes/prebuilt/`，避开 `.gitignore` 的 `lib/` 规则）；因其为静态库且内置默认样式资源，链接器加 `/WHOLEARCHIVE:QtNodes.lib` 防止资源自注册被裁剪；编译期需定义 `NODE_EDITOR_STATIC`（否则 `Export.hpp` 报“Choose whether to link against shared or static”）。
+- 链接 Qt6 模块导入库（Core/Gui/Widgets/OpenGL/Qml/Quick/QuickControls2/QuickWidgets + EntryPoint），`/MD`、C++17、`/permissive-`、`/Zc:__cplusplus`、`/utf-8`；GUI 子系统。
+- PostBuild 调 `windeployqt` 自动部署运行库到 `out/Release/`。
+
+当前状态：
+已解决。命令行 `MSBuild ImageNodeEditor.slnx /p:Configuration=Release /p:Platform=x64`（不调用 CMake）实测编译链接通过；CLI（`version`）与 GUI 均成功运行。
+
+后续注意：
+- 工具集 v145、Windows SDK 10.0.26100.0、仅 `Release|x64`。Debug 需另装 debug 版 Qt。
+- moc/rcc 是预生成快照：新增/修改 `Q_OBJECT` 类或改 qml 后须运行 `GeneratedFiles/regen.bat`（否则 VS 里会缺符号/资源）；日常活跃开发也可继续用 CMake 构建（AUTOMOC 自动处理）。
+- `QtNodes.lib` 为 Release/x64/MSVC 专用预编译产物；升级 Qt 或换工具链需用 CMake 重新生成后替换。
+- `out/` 已 gitignore；`GeneratedFiles/` 与 `prebuilt/QtNodes.lib` 需随提交保留。
+
+---
+
+### 2026-06-09 / 新增原生 VS 2026 提交工程结构阶段
+
+类型：修改
+
+概述：
+按课程提交要求，在仓库中新增原生 Visual Studio 2026 解决方案布局：根目录 `ImageNodeEditor.slnx`（新版 XML 解决方案格式），同名项目目录 `ImageNodeEditor/` 下新增 `ImageNodeEditor.vcxproj` / `.vcxproj.filters` / `.vcxproj.user`，`main.cpp` 已在该目录内。未改动任何源码、`CMakeLists.txt` 或 `third_party/`。
+
+影响范围：
+`ImageNodeEditor.slnx`（新增）、`ImageNodeEditor/ImageNodeEditor.vcxproj` / `.filters` / `.user`（新增）、`README.md`。
+
+处理方式：
+`.vcxproj` 采用 **Makefile（NMake）类型**，把“生成”动作委托给现有 CMake（`cmake --build build-vs --config Release`，首次自动配置 `build-vs/`），即真正编译仍走 CMake，避免在 VS 与 CMake 间维护两份编译配置，也无需安装 Qt VS Tools 扩展（该扩展对全新 VS 2026/v18 兼容性未知）。`.filters` 按 app/core/gui/nodes/processing/util/workflow/qml 镜像目录树；`.user` 把 F5 调试目标指向 CMake 产物并把 Qt bin 注入 PATH。Qt 路径用属性 `QtDir`（默认 `C:\Qt\6.8.3\msvc2022_64`，可由环境变量 `QTDIR` 覆盖）。本机仅装 Release 版 Qt，故只提供 `Release|x64` 单配置。
+
+当前状态：
+已解决。命令行 `MSBuild ImageNodeEditor.slnx /p:Configuration=Release /p:Platform=x64` 实测通过：自动配置 CMake、编译出 `QtNodes.lib` 与 `ImageNodeEditor.exe`。
+
+后续注意：
+- 跨平台与 macOS 仍以根目录 `CMakeLists.txt` 为准；原生 `.vcxproj` 是 Windows 专用、提交结构用，不参与 macOS 构建。
+- 该原生工程依赖 `build-vs/` 由 CMake 配置（NMake 命令里已含“缺失则自动配置”）；换机器时若 Qt 路径不同，改 `QtDir` 默认值或设 `QTDIR`。
+- 若日后需要 VS 内真正的 Debug 单步，需用 aqt 另装 debug 版 Qt 并在 `.vcxproj` 增加 `Debug|x64` 配置。
+- 坑：CMake 在 `build-vs/` 里也会生成一个**同名** `ImageNodeEditor.slnx`，且其默认启动项目是不可运行的 `ALL_BUILD`，直接 F5 会报“无法启动程序 …ALL_BUILD / 拒绝访问”。已在 `CMakeLists.txt` 加 `set_property(DIRECTORY ... PROPERTY VS_STARTUP_PROJECT ImageNodeEditor)`，把生成解决方案的启动项目设为 `ImageNodeEditor`，两个 slnx 现在 F5 均可运行。日常/提交请开**根目录**的 `ImageNodeEditor.slnx`；`build-vs/` 已加入 `.gitignore`。
+
+---
+
+### 2026-06-09 / Windows 首次搭建 Qt 环境并用 VS 2026 编译阶段
+
+类型：决策 / 修改
+
+概述：
+本机原本只有 Visual Studio 2026 Community（v18.6.2，MSVC 14.51，自带 CMake 4.2.3 + Ninja），没有 Qt，也没有可用的 Python（仅 Microsoft Store 占位 alias）。为在 Windows 上重新编译出 `.exe`，新引入开发环境依赖并完成一次完整 Release 构建与运行验证。
+
+影响范围：
+仅开发环境与 `build-vs/` 构建产物，未改动任何源码、`CMakeLists.txt`、JSON 格式或节点接口。
+
+处理方式：
+1. winget 安装 Python 3.12（消除 Store alias），`pip install --user aqtinstall`。
+2. `aqt install-qt windows desktop 6.8.3 win64_msvc2022_64`（基础包已含 qtdeclarative，即 Qml/Quick/QuickControls2/QuickWidgets），再补 `-m qtshadertools`（Qt Quick 在 CMake 配置时会传递性要求它）。安装到 `C:\Qt`。VS 2026 的 MSVC 与 Qt 的 msvc2022_64 二进制 ABI 兼容。
+3. 用 VS 自带 cmake 配置：`cmake -S . -B build-vs -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64`，生成 `.sln`；`cmake --build build-vs --config Release` 通过。
+4. `windeployqt --release` 部署运行期 DLL 与插件。
+
+当前状态：
+已解决。CLI（`version`/`nodes` 等）与 GUI 均成功运行。
+
+后续注意：
+- `windeployqt` 默认只部署 `platforms/qwindows.dll`。本项目命令行模式在 `main.cpp` 里运行时设 `QT_QPA_PLATFORM=offscreen`，windeployqt 无法感知，导致缺 `platforms/qoffscreen.dll`，CLI 启动即 `0xC0000409`（平台插件加载失败 abort）。需手动从 `C:\Qt\6.8.3\msvc2022_64\plugins\platforms\qoffscreen.dll` 复制到部署目录；GUI 模式用 qwindows，不受影响。
+- 构建尾部 `'pwsh.exe' 不是内部命令` 与 windeployqt 的 `dxcompiler/dxil.dll`、`VCINSTALLDIR` 警告均无害，不影响产物。
+
+---
+
 ### 2026-05-21 / Qt GUI 候选原型验证阶段
 
 类型：修改

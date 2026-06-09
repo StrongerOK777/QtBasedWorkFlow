@@ -1,0 +1,8 @@
+<!-- Qt 资源清单：把 codicon 字体打包到 :/codicons 前缀。
+     与 CMakeLists.txt 中 qt_add_resources(... PREFIX "/codicons") 等价，
+     供原生 Visual Studio 工程用 rcc 生成 qrc_codicons_assets.cpp。 -->
+<RCC>
+  <qresource prefix="/codicons">
+    <file>codicon.ttf</file>
+  </qresource>
+</RCC>

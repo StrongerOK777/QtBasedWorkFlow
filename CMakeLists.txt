@@ -130,6 +130,12 @@ set_target_properties(ImageNodeEditor PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+# 让 CMake 生成的 Visual Studio 解决方案默认以可运行的 ImageNodeEditor 为启动项目，
+# 否则默认会选中不可运行的 ALL_BUILD，F5 启动时报“无法启动程序 ... ALL_BUILD / 拒绝访问”。
+if(MSVC)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ImageNodeEditor)
+endif()
+
 if(MINGW)
     target_link_options(ImageNodeEditor PRIVATE -mwindows)
 endif()

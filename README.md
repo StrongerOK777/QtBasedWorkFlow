@@ -36,23 +36,39 @@ build\Release\ImageNodeEditor.exe --no-gui --workflow path\to\workflow.json
 ./build/ImageNodeEditor.app/Contents/MacOS/ImageNodeEditor --no-gui --workflow ImageNodeEditor/resources/workflows/sample.json
 ```
 
-## Windows / Visual Studio 提交建议
+## Windows / Visual Studio 提交结构
 
-本项目使用 CMake。Windows 上安装 Qt 6、CMake 和 Visual Studio 后，可以用 CMake 生成 Visual Studio 工程：
+仓库自带原生 Visual Studio 2026 解决方案，**由 VS/MSVC 直接编译本项目源码**（不再委托 CMake）：
+
+```text
+ImageNodeEditor.slnx                            根目录解决方案（VS 2026 新格式）
+ImageNodeEditor/ImageNodeEditor.vcxproj         同名项目（含 main.cpp 等全部源码）
+ImageNodeEditor/ImageNodeEditor.vcxproj.filters
+ImageNodeEditor/ImageNodeEditor.vcxproj.user
+ImageNodeEditor/GeneratedFiles/                 Qt moc/rcc 预生成产物 + regen.bat
+third_party/QtNodes/prebuilt/QtNodes.lib        第三方节点库（预编译静态库）
+```
+
+**用法：双击根目录 `ImageNodeEditor.slnx` → 在 VS 里按 F5（开始执行）即可编译并运行。**
+
+工作机制：
+
+- `ImageNodeEditor/` 下的全部 `.cpp` 由 MSVC 直接编译。
+- Qt 的 moc/rcc 产物已**预生成**在 `ImageNodeEditor/GeneratedFiles/`，作为普通源码参与编译，因此 VS 构建时不依赖任何 Qt 命令行工具。改了含 `Q_OBJECT` 的头（`CanvasTabBar.h` / `WorkbenchHostWidget.h` / `WorkbenchModels.h`）或 `qml/` 资源后，运行 `ImageNodeEditor/GeneratedFiles/regen.bat` 刷新即可。
+- 第三方 **QtNodes** 以预编译静态库 `third_party/QtNodes/prebuilt/QtNodes.lib` 链接（非本项目源码，避免把第三方整库搬进工程）。
+- 链接后由 `windeployqt` 自动把 Qt6 运行库与平台插件部署到 `out/Release/`，F5 与双击 exe 均可直接运行。
+- 仅 `Release|x64` 配置（本机只装了 Release 版 Qt）。
+
+前置条件：装好 Qt 6.8.3 msvc2022_64（默认 `C:\Qt\6.8.3\msvc2022_64`，可用环境变量 `QTDIR` 覆盖）与 VS 2026（含 C++ 桌面开发负载）。换机器若 Qt 路径不同，设 `QTDIR` 或改 `.vcxproj` / `.vcxproj.user` 中的 `QtDir` 默认值即可。
+
+> 跨平台（macOS / Linux）以及重新编译 QtNodes 仍以根目录 `CMakeLists.txt` 为准。纯 CMake 构建：
 
 ```bat
-cmake -S . -B build-vs -G "Visual Studio 17 2022" -DCMAKE_PREFIX_PATH=C:/Qt/6.x.x/msvc2022_64
+cmake -S . -B build-vs -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64
 cmake --build build-vs --config Release
 ```
 
-课程平台要求提交 Visual Studio 项目压缩包时，建议在 Windows 上生成 `.sln` 后打包：
-
-- `.sln` 或 `.slnx`
-- 同名项目目录和 `.vcxproj` / `.vcxproj.filters` / `.vcxproj.user`
-- `ImageNodeEditor/` 源码目录、`CMakeLists.txt`、`README.md`
-- 示例图片与示例 workflow
-
-演示视频和最终报告需要单独录制/撰写后放入提交材料。
+提交压缩包时一并打包：上述 `.slnx` / `.vcxproj*`、`ImageNodeEditor/` 源码目录、`third_party/`、`CMakeLists.txt`、`README.md`、示例图片与示例 workflow。演示视频和最终报告另行录制/撰写后放入提交材料。
 
 ## 已实现
 

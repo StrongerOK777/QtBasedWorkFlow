@@ -22,8 +22,12 @@ lib/
 *.out
 *.app/
 build/
+build-vs/
 out/
 .qt/
+# Visual Studio 本地缓存目录（不进仓库）。
+# 注意：.vcxproj.user 按课程提交要求需保留，故不忽略。
+.vs/
 
 # --- Python ---
 __pycache__/
