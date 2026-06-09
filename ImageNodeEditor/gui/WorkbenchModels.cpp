@@ -713,6 +713,15 @@ void WorkbenchBridge::setWindowMaximized(bool maximized)
     Q_EMIT windowMaximizedChanged();
 }
 
+void WorkbenchBridge::setHeaderMenuTitles(const QStringList& titles)
+{
+    if (headerMenuTitles_ == titles) {
+        return;
+    }
+    headerMenuTitles_ = titles;
+    Q_EMIT headerMenuTitlesChanged();
+}
+
 void WorkbenchBridge::createNode(const QString& typeName)
 {
     if (!typeName.trimmed().isEmpty()) {
@@ -839,6 +848,11 @@ void WorkbenchBridge::requestWindowMaximizeToggle()
 void WorkbenchBridge::requestWindowClose()
 {
     Q_EMIT windowCloseRequested();
+}
+
+void WorkbenchBridge::openHeaderMenu(int index, const QPointF& globalPos)
+{
+    Q_EMIT headerMenuRequested(index, globalPos);
 }
 
 void WorkbenchBridge::showTooltip(const QString& text, const QString& placement)

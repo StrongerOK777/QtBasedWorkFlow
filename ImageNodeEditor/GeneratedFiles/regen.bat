@@ -1,18 +1,20 @@
 @echo off
 REM ============================================================
-REM 重新生成 Qt 的 moc / rcc 文件。
-REM 当你编辑了含 Q_OBJECT 的头文件（CanvasTabBar.h / WorkbenchHostWidget.h /
-REM WorkbenchModels.h）或 qml 资源后，双击运行本脚本即可刷新本目录下的生成文件，
-REM 然后在 Visual Studio 里重新生成解决方案。
-REM Qt 路径默认 C:\Qt\6.8.3\msvc2022_64，可用环境变量 QTDIR 覆盖。
+REM Regenerate Qt moc/rcc files (ASCII-only comments on purpose:
+REM non-ASCII comments can break under a mismatched console codepage).
+REM Run this after editing a Q_OBJECT header (CanvasTabBar.h /
+REM WorkbenchHostWidget.h / WorkbenchModels.h) or any qml resource,
+REM then rebuild the solution in Visual Studio / MSBuild.
+REM Qt path defaults to C:\Qt\6.8.3\msvc2022_64; override via QTDIR.
 REM ============================================================
 setlocal
 if "%QTDIR%"=="" set "QTDIR=C:\Qt\6.8.3\msvc2022_64"
 set "MOC=%QTDIR%\bin\moc.exe"
 set "RCC=%QTDIR%\bin\rcc.exe"
-REM 切到仓库根目录（本脚本位于 ImageNodeEditor\GeneratedFiles\）。
+REM cd to repo root (this script lives in ImageNodeEditor\GeneratedFiles\).
 cd /d "%~dp0..\.."
-set "INC=-I ImageNodeEditor -I third_party\QtNodes\include -I "%QTDIR%\include" -I "%QTDIR%\include\QtCore" -I "%QTDIR%\include\QtGui" -I "%QTDIR%\include\QtWidgets" -I "%QTDIR%\include\QtQml" -I "%QTDIR%\include\QtQuick" -I "%QTDIR%\include\QtQuickWidgets""
+REM NOTE: no surrounding quotes on INC, otherwise the inner path quotes break cmd parsing.
+set INC=-I ImageNodeEditor -I third_party\QtNodes\include -I "%QTDIR%\include" -I "%QTDIR%\include\QtCore" -I "%QTDIR%\include\QtGui" -I "%QTDIR%\include\QtWidgets" -I "%QTDIR%\include\QtQml" -I "%QTDIR%\include\QtQuick" -I "%QTDIR%\include\QtQuickWidgets"
 set "GEN=ImageNodeEditor\GeneratedFiles"
 echo [moc] CanvasTabBar
 "%MOC%" %INC% ImageNodeEditor\gui\CanvasTabBar.h -o "%GEN%\moc_CanvasTabBar.cpp"

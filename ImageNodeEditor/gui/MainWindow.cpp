@@ -1034,6 +1034,36 @@ void MainWindow::createLayout()
         isMaximized() ? showNormal() : showMaximized();
     });
     connect(workbenchBridge_, &WorkbenchBridge::windowCloseRequested, this, [this] { close(); });
+    // 顶部标题栏菜单：把现有原生菜单按序暴露给 QML 标题栏；点击标题时在按钮正下方弹出对应原生菜单，
+    // 菜单内容（含动态生成的「节点操作」子菜单）完全复用，不重写。
+    headerMenus_ = {fileMenu_, editMenu_, nodeOperationMenu_, viewMenu_, settingsMenu_, layoutMenu_};
+    workbenchBridge_->setHeaderMenuTitles({"文件", "编辑", "节点操作", "视图", "设置", "布局"});
+    connect(workbenchBridge_, &WorkbenchBridge::headerMenuRequested, this,
+            [this](int index, const QPointF& globalPos) {
+                if (index >= 0 && index < headerMenus_.size() && headerMenus_[index]) {
+                    headerMenus_[index]->popup(globalPos.toPoint());
+                }
+            });
+#if !defined(Q_OS_MACOS)
+    // 非 macOS 隐藏了 menuBar()，其菜单内动作的快捷键会随之失效；把带快捷键的动作追加到主窗口，
+    // 让快捷键在窗口范围内仍然有效（复用同一 QAction，不产生歧义）。无快捷键的动作（如动态节点项）跳过。
+    std::function<void(QMenu*)> hoistMenuShortcuts = [this, &hoistMenuShortcuts](QMenu* menu) {
+        if (!menu) {
+            return;
+        }
+        const auto actions = menu->actions();
+        for (QAction* action : actions) {
+            if (action->menu()) {
+                hoistMenuShortcuts(action->menu());
+            } else if (!action->shortcut().isEmpty()) {
+                addAction(action);
+            }
+        }
+    };
+    for (QMenu* menu : headerMenus_) {
+        hoistMenuShortcuts(menu);
+    }
+#endif
     connect(workbenchBridge_, &WorkbenchBridge::tooltipRequested, this, &MainWindow::showWorkbenchTooltip);
     connect(workbenchBridge_, &WorkbenchBridge::tooltipHideRequested, this, &MainWindow::hideWorkbenchTooltip);
     refreshRecentWorkflowModel();
@@ -1121,7 +1151,13 @@ void MainWindow::createLayout()
         !workbenchSplitter_->restoreState(workbenchState) || !editorSplitter_->restoreState(editorState)) {
         resetWorkbenchLayout();
     }
+#if defined(Q_OS_MACOS)
+    // macOS 在系统菜单栏顶部渲染菜单，保留显示。
     menuBar()->show();
+#else
+    // 其它平台菜单已并入 QML 标题栏（WorkbenchTitleBar.qml），隐藏窗口内菜单栏行，合并为单行标题栏。
+    menuBar()->hide();
+#endif
     if (mainToolbar_) {
         mainToolbar_->hide();
     }

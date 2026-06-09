@@ -249,6 +249,8 @@ private:
     QMenu* settingsMenu_ = nullptr;
     QMenu* layoutMenu_ = nullptr;
     QMenu* commandCenterMenu_ = nullptr;
+    // 顶部标题栏菜单按钮按序映射到这些原生菜单（与 WorkbenchBridge::headerMenuTitles 一一对应）。
+    QList<QMenu*> headerMenus_;
     QAction* commandCenterAction_ = nullptr;
     QAction* newWorkbookAction_ = nullptr;
     QAction* returnToParentAction_ = nullptr;

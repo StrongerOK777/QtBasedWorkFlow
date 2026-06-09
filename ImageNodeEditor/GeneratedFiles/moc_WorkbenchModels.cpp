@@ -1021,6 +1021,10 @@ static constexpr auto qt_meta_stringdata_ZN15WorkbenchBridgeE = QtMocHelpers::st
     "windowMinimizeRequested",
     "windowMaximizeToggleRequested",
     "windowCloseRequested",
+    "headerMenuTitlesChanged",
+    "headerMenuRequested",
+    "index",
+    "globalPos",
     "tooltipRequested",
     "text",
     "placement",
@@ -1045,6 +1049,7 @@ static constexpr auto qt_meta_stringdata_ZN15WorkbenchBridgeE = QtMocHelpers::st
     "requestWindowMinimize",
     "requestWindowMaximizeToggle",
     "requestWindowClose",
+    "openHeaderMenu",
     "showTooltip",
     "hideTooltip",
     "documentTitle",
@@ -1054,7 +1059,8 @@ static constexpr auto qt_meta_stringdata_ZN15WorkbenchBridgeE = QtMocHelpers::st
     "activeSidebar",
     "previewVisible",
     "panelVisible",
-    "windowMaximized"
+    "windowMaximized",
+    "headerMenuTitles"
 );
 #else  // !QT_MOC_HAS_STRINGDATA
 #error "qtmochelpers.h not found or too old."
@@ -1066,61 +1072,64 @@ Q_CONSTINIT static const uint qt_meta_data_ZN15WorkbenchBridgeE[] = {
       12,       // revision
        0,       // classname
        0,    0, // classinfo
-      45,   14, // methods
-       8,  377, // properties
+      48,   14, // methods
+       9,  406, // properties
        0,    0, // enums/sets
        0,    0, // constructors
        0,       // flags
-      27,       // signalCount
+      29,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    0,  284,    2, 0x06,    9 /* Public */,
-       3,    0,  285,    2, 0x06,   10 /* Public */,
-       4,    0,  286,    2, 0x06,   11 /* Public */,
-       5,    0,  287,    2, 0x06,   12 /* Public */,
-       6,    0,  288,    2, 0x06,   13 /* Public */,
-       7,    0,  289,    2, 0x06,   14 /* Public */,
-       8,    0,  290,    2, 0x06,   15 /* Public */,
-       9,    0,  291,    2, 0x06,   16 /* Public */,
-      10,    1,  292,    2, 0x06,   17 /* Public */,
-      12,    1,  295,    2, 0x06,   19 /* Public */,
-      14,    1,  298,    2, 0x06,   21 /* Public */,
-      16,    0,  301,    2, 0x06,   23 /* Public */,
-      17,    1,  302,    2, 0x06,   24 /* Public */,
-      19,    0,  305,    2, 0x06,   26 /* Public */,
-      20,    1,  306,    2, 0x06,   27 /* Public */,
-      22,    1,  309,    2, 0x06,   29 /* Public */,
-      23,    1,  312,    2, 0x06,   31 /* Public */,
-      25,    1,  315,    2, 0x06,   33 /* Public */,
-      27,    1,  318,    2, 0x06,   35 /* Public */,
-      28,    0,  321,    2, 0x06,   37 /* Public */,
-      29,    0,  322,    2, 0x06,   38 /* Public */,
-      30,    0,  323,    2, 0x06,   39 /* Public */,
-      31,    0,  324,    2, 0x06,   40 /* Public */,
-      32,    0,  325,    2, 0x06,   41 /* Public */,
-      33,    0,  326,    2, 0x06,   42 /* Public */,
-      34,    2,  327,    2, 0x06,   43 /* Public */,
-      37,    0,  332,    2, 0x06,   46 /* Public */,
+       1,    0,  302,    2, 0x06,   10 /* Public */,
+       3,    0,  303,    2, 0x06,   11 /* Public */,
+       4,    0,  304,    2, 0x06,   12 /* Public */,
+       5,    0,  305,    2, 0x06,   13 /* Public */,
+       6,    0,  306,    2, 0x06,   14 /* Public */,
+       7,    0,  307,    2, 0x06,   15 /* Public */,
+       8,    0,  308,    2, 0x06,   16 /* Public */,
+       9,    0,  309,    2, 0x06,   17 /* Public */,
+      10,    1,  310,    2, 0x06,   18 /* Public */,
+      12,    1,  313,    2, 0x06,   20 /* Public */,
+      14,    1,  316,    2, 0x06,   22 /* Public */,
+      16,    0,  319,    2, 0x06,   24 /* Public */,
+      17,    1,  320,    2, 0x06,   25 /* Public */,
+      19,    0,  323,    2, 0x06,   27 /* Public */,
+      20,    1,  324,    2, 0x06,   28 /* Public */,
+      22,    1,  327,    2, 0x06,   30 /* Public */,
+      23,    1,  330,    2, 0x06,   32 /* Public */,
+      25,    1,  333,    2, 0x06,   34 /* Public */,
+      27,    1,  336,    2, 0x06,   36 /* Public */,
+      28,    0,  339,    2, 0x06,   38 /* Public */,
+      29,    0,  340,    2, 0x06,   39 /* Public */,
+      30,    0,  341,    2, 0x06,   40 /* Public */,
+      31,    0,  342,    2, 0x06,   41 /* Public */,
+      32,    0,  343,    2, 0x06,   42 /* Public */,
+      33,    0,  344,    2, 0x06,   43 /* Public */,
+      34,    0,  345,    2, 0x06,   44 /* Public */,
+      35,    2,  346,    2, 0x06,   45 /* Public */,
+      38,    2,  351,    2, 0x06,   48 /* Public */,
+      41,    0,  356,    2, 0x06,   51 /* Public */,
 
  // methods: name, argc, parameters, tag, flags, initial metatype offsets
-      38,    1,  333,    2, 0x02,   47 /* Public */,
-      39,    1,  336,    2, 0x02,   49 /* Public */,
-      40,    1,  339,    2, 0x02,   51 /* Public */,
-      42,    0,  342,    2, 0x02,   53 /* Public */,
-      43,    1,  343,    2, 0x02,   54 /* Public */,
-      45,    3,  346,    2, 0x02,   56 /* Public */,
-      48,    0,  353,    2, 0x02,   60 /* Public */,
-      49,    1,  354,    2, 0x02,   61 /* Public */,
-      50,    0,  357,    2, 0x02,   63 /* Public */,
-      51,    1,  358,    2, 0x02,   64 /* Public */,
-      52,    1,  361,    2, 0x02,   66 /* Public */,
-      53,    1,  364,    2, 0x02,   68 /* Public */,
-      54,    0,  367,    2, 0x02,   70 /* Public */,
-      55,    0,  368,    2, 0x02,   71 /* Public */,
-      56,    0,  369,    2, 0x02,   72 /* Public */,
-      57,    0,  370,    2, 0x02,   73 /* Public */,
-      58,    2,  371,    2, 0x02,   74 /* Public */,
-      59,    0,  376,    2, 0x02,   77 /* Public */,
+      42,    1,  357,    2, 0x02,   52 /* Public */,
+      43,    1,  360,    2, 0x02,   54 /* Public */,
+      44,    1,  363,    2, 0x02,   56 /* Public */,
+      46,    0,  366,    2, 0x02,   58 /* Public */,
+      47,    1,  367,    2, 0x02,   59 /* Public */,
+      49,    3,  370,    2, 0x02,   61 /* Public */,
+      52,    0,  377,    2, 0x02,   65 /* Public */,
+      53,    1,  378,    2, 0x02,   66 /* Public */,
+      54,    0,  381,    2, 0x02,   68 /* Public */,
+      55,    1,  382,    2, 0x02,   69 /* Public */,
+      56,    1,  385,    2, 0x02,   71 /* Public */,
+      57,    1,  388,    2, 0x02,   73 /* Public */,
+      58,    0,  391,    2, 0x02,   75 /* Public */,
+      59,    0,  392,    2, 0x02,   76 /* Public */,
+      60,    0,  393,    2, 0x02,   77 /* Public */,
+      61,    0,  394,    2, 0x02,   78 /* Public */,
+      62,    2,  395,    2, 0x02,   79 /* Public */,
+      63,    2,  400,    2, 0x02,   82 /* Public */,
+      64,    0,  405,    2, 0x02,   85 /* Public */,
 
  // signals: parameters
     QMetaType::Void,
@@ -1148,16 +1157,18 @@ Q_CONSTINIT static const uint qt_meta_data_ZN15WorkbenchBridgeE[] = {
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString,   35,   36,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int, QMetaType::QPointF,   36,   37,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString,   39,   40,
     QMetaType::Void,
 
  // methods: parameters
     QMetaType::Void, QMetaType::QString,   11,
     QMetaType::Void, QMetaType::QString,   13,
-    QMetaType::Void, QMetaType::QString,   41,
+    QMetaType::Void, QMetaType::QString,   45,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::Int,   44,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::QString,   11,   46,   47,
+    QMetaType::Void, QMetaType::Int,   48,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::QString,   11,   50,   51,
     QMetaType::Void,
     QMetaType::Void, QMetaType::QString,   18,
     QMetaType::Void,
@@ -1168,18 +1179,20 @@ Q_CONSTINIT static const uint qt_meta_data_ZN15WorkbenchBridgeE[] = {
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString,   35,   36,
+    QMetaType::Void, QMetaType::Int, QMetaType::QPointF,   36,   37,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString,   39,   40,
     QMetaType::Void,
 
  // properties: name, type, flags, notifyId, revision
-      60, QMetaType::QString, 0x00015103, uint(0), 0,
-      61, QMetaType::QString, 0x00015103, uint(1), 0,
-      62, QMetaType::QString, 0x00015103, uint(2), 0,
-      63, QMetaType::QString, 0x00015103, uint(3), 0,
-      64, QMetaType::QString, 0x00015103, uint(4), 0,
-      65, QMetaType::Bool, 0x00015103, uint(5), 0,
-      66, QMetaType::Bool, 0x00015103, uint(6), 0,
-      67, QMetaType::Bool, 0x00015001, uint(7), 0,
+      65, QMetaType::QString, 0x00015103, uint(0), 0,
+      66, QMetaType::QString, 0x00015103, uint(1), 0,
+      67, QMetaType::QString, 0x00015103, uint(2), 0,
+      68, QMetaType::QString, 0x00015103, uint(3), 0,
+      69, QMetaType::QString, 0x00015103, uint(4), 0,
+      70, QMetaType::Bool, 0x00015103, uint(5), 0,
+      71, QMetaType::Bool, 0x00015103, uint(6), 0,
+      72, QMetaType::Bool, 0x00015001, uint(7), 0,
+      73, QMetaType::QStringList, 0x00015103, uint(25), 0,
 
        0        // eod
 };
@@ -1207,6 +1220,8 @@ Q_CONSTINIT const QMetaObject WorkbenchBridge::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<bool, std::true_type>,
         // property 'windowMaximized'
         QtPrivate::TypeAndForceComplete<bool, std::true_type>,
+        // property 'headerMenuTitles'
+        QtPrivate::TypeAndForceComplete<QStringList, std::true_type>,
         // Q_OBJECT / Q_GADGET
         QtPrivate::TypeAndForceComplete<WorkbenchBridge, std::true_type>,
         // method 'documentTitleChanged'
@@ -1268,6 +1283,12 @@ Q_CONSTINIT const QMetaObject WorkbenchBridge::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'windowCloseRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'headerMenuTitlesChanged'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'headerMenuRequested'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QPointF &, std::false_type>,
         // method 'tooltipRequested'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
@@ -1317,6 +1338,10 @@ Q_CONSTINIT const QMetaObject WorkbenchBridge::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'requestWindowClose'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'openHeaderMenu'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QPointF &, std::false_type>,
         // method 'showTooltip'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         QtPrivate::TypeAndForceComplete<const QString &, std::false_type>,
@@ -1357,26 +1382,29 @@ void WorkbenchBridge::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         case 22: _t->windowMinimizeRequested(); break;
         case 23: _t->windowMaximizeToggleRequested(); break;
         case 24: _t->windowCloseRequested(); break;
-        case 25: _t->tooltipRequested((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2]))); break;
-        case 26: _t->tooltipHideRequested(); break;
-        case 27: _t->createNode((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 28: _t->focusNode((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 29: _t->triggerCommand((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 30: _t->showQuickAccess(); break;
-        case 31: _t->activateQuickAccess((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 32: _t->startNodeDrag((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[3]))); break;
-        case 33: _t->saveWorkflowTemplate(); break;
-        case 34: _t->applyWorkflowTemplate((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 35: _t->createCheckpoint(); break;
-        case 36: _t->restoreCheckpoint((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 37: _t->branchFromCheckpoint((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 38: _t->restoreTimeline((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
-        case 39: _t->requestWindowMove(); break;
-        case 40: _t->requestWindowMinimize(); break;
-        case 41: _t->requestWindowMaximizeToggle(); break;
-        case 42: _t->requestWindowClose(); break;
-        case 43: _t->showTooltip((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2]))); break;
-        case 44: _t->hideTooltip(); break;
+        case 25: _t->headerMenuTitlesChanged(); break;
+        case 26: _t->headerMenuRequested((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QPointF>>(_a[2]))); break;
+        case 27: _t->tooltipRequested((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2]))); break;
+        case 28: _t->tooltipHideRequested(); break;
+        case 29: _t->createNode((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 30: _t->focusNode((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 31: _t->triggerCommand((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 32: _t->showQuickAccess(); break;
+        case 33: _t->activateQuickAccess((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
+        case 34: _t->startNodeDrag((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[3]))); break;
+        case 35: _t->saveWorkflowTemplate(); break;
+        case 36: _t->applyWorkflowTemplate((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 37: _t->createCheckpoint(); break;
+        case 38: _t->restoreCheckpoint((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 39: _t->branchFromCheckpoint((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 40: _t->restoreTimeline((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 41: _t->requestWindowMove(); break;
+        case 42: _t->requestWindowMinimize(); break;
+        case 43: _t->requestWindowMaximizeToggle(); break;
+        case 44: _t->requestWindowClose(); break;
+        case 45: _t->openHeaderMenu((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QPointF>>(_a[2]))); break;
+        case 46: _t->showTooltip((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<QString>>(_a[2]))); break;
+        case 47: _t->hideTooltip(); break;
         default: ;
         }
     }
@@ -1558,16 +1586,30 @@ void WorkbenchBridge::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
             }
         }
         {
+            using _q_method_type = void (WorkbenchBridge::*)();
+            if (_q_method_type _q_method = &WorkbenchBridge::headerMenuTitlesChanged; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 25;
+                return;
+            }
+        }
+        {
+            using _q_method_type = void (WorkbenchBridge::*)(int , const QPointF & );
+            if (_q_method_type _q_method = &WorkbenchBridge::headerMenuRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
+                *result = 26;
+                return;
+            }
+        }
+        {
             using _q_method_type = void (WorkbenchBridge::*)(const QString & , const QString & );
             if (_q_method_type _q_method = &WorkbenchBridge::tooltipRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
-                *result = 25;
+                *result = 27;
                 return;
             }
         }
         {
             using _q_method_type = void (WorkbenchBridge::*)();
             if (_q_method_type _q_method = &WorkbenchBridge::tooltipHideRequested; *reinterpret_cast<_q_method_type *>(_a[1]) == _q_method) {
-                *result = 26;
+                *result = 28;
                 return;
             }
         }
@@ -1583,6 +1625,7 @@ void WorkbenchBridge::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         case 5: *reinterpret_cast< bool*>(_v) = _t->previewVisible(); break;
         case 6: *reinterpret_cast< bool*>(_v) = _t->panelVisible(); break;
         case 7: *reinterpret_cast< bool*>(_v) = _t->windowMaximized(); break;
+        case 8: *reinterpret_cast< QStringList*>(_v) = _t->headerMenuTitles(); break;
         default: break;
         }
     }
@@ -1596,6 +1639,7 @@ void WorkbenchBridge::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         case 4: _t->setActiveSidebar(*reinterpret_cast< QString*>(_v)); break;
         case 5: _t->setPreviewVisible(*reinterpret_cast< bool*>(_v)); break;
         case 6: _t->setPanelVisible(*reinterpret_cast< bool*>(_v)); break;
+        case 8: _t->setHeaderMenuTitles(*reinterpret_cast< QStringList*>(_v)); break;
         default: break;
         }
     }
@@ -1620,20 +1664,20 @@ int WorkbenchBridge::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 45)
+        if (_id < 48)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 45;
+        _id -= 48;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 45)
+        if (_id < 48)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 45;
+        _id -= 48;
     }
     if (_c == QMetaObject::ReadProperty || _c == QMetaObject::WriteProperty
             || _c == QMetaObject::ResetProperty || _c == QMetaObject::BindableProperty
             || _c == QMetaObject::RegisterPropertyMetaType) {
         qt_static_metacall(this, _c, _id, _a);
-        _id -= 8;
+        _id -= 9;
     }
     return _id;
 }
@@ -1798,15 +1842,28 @@ void WorkbenchBridge::windowCloseRequested()
 }
 
 // SIGNAL 25
-void WorkbenchBridge::tooltipRequested(const QString & _t1, const QString & _t2)
+void WorkbenchBridge::headerMenuTitlesChanged()
 {
-    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
-    QMetaObject::activate(this, &staticMetaObject, 25, _a);
+    QMetaObject::activate(this, &staticMetaObject, 25, nullptr);
 }
 
 // SIGNAL 26
+void WorkbenchBridge::headerMenuRequested(int _t1, const QPointF & _t2)
+{
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
+    QMetaObject::activate(this, &staticMetaObject, 26, _a);
+}
+
+// SIGNAL 27
+void WorkbenchBridge::tooltipRequested(const QString & _t1, const QString & _t2)
+{
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))), const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t2))) };
+    QMetaObject::activate(this, &staticMetaObject, 27, _a);
+}
+
+// SIGNAL 28
 void WorkbenchBridge::tooltipHideRequested()
 {
-    QMetaObject::activate(this, &staticMetaObject, 26, nullptr);
+    QMetaObject::activate(this, &staticMetaObject, 28, nullptr);
 }
 QT_WARNING_POP

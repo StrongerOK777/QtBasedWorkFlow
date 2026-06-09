@@ -6,6 +6,7 @@
 #include <QAbstractListModel>
 #include <QColor>
 #include <QObject>
+#include <QPointF>
 #include <QPointer>
 #include <QStringList>
 #include <QVector>
@@ -333,6 +334,7 @@ class WorkbenchBridge final : public QObject {
     Q_PROPERTY(bool previewVisible READ previewVisible WRITE setPreviewVisible NOTIFY previewVisibleChanged)
     Q_PROPERTY(bool panelVisible READ panelVisible WRITE setPanelVisible NOTIFY panelVisibleChanged)
     Q_PROPERTY(bool windowMaximized READ windowMaximized NOTIFY windowMaximizedChanged)
+    Q_PROPERTY(QStringList headerMenuTitles READ headerMenuTitles WRITE setHeaderMenuTitles NOTIFY headerMenuTitlesChanged)
 public:
     WorkbenchBridge(WorkbenchCommandRegistry* commands, QuickAccessModel* quickAccess, QObject* parent = nullptr);
 
@@ -344,6 +346,7 @@ public:
     bool previewVisible() const { return previewVisible_; }
     bool panelVisible() const { return panelVisible_; }
     bool windowMaximized() const { return windowMaximized_; }
+    QStringList headerMenuTitles() const { return headerMenuTitles_; }
 
     void setDocumentTitle(const QString& title);
     void setStatusText(const QString& status);
@@ -353,6 +356,7 @@ public:
     void setPreviewVisible(bool visible);
     void setPanelVisible(bool visible);
     void setWindowMaximized(bool maximized);
+    void setHeaderMenuTitles(const QStringList& titles);
 
     Q_INVOKABLE void createNode(const QString& typeName);
     Q_INVOKABLE void focusNode(const QString& nodeId);
@@ -370,6 +374,8 @@ public:
     Q_INVOKABLE void requestWindowMinimize();
     Q_INVOKABLE void requestWindowMaximizeToggle();
     Q_INVOKABLE void requestWindowClose();
+    // 在 globalPos（屏幕坐标，通常为按钮正下方）弹出第 index 个顶部菜单。
+    Q_INVOKABLE void openHeaderMenu(int index, const QPointF& globalPos);
     Q_INVOKABLE void showTooltip(const QString& text, const QString& placement);
     Q_INVOKABLE void hideTooltip();
 
@@ -399,6 +405,8 @@ signals:
     void windowMinimizeRequested();
     void windowMaximizeToggleRequested();
     void windowCloseRequested();
+    void headerMenuTitlesChanged();
+    void headerMenuRequested(int index, const QPointF& globalPos);
     void tooltipRequested(const QString& text, const QString& placement);
     void tooltipHideRequested();
 
@@ -413,4 +421,5 @@ private:
     bool previewVisible_ = true;
     bool panelVisible_ = true;
     bool windowMaximized_ = false;
+    QStringList headerMenuTitles_;
 };

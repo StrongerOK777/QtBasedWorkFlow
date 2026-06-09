@@ -20,6 +20,33 @@
 
 ## 记录条目
 
+### 2026-06-09 / 顶部菜单与标题栏合并为单行阶段
+
+类型：修改
+
+概述：
+Windows 上窗口顶部原为两行（第 1 行 `QMenuBar`，第 2 行 QML 标题栏）。将菜单并入 QML 标题栏最左侧，合并为单行：`菜单 | 导航键 | 标题框 | 右侧按钮`。
+
+影响范围：
+`ImageNodeEditor/gui/WorkbenchModels.h`/`.cpp`（`WorkbenchBridge`）、`ImageNodeEditor/gui/MainWindow.h`/`.cpp`、`ImageNodeEditor/qml/WorkbenchTitleBar.qml`；另修了 `ImageNodeEditor/GeneratedFiles/regen.bat`。
+
+处理方式：
+- `WorkbenchBridge` 新增 `headerMenuTitles` 属性、`openHeaderMenu(index, globalPos)` 方法、`headerMenuRequested` 信号（沿用既有「QML 调用→发信号→MainWindow 执行」中继模式）。
+- `WorkbenchTitleBar.qml` 在导航键左侧用 `Repeater` 渲染菜单标题文字按钮（`MenuButton` 组件，复用命令按钮样式），点击调用 `openHeaderMenu(index, mapToGlobal(0, height))`，仅非 macOS 显示。
+- `MainWindow` 建立 `headerMenus_`（按序映射 6 个现有原生 `QMenu`），连接 `headerMenuRequested` → `menu->popup()` 在按钮正下方弹出原生菜单——菜单内容（含动态「节点操作」子菜单）完全复用，不重写。
+- 非 macOS 隐藏 `menuBar()`；macOS 仍用系统菜单栏、标题栏不显示菜单按钮。
+- 坑（已修）：隐藏 `menuBar()` 后，菜单内动作的快捷键会失效。已把带快捷键的动作递归 `addAction` 到主窗口（仅非 macOS），复用同一 `QAction` 不产生歧义；实测 `Ctrl+K`（快捷添加节点）等正常触发。
+- 工具：`GeneratedFiles/regen.bat` 原有两处 bug——`set "INC=…"` 外层引号与内层路径引号冲突、且中文注释在不匹配的控制台代码页下被当成命令——已改为 `set INC=`（去外层引号）并全部用 ASCII 注释，实测可正常重生成 moc/rcc。
+
+当前状态：
+已解决。原生构建实测：顶部为单行，6 个菜单点击均在按钮下方弹出对应原生菜单（含动态节点子菜单），菜单快捷键正常，拖动/最小化/最大化/关闭不受影响。
+
+后续注意：
+- 标题框居中沿用 QML 两个 `fillWidth` 占位符，左侧多了菜单按钮后略向右偏，属预期。
+- 改了 `WorkbenchModels.h`（含 `Q_OBJECT`）或 `WorkbenchTitleBar.qml` 后，务必先运行 `GeneratedFiles/regen.bat` 再构建（原生工程用预生成 moc/rcc）。
+
+---
+
 ### 2026-06-09 / Windows 无边框窗口阶段
 
 类型：修改
