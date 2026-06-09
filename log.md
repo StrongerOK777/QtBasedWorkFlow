@@ -44,6 +44,7 @@
 - moc/rcc 是预生成快照：新增/修改 `Q_OBJECT` 类或改 qml 后须运行 `GeneratedFiles/regen.bat`（否则 VS 里会缺符号/资源）；日常活跃开发也可继续用 CMake 构建（AUTOMOC 自动处理）。
 - `QtNodes.lib` 为 Release/x64/MSVC 专用预编译产物；升级 Qt 或换工具链需用 CMake 重新生成后替换。
 - `out/` 已 gitignore；`GeneratedFiles/` 与 `prebuilt/QtNodes.lib` 需随提交保留。
+- 坑（已修）：PostBuild 的 windeployqt 起初没带 `qmldir` 选项，未部署 Qt Quick/QML 模块（QtQuick / Controls / Layouts / QtQml），导致工作台 QML 侧边栏（节点库、活动栏）整块**黑屏**。已在 PostBuild 加 `--qmldir "$(ProjectDir)qml"`，让 windeployqt 扫描 qml 源码并部署所需模块到 `out\Release\qml\`。注意 vcxproj 的 XML 注释里不能出现连续两个连字符（会触发 MSB4025），描述该选项时改用“qmldir 选项”等措辞。
 
 ---
 
