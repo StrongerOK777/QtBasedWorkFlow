@@ -135,6 +135,16 @@ const QMap<QString, OpSpec>& opTable()
         {"preview", {"Preview", "", false, false}},
         {"blend", {"Blend", "", true, false}},
         {"merge", {"ImageMerge", "", true, false}},
+        // 扩展节点（线性管线适用的单输入操作）
+        {"sharpen", {"Sharpen", "amount", false, false}},
+        {"edge", {"EdgeDetect", "", false, false}},
+        {"edgedetect", {"EdgeDetect", "", false, false}},
+        {"invert", {"Invert", "", false, false}},
+        {"threshold", {"Threshold", "level", false, false}},
+        {"hsl", {"HueSaturation", "hue", false, false}},
+        {"huesaturation", {"HueSaturation", "hue", false, false}},
+        {"pixelate", {"Pixelate", "blockSize", false, false}},
+        {"watermark", {"ImageOverlay", "", true, false}},
     };
     return table;
 }
@@ -533,7 +543,11 @@ int cmdHelp(const QStringList&)
 操作（--后）：grayscale/gray、blur [radius|值]、resize [WxH|width= height= keepAspect=]、
   crop [x= y= width= height=]、brightness/bc [值|brightness= contrast=]、
   rotate [角度|angle= flipHorizontal= flipVertical=]、text [文字|text= x= y= size= color=]、
-  preview、blend 第二图 [opacity=]、merge 第二图 [第三图] [mode=horizontal|vertical]
+  preview、blend 第二图 [opacity= mode=normal|multiply|screen|overlay|darken|lighten|difference]、
+  merge 第二图 [第三图] [mode=horizontal|vertical|grid columns=]、
+  sharpen [强度|amount= radius=]、edge/edgedetect、invert、threshold [阈值|level=]、
+  hsl [色相|hue= saturation= lightness=]、pixelate [块大小|blockSize=]、
+  watermark 水印图 [anchor= offsetX= offsetY= scale= opacity=]
 
 示例：
   picdeal pipe -i in.png --grayscale --blur 3 --resize 800x600 -o out.png

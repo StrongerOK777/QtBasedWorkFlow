@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QVariant>
 #include <QVector>
+#include <atomic>
 #include <memory>
 
 class QAction;
@@ -84,6 +85,8 @@ private:
     void createLayout();
     void rebuildNodeMenus();
     void addNodeFromMenu(const QString& typeName);
+    void handleCanvasFilesDropped(const QStringList& files, const QPointF& scenePos);
+    void updateEmptyCanvasHint();
     void rebuildProperties();
     bool acceptCanvasEdge(const Edge& edge);
     void removeCanvasEdge(const Edge& edge);
@@ -262,13 +265,18 @@ private:
     QAction* previewToggleAction_ = nullptr;
     QAction* bottomToggleAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
+    QLabel* emptyCanvasHint_ = nullptr;
     QString currentWorkflowBranch_ = "main";
     QTimer* livePreviewTimer_ = nullptr;
     QTimer* runAnimationTimer_ = nullptr;
+    QTimer* autoSaveTimer_ = nullptr;
     QVector<QThread*> workerThreads_;
     bool executionBusy_ = false;
     int executionGeneration_ = 0;
     int livePreviewGeneration_ = 0;
+    // 当前执行/预览的取消标志；引擎快照共享同一标志，置 true 后引擎在下一调度轮停止。
+    std::shared_ptr<std::atomic<bool>> executionCancelFlag_;
+    std::shared_ptr<std::atomic<bool>> livePreviewCancelFlag_;
     QFrame* tooltipPopup_ = nullptr;
     QLabel* tooltipLabel_ = nullptr;
     QUndoStack* undoStack_ = nullptr;

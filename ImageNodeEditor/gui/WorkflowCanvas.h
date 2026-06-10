@@ -41,6 +41,8 @@ public:
         std::function<void(const QString&, const QPointF&)> nodeDropped;
         std::function<void(double)> wheelZoomRequested;
         std::function<void(const QString&, const QString&, const QVariant&)> parameterChanged;
+        // 外部文件拖入画布：图片创建「读入图片」节点、.json 打开 workflow。
+        std::function<void(const QStringList&, const QPointF&)> filesDropped;
     };
 
     WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbacks);

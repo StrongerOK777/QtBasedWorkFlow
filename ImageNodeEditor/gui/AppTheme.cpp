@@ -110,6 +110,30 @@ Palette palette()
     return g_themePreference == ThemePreference::Light ? lightPalette() : darkPalette();
 }
 
+QColor portTypeColor(const QString& dataTypeId)
+{
+    // 连线 / 端口按数据类型着色；深浅主题各给一组，保证对比度。
+    const bool dark = isDarkTheme();
+    if (dataTypeId == "image") return dark ? QColor("#6ea0e0") : QColor("#2e7fb8");
+    if (dataTypeId == "number") return dark ? QColor("#89d185") : QColor("#2e9e5b");
+    if (dataTypeId == "text") return dark ? QColor("#c586c0") : QColor("#8e44ad");
+    if (dataTypeId == "mask") return dark ? QColor("#e0a36e") : QColor("#c97a23");
+    if (dataTypeId == "image-list") return dark ? QColor("#4ec9b0") : QColor("#1d8f7c");
+    return palette().edge;
+}
+
+QColor categoryColor(const QString& category)
+{
+    const bool dark = isDarkTheme();
+    if (category == "输入输出") return dark ? QColor("#4fc1ff") : QColor("#1f7fc4");
+    if (category == "几何变换") return dark ? QColor("#c586c0") : QColor("#8e44ad");
+    if (category == "色彩处理") return dark ? QColor("#ce9178") : QColor("#b05c34");
+    if (category == "滤波处理") return dark ? QColor("#4ec9b0") : QColor("#1d8f7c");
+    if (category == "合成处理") return dark ? QColor("#dcdcaa") : QColor("#9a8a1f");
+    if (category == "高级功能") return dark ? QColor("#9cdcfe") : QColor("#3a6fb0");
+    return dark ? QColor("#9cdcfe") : QColor("#3a6fb0");
+}
+
 double clampedScale(double uiScale)
 {
     return std::clamp(uiScale, kMinUiScale, kMaxUiScale);

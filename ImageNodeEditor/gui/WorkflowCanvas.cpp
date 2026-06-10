@@ -14,9 +14,14 @@
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/NodeStyle>
+#include <QtNodes/internal/AbstractConnectionPainter.hpp>
+#include <QtNodes/internal/AbstractGraphModel.hpp>
 #include <QtNodes/internal/ConnectionGraphicsObject.hpp>
+#include <QtNodes/internal/ConnectionState.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
+#include <QtNodes/internal/StyleCollection.hpp>
 
+#include <QFileInfo>
 #include <QGraphicsItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsView>
@@ -24,12 +29,15 @@
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDropEvent>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
+#include <QPainterPath>
 #include <QScrollBar>
 #include <QTimer>
+#include <QUrl>
 #include <QVariant>
 #include <QWheelEvent>
 
@@ -86,6 +94,116 @@ bool isKnownNodeType(const QString& typeName)
     }
     return false;
 }
+
+// 拖入的外部文件中筛选出可接受的本地文件：图片（按 Qt 支持的格式）或 workflow JSON。
+QStringList droppableLocalFiles(const QMimeData* mime)
+{
+    QStringList files;
+    if (!mime || !mime->hasUrls()) {
+        return files;
+    }
+    static const QStringList imageSuffixes = [] {
+        QStringList suffixes;
+        for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+            suffixes.append(QString::fromLatin1(format).toLower());
+        }
+        return suffixes;
+    }();
+    for (const QUrl& url : mime->urls()) {
+        if (!url.isLocalFile()) {
+            continue;
+        }
+        const QString path = url.toLocalFile();
+        const QString suffix = QFileInfo(path).suffix().toLower();
+        if (suffix == "json" || imageSuffixes.contains(suffix)) {
+            files.append(path);
+        }
+    }
+    return files;
+}
+
+// 自定义连线绘制：按数据类型着色（颜色来自 AppTheme，深浅主题自适应）。
+// 行为与 QtNodes DefaultConnectionPainter 一致：悬停/选中光晕、拖拽虚线、普通曲线、端点圆点。
+// 放在应用层而不是 patch third_party，避免原生 VS 工程重编预编译 QtNodes.lib。
+class WorkflowConnectionPainter final : public QtNodes::AbstractConnectionPainter {
+public:
+    void paint(QPainter* painter, const QtNodes::ConnectionGraphicsObject& cgo) const override
+    {
+        const auto& style = QtNodes::StyleCollection::connectionStyle();
+        const QPainterPath cubic = cubicPath(cgo);
+        const bool requiresPort = cgo.connectionState().requiresPort();
+
+        QColor typeColor = style.normalColor();
+        if (!requiresPort) {
+            const auto cId = cgo.connectionId();
+            const auto dataType = cgo.graphModel()
+                                      .portData(cId.outNodeId, QtNodes::PortType::Out, cId.outPortIndex,
+                                                QtNodes::PortRole::DataType)
+                                      .value<QtNodes::NodeDataType>();
+            typeColor = AppTheme::portTypeColor(dataType.id);
+        }
+
+        // 悬停 / 选中光晕
+        if (cgo.connectionState().hovered() || cgo.isSelected()) {
+            QPen halo;
+            halo.setWidth(int(2 * style.lineWidth()));
+            halo.setColor(cgo.isSelected() ? style.selectedHaloColor() : style.hoveredColor());
+            painter->setPen(halo);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPath(cubic);
+        }
+
+        // 正在拖拽的未完成连线：虚线
+        if (requiresPort || cgo.connectionState().frozen()) {
+            QPen pen;
+            pen.setWidth(int(style.constructionLineWidth()));
+            pen.setColor(style.constructionColor());
+            pen.setStyle(Qt::DashLine);
+            painter->setPen(pen);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPath(cubic);
+        } else {
+            QPen pen;
+            pen.setWidthF(style.lineWidth());
+            pen.setColor(cgo.isSelected() ? style.selectedColor() : typeColor);
+            painter->setPen(pen);
+            painter->setBrush(Qt::NoBrush);
+            painter->drawPath(cubic);
+        }
+
+        // 两端小圆点
+        const double pointRadius = style.pointDiameter() / 2.0;
+        painter->setPen(typeColor);
+        painter->setBrush(typeColor);
+        painter->drawEllipse(cgo.out(), pointRadius, pointRadius);
+        painter->drawEllipse(cgo.in(), pointRadius, pointRadius);
+    }
+
+    QPainterPath getPainterStroke(const QtNodes::ConnectionGraphicsObject& cgo) const override
+    {
+        const QPainterPath cubic = cubicPath(cgo);
+        QPainterPath result(cgo.endPoint(QtNodes::PortType::Out));
+        constexpr unsigned int segments = 20;
+        for (unsigned int i = 0; i < segments; ++i) {
+            const double ratio = double(i + 1) / segments;
+            result.lineTo(cubic.pointAtPercent(ratio));
+        }
+        QPainterPathStroker stroker;
+        stroker.setWidth(10.0);
+        return stroker.createStroke(result);
+    }
+
+private:
+    static QPainterPath cubicPath(const QtNodes::ConnectionGraphicsObject& connection)
+    {
+        const QPointF& in = connection.endPoint(QtNodes::PortType::In);
+        const QPointF& out = connection.endPoint(QtNodes::PortType::Out);
+        const auto c1c2 = connection.pointsC1C2();
+        QPainterPath cubic(out);
+        cubic.cubicTo(c1c2.first, c1c2.second, in);
+        return cubic;
+    }
+};
 
 // 按当前主题 palette 生成 Qt Nodes 全局样式。无 static 守卫，主题切换时 rebuild()
 // 会重新调用，使节点边框 / 渐变 / 连线 / 端口颜色跟随深色 / 浅色切换。
@@ -170,6 +288,7 @@ public:
                          std::function<void(const QPointF&)> quickPalette,
                          std::function<void(const QString&, const QPointF&)> nodeDropped,
                          std::function<void(double)> wheelZoomRequested,
+                         std::function<void(const QStringList&, const QPointF&)> filesDropped,
                          QWidget* parent)
         : QtNodes::GraphicsView(scene, parent),
           uiScale_(uiScale),
@@ -177,7 +296,8 @@ public:
           copySelection_(std::move(copySelection)),
           quickPalette_(std::move(quickPalette)),
           nodeDropped_(std::move(nodeDropped)),
-          wheelZoomRequested_(std::move(wheelZoomRequested))
+          wheelZoomRequested_(std::move(wheelZoomRequested)),
+          filesDropped_(std::move(filesDropped))
     {
         setAcceptDrops(true);
     }
@@ -247,12 +367,18 @@ protected:
             event->acceptProposedAction();
             return;
         }
+        // 外部文件：图片自动创建「读入图片」节点，.json 直接打开 workflow。
+        if (!droppableLocalFiles(event->mimeData()).isEmpty()) {
+            event->acceptProposedAction();
+            return;
+        }
         QtNodes::GraphicsView::dragEnterEvent(event);
     }
 
     void dragMoveEvent(QDragMoveEvent* event) override
     {
-        if (event->mimeData()->hasFormat("application/x-imagenode-type")) {
+        if (event->mimeData()->hasFormat("application/x-imagenode-type")
+            || !droppableLocalFiles(event->mimeData()).isEmpty()) {
             event->acceptProposedAction();
             return;
         }
@@ -273,6 +399,19 @@ protected:
             QTimer::singleShot(0, this, [callback = std::move(callback), typeName, scenePos] {
                 if (callback) {
                     callback(typeName, scenePos);
+                }
+            });
+            return;
+        }
+        const QStringList files = droppableLocalFiles(event->mimeData());
+        if (!files.isEmpty() && filesDropped_) {
+            const QPointF scenePos = mapToScene(event->position().toPoint());
+            auto callback = filesDropped_;
+            event->acceptProposedAction();
+            // 与节点拖放一致：延后到事件返回后处理，避免在 drop 回调里重建 scene。
+            QTimer::singleShot(0, this, [callback = std::move(callback), files, scenePos] {
+                if (callback) {
+                    callback(files, scenePos);
                 }
             });
             return;
@@ -301,6 +440,7 @@ private:
     std::function<void(const QPointF&)> quickPalette_;
     std::function<void(const QString&, const QPointF&)> nodeDropped_;
     std::function<void(double)> wheelZoomRequested_;
+    std::function<void(const QStringList&, const QPointF&)> filesDropped_;
 };
 
 class WorkflowGraphicsScene final : public QtNodes::DataFlowGraphicsScene {
@@ -345,6 +485,7 @@ WorkflowCanvas::WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbac
                                      callbacks_.quickPalette,
                                      callbacks_.nodeDropped,
                                      callbacks_.wheelZoomRequested,
+                                     callbacks_.filesDropped,
                                      owner_);
     view_->setObjectName("workflowView");
     view_->viewport()->setObjectName("workflowViewport");
@@ -419,6 +560,7 @@ void WorkflowCanvas::rebuild(WorkflowGraph& graph,
     scene_ = std::make_unique<WorkflowGraphicsScene>(*graphModel_, callbacks_.quickPalette, callbacks_.sceneContextMenu, owner_);
     scene_->setSceneRect(-2000, -2000, 4000, 4000);
     scene_->setNodePainter(std::make_unique<WorkflowNodePainter>());
+    scene_->setConnectionPainter(std::make_unique<WorkflowConnectionPainter>());
     view_->setScene(scene_.get());
     connectSceneCallbacks();
 

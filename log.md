@@ -20,6 +20,48 @@
 
 ## 记录条目
 
+### 2026-06-11 / 仓库整洁化：本地开发文件不入库阶段
+
+类型：修改
+
+概述：
+按用户要求，把仅供本地开发使用的文件排除出提交仓库：`plan.md`、`tests/`、`verify_build.bat`（及输出 `verify_report.txt`）加入 `.gitignore`；同时补充忽略 `.claude/`（辅助工具会话目录）与 `x64/`（MSBuild 中间目录）。这些文件此前均未被 Git 跟踪，无需 git rm。
+
+影响范围：
+`.gitignore`、`CMakeLists.txt`（测试块加 `EXISTS tests/` 守卫）、`struct.md`（标注 plan.md / tests/ 为本地文件）。
+
+处理方式：
+因 `tests/` 不再随仓库分发，CMake 单元测试块改为「目录存在且找到 Qt6Test」才启用，保证全新克隆直接配置不报错。`aqtinstall.log` 与各验证日志已被既有 `*.log` 规则覆盖。另：清理了挂载盘上一次 git 操作残留的 `.git/index.lock` 空锁文件。
+
+当前状态：
+已解决（git check-ignore 验证通过）。
+
+后续注意：
+`agent.md` 要求阅读的 `plan.md` 在全新克隆中可能不存在，属预期；本地开发机上保留。`.vcxproj.user` 按课程提交要求继续保留跟踪，不忽略。
+
+---
+
+### 2026-06-11 / 全项目审查后的性能、健壮性、界面与节点扩展阶段
+
+类型：修改 / 新增
+
+概述：
+按全项目代码审查结论实施四个方向的改进（用户确认全做）：1) 性能——boxBlur 改滑动窗口（O(w·h)，与半径无关，去掉逐邻居 QImage::pixel/QColor）、brightnessContrast 改 256 项查找表、执行缓存加 512MB LRU 上限、执行/实时预览支持取消令牌；2) 健壮性——Choice 参数校验取值必须在 options 内、声明范围的数值参数加载时拒绝越界、ImageMerge 不再静默丢弃坏输入、验证器错误信息统一中文标签（formatNodeLabel）、新建 tests/（QtTest 三个测试程序，CMake 可选接入，找不到 Qt6Test 自动跳过）；3) 界面——拖图片文件进画布自动建「读入图片」节点（多图级联摆放）、拖 .json 直接打开、连线与端口圆点按数据类型着色（应用层自定义 ConnectionPainter，不动 third_party 也不需重编 QtNodes.lib）、预览透明棋盘格底 + 悬停像素坐标/颜色 + 大图弹窗滚轮缩放/拖拽平移/双击 100%、空画布引导层、节点网格吸附（设置页开关，默认关）、dirty 状态每 5 分钟自动保存时间线快照、节点类别色并入 AppTheme 并适配浅色主题；4) 节点——新增锐化/边缘检测/反色/阈值二值化/色相饱和度/通道拆分/通道合并/蒙版混合/图片水印/像素化共 10 种（合计 22 种 + 宏节点），ImageMerge 补 grid 布局+列数+背景色，Blend 补 7 种混合模式+尺寸策略，TextOverlay 补锚点/字体/粗体/描边/不透明度并改用 pixelSize；picdeal 命令行 opTable 同步新增 sharpen/edge/invert/threshold/hsl/pixelate/watermark。
+
+影响范围：
+`processing/ImageProcessors.{h,cpp}`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.{h,cpp}`、`workflow/WorkflowValidator.cpp`、`gui/MainWindow.{h,cpp}`、`gui/WorkflowCanvas.{h,cpp}`、`gui/WorkflowNodePainter.cpp`、`gui/AppTheme.{h,cpp}`、`gui/PreviewWidgets.h`、`app/CommandLineApp.cpp`、`CMakeLists.txt`、`tests/`（新增）、`plan.md`（新建路线图）、`verify_build.bat`（新增一键验证脚本）。未改 third_party、未改 qml/、未新增含 Q_OBJECT 的头（原生 VS 工程无需 regen.bat，vcxproj 无需改动；tests 仅走 CMake）。
+
+处理方式：
+执行取消采用 shared_ptr<atomic<bool>> 随引擎快照共享，按调度轮粒度停止；执行期间「执行」按钮改为取消入口（再次触发询问取消），关闭窗口时同时置取消标志缩短退出等待。缓存 LRU 按估算字节数逐出，至少保留最新一条，不影响单次执行正确性。连线着色经 BasicGraphicsScene::setConnectionPainter 注入应用层 painter；端口圆点在 WorkflowNodePainter 中按 dataType 覆绘（实心=已连接、空心=未连接）。兼容性：旧 workflow JSON 默认值全部保持旧行为（TextOverlay 锚点默认 custom 即原基线定位、Blend 默认 stretch+normal、Merge 默认 horizontal）；TextOverlay 字号从 pointSize 改 pixelSize，仅当输入图片带非常规 DPI 元数据时渲染大小与旧版略有差异。
+
+当前状态：
+待验证。沙盒无法安装 Qt（网络代理封锁 qt.io），需在 Windows 本机运行 `verify_build.bat`（MSBuild 构建 + CLI 冒烟 + ctest 单元测试，报告写入 verify_report.txt），并在 Visual Studio 中构建运行确认 GUI 交互。computer-use 权限请求两次超时未获批准。
+
+后续注意：
+宏节点内部子图执行不传播取消令牌（宏整体作为一个节点参与取消粒度）。executeForNode 实时预览沿用未验证路径，新节点的输入缺失在执行期报错。若 ctest 在本机首次配置较慢属正常（需配置 build-vs 并编译核心源码两份）。
+
+---
+
 ### 2026-06-09 / 顶部菜单与标题栏合并为单行阶段
 
 类型：修改

@@ -164,3 +164,54 @@ else()
         VERBATIM
         COMMENT "生成 picdeal 便捷命令（符号链接）")
 endif()
+
+# ===== 单元测试（QtTest，可选）=====
+# 只依赖核心层（nodes/processing/workflow/util），不链接 GUI 与 QtNodes；
+# 找不到 Qt6Test 时静默跳过，不影响主程序构建，也不影响原生 VS 工程。
+# tests/ 仅存在于本地开发环境（已 gitignore，不进入提交仓库），
+# 因此目录缺失时也要静默跳过，保证全新克隆能直接配置。
+option(IMAGENODEEDITOR_BUILD_TESTS "构建 ImageNodeEditor 单元测试" ON)
+if(IMAGENODEEDITOR_BUILD_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_workflow_json.cpp")
+    find_package(Qt6 QUIET COMPONENTS Test)
+    if(Qt6Test_FOUND)
+        enable_testing()
+        set(INE_TEST_CORE_SOURCES
+            ImageNodeEditor/core/Edge.h
+            ImageNodeEditor/core/NodeData.h
+            ImageNodeEditor/core/NodeLabel.h
+            ImageNodeEditor/core/NodeParameter.h
+            ImageNodeEditor/core/PortType.h
+            ImageNodeEditor/core/Result.h
+            ImageNodeEditor/nodes/ImageNode.h
+            ImageNodeEditor/nodes/ImageNode.cpp
+            ImageNodeEditor/nodes/NodeFactory.h
+            ImageNodeEditor/nodes/NodeFactory.cpp
+            ImageNodeEditor/nodes/BasicNodes.h
+            ImageNodeEditor/nodes/BasicNodes.cpp
+            ImageNodeEditor/nodes/MacroNode.h
+            ImageNodeEditor/nodes/MacroNode.cpp
+            ImageNodeEditor/processing/ImageProcessors.h
+            ImageNodeEditor/processing/ImageProcessors.cpp
+            ImageNodeEditor/util/PathUtils.h
+            ImageNodeEditor/util/PathUtils.cpp
+            ImageNodeEditor/workflow/ExecutionEngine.h
+            ImageNodeEditor/workflow/ExecutionEngine.cpp
+            ImageNodeEditor/workflow/WorkflowGraph.h
+            ImageNodeEditor/workflow/WorkflowGraph.cpp
+            ImageNodeEditor/workflow/WorkflowSerializer.h
+            ImageNodeEditor/workflow/WorkflowSerializer.cpp
+            ImageNodeEditor/workflow/WorkflowValidator.h
+            ImageNodeEditor/workflow/WorkflowValidator.cpp
+        )
+        foreach(test_name IN ITEMS test_workflow_json test_graph_validation test_nodes)
+            qt_add_executable(${test_name} tests/${test_name}.cpp ${INE_TEST_CORE_SOURCES})
+            target_include_directories(${test_name} PRIVATE ImageNodeEditor)
+            target_link_libraries(${test_name} PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
+            add_test(NAME ${test_name} COMMAND ${test_name})
+            # 离屏平台运行，便于 CI / 无显示环境执行（文字叠加等仍可渲染）。
+            set_tests_properties(${test_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        endforeach()
+    else()
+        message(STATUS "未找到 Qt6Test，跳过单元测试目标")
+    endif()
+endif()

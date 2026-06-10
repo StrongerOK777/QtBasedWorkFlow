@@ -44,7 +44,7 @@ ImageNodeEditor/
 - `struct.md`：项目结构索引，说明目录、文件和类职责。
 - `log.md`：开发和运行问题记录，记录重要修改、遇到的问题、解决方式和遗留事项。
 - `agent.md`：给辅助编码工具的最终指导文件，规定编码风格、排错方式和修改边界。
-- `plan.md`：后续优化计划，只保存尚未完成的任务、优先级和验收方向。
+- `plan.md`：后续优化计划，只保存尚未完成的任务、优先级和验收方向。**仅本地开发使用，已加入 `.gitignore`，不进入提交仓库**；新克隆环境中此文件可能不存在。
 - `ImageNodeEditor/`：与项目同名的源码目录，`main.cpp` 放在这里，其他模块按职责分子目录放置。
 - `resources.qrc`：可选 Qt 资源入口；只有需要把图标、示例图片、示例 workflow 打包进程序时才加入。
 
@@ -653,6 +653,10 @@ tests/
   test_graph_validation.cpp
   test_nodes.cpp
 ```
+
+说明：`tests/` 仅本地开发使用，已加入 `.gitignore`，不进入提交仓库。CMake 在 `tests/`
+目录缺失或找不到 Qt6Test 时会自动跳过测试目标，不影响全新克隆的配置与构建。同属本地
+辅助文件的还有 `verify_build.bat`（一键构建验证脚本）及其输出 `verify_report.txt`。
 
 ### `test_workflow_json.cpp`
 

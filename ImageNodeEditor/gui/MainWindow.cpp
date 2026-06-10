@@ -490,6 +490,21 @@ MainWindow::MainWindow(QWidget* parent)
     runAnimationTimer_ = new QTimer(this);
     runAnimationTimer_->setInterval(90);
     connect(runAnimationTimer_, &QTimer::timeout, this, [this] { updateRunAnimation(); });
+    // 定时自动保存：有未保存修改时每 5 分钟自动写入时间线快照（不动当前文件，可在「进度记录」恢复）。
+    autoSaveTimer_ = new QTimer(this);
+    autoSaveTimer_->setInterval(5 * 60 * 1000);
+    connect(autoSaveTimer_, &QTimer::timeout, this, [this] {
+        if (shuttingDown_ || executionBusy_ || !undoStack_ || undoStack_->isClean() || !workflowTimelineModel_) {
+            return;
+        }
+        const auto saved = WorkflowHistory::save(WorkflowHistory::kTimeline, graphForPersistence(),
+                                                 {{"label", QString("自动保存")}}, 30);
+        if (saved.isOk()) {
+            refreshWorkflowTimelineModel();
+            appendLog("已自动保存快照（进度记录 › 时间线）");
+        }
+    });
+    autoSaveTimer_->start();
     updateWindowTitle();
     // 初始尺寸只是兜底；createLayout() 末尾会用 restoreGeometry 恢复上次的
     // 窗口大小/最大化状态，仅当没有可恢复的几何信息时才保留这个默认值。
@@ -744,6 +759,9 @@ void MainWindow::createLayout()
     canvasCallbacks.parameterChanged = [this](const QString& nodeId, const QString& name, const QVariant& value) {
         setNodeParameterForNode(nodeId, name, value);
     };
+    canvasCallbacks.filesDropped = [this](const QStringList& files, const QPointF& pos) {
+        handleCanvasFilesDropped(files, pos);
+    };
     canvas_ = std::make_unique<WorkflowCanvas>(this, uiScale_, std::move(canvasCallbacks));
     view_ = canvas_->view();
     view_->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing);
@@ -782,6 +800,17 @@ void MainWindow::createLayout()
     viewStack->setAlignment(miniMap_, Qt::AlignLeft | Qt::AlignBottom);
     connect(canvasZoomInButton_, &QToolButton::clicked, this, [this] { zoomIn(); });
     connect(canvasZoomOutButton_, &QToolButton::clicked, this, [this] { zoomOut(); });
+
+    // 空画布引导层：画布无节点时显示操作提示，添加首个节点后自动隐藏。
+    emptyCanvasHint_ = new QLabel;
+    emptyCanvasHint_->setObjectName("emptyCanvasHint");
+    emptyCanvasHint_->setAttribute(Qt::WA_TranslucentBackground);
+    emptyCanvasHint_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    emptyCanvasHint_->setAlignment(Qt::AlignCenter);
+    emptyCanvasHint_->setTextFormat(Qt::RichText);
+    viewStack->addWidget(emptyCanvasHint_);
+    viewStack->setAlignment(emptyCanvasHint_, Qt::AlignCenter);
+    updateEmptyCanvasHint();
 
     // ===== 画布顶部：VS Code 风画布标签条 + 宏层级面包屑（在画布之上）=====
     workbookTabs_ = new CanvasTabBar;  // Chrome 风自绘标签栏
@@ -1251,6 +1280,73 @@ void MainWindow::addNodeFromType(const QString& typeName, const QPointF& positio
                          WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 }
 
+void MainWindow::handleCanvasFilesDropped(const QStringList& files, const QPointF& scenePos)
+{
+    if (rejectGraphReplacementWhileBusy("拖入文件")) {
+        return;
+    }
+    // .json 视为 workflow，仅取第一个；其余按图片创建「读入图片」节点。
+    for (const QString& path : files) {
+        if (QFileInfo(path).suffix().toLower() == "json") {
+            openWorkflowPath(path, true);
+            return;
+        }
+    }
+    const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
+    const QString selectedBefore = selectedNodeId_;
+    int created = 0;
+    for (const QString& path : files) {
+        auto node = NodeFactory::instance().create("ImageInput");
+        if (node.isFail()) {
+            appendLog(node.error());
+            break;
+        }
+        auto applied = node.value()->setParameter("filePath", path);
+        if (applied.isFail()) {
+            appendLog(QString("设置图片路径失败：%1").arg(applied.error()));
+            continue;
+        }
+        const QPointF target = findAvailableNodePosition(scenePos + QPointF(40.0 * created, 40.0 * created));
+        const QString id = graph_.addNode(node.value(), target);
+        selectedNodeId_ = id;
+        appendLog(QString("拖入图片创建节点：%1（%2）").arg(nodeLabel(id), QFileInfo(path).fileName()), id);
+        ++created;
+    }
+    if (created == 0) {
+        return;
+    }
+    resetNodeRunStates();
+    rebuildScene();
+    if (auto* item = nodeItems_.value(selectedNodeId_)) {
+        item->setSelected(true);
+    }
+    pushGraphEditCommand(QString("拖入 %1 张图片").arg(created), before, selectedBefore,
+                         WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
+}
+
+void MainWindow::updateEmptyCanvasHint()
+{
+    if (!emptyCanvasHint_) {
+        return;
+    }
+    const bool empty = graph_.nodes().isEmpty();
+    if (empty) {
+        const AppTheme::Palette p = AppTheme::palette();
+        emptyCanvasHint_->setText(QString(
+            "<div style='color:%1; font-size:%2px;'>"
+            "<p style='font-size:%3px; color:%4;'>画布是空的</p>"
+            "<p>从左侧节点库拖入节点开始搭建</p>"
+            "<p>把图片文件拖进来会自动创建「读入图片」节点</p>"
+            "<p>Ctrl/Cmd + K 或 Tab 可快速搜索添加节点</p>"
+            "</div>")
+            .arg(p.textMuted.name())
+            .arg(AppTheme::px(13, uiScale_))
+            .arg(AppTheme::px(17, uiScale_))
+            .arg(p.textSecondary.name()));
+    }
+    emptyCanvasHint_->setVisible(empty);
+}
+
 void MainWindow::selectNode(const QString& nodeId)
 {
     selectedNodeId_ = nodeId;
@@ -1269,14 +1365,32 @@ void MainWindow::commitNodeMove(const QString& nodeId, const QPointF& beforePosi
     if (!graph_.containsNode(nodeId)) {
         return;
     }
-    if (qFuzzyCompare(beforePosition.x(), afterPosition.x()) && qFuzzyCompare(beforePosition.y(), afterPosition.y())) {
+    QPointF targetPosition = afterPosition;
+    {
+        // 网格吸附（设置页开关，默认关闭）：松开鼠标时把节点位置对齐到网格。
+        QSettings settings;
+        if (settings.value("mainWindow/snapToGrid", false).toBool()) {
+            constexpr double kGridStep = 20.0;
+            targetPosition = QPointF(std::round(afterPosition.x() / kGridStep) * kGridStep,
+                                     std::round(afterPosition.y() / kGridStep) * kGridStep);
+        }
+    }
+    if (qFuzzyCompare(beforePosition.x(), targetPosition.x()) && qFuzzyCompare(beforePosition.y(), targetPosition.y())) {
         return;
     }
     WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
     before.setNodePosition(nodeId, beforePosition);
     WorkflowGraph after = WorkflowCommands::cloneGraph(graph_);
-    after.setNodePosition(nodeId, afterPosition);
+    after.setNodePosition(nodeId, targetPosition);
     pushGraphEditCommand(QString("移动节点 %1").arg(nodeLabel(nodeId)), before, nodeId, after, nodeId, QString("move:%1").arg(nodeId));
+    // 快照命令跳过首次 redo（画布已应用拖拽位置）；吸附改变了最终位置时需显式落回模型并重建。
+    if (!qFuzzyCompare(targetPosition.x(), afterPosition.x()) || !qFuzzyCompare(targetPosition.y(), afterPosition.y())) {
+        graph_.setNodePosition(nodeId, targetPosition);
+        rebuildScene();
+        if (auto* item = nodeItems_.value(nodeId)) {
+            item->setSelected(true);
+        }
+    }
 }
 
 void MainWindow::showNodeContextMenu(const QString& nodeId, const QPoint& screenPos)
@@ -2095,6 +2209,7 @@ void MainWindow::rebuildScene()
     }
     rebuildEdges();
     updateMiniMap();
+    updateEmptyCanvasHint();
 }
 
 void MainWindow::rebuildEdges()
@@ -2299,7 +2414,10 @@ void MainWindow::setExecutionBusy(bool busy)
     }
     executionBusy_ = busy;
     if (runAction_) {
-        runAction_->setEnabled(!busy);
+        // 执行期间不再禁用执行入口，而是改作「取消」入口：
+        // 再次触发会在 runWorkflow() 的忙碌分支中询问并置取消标志。
+        runAction_->setText(busy ? "取消执行" : "执行");
+        runAction_->setToolTip(busy ? "正在执行，点击可取消本次执行" : QString());
     }
     if (workbenchBridge_) {
         workbenchBridge_->setStatusText(busy ? QString("正在后台执行，画布仍可浏览") : QString("就绪"));
@@ -2484,6 +2602,7 @@ void MainWindow::finishWorkflowExecution(int generation,
         return;
     }
     engine_ = updatedEngine;
+    engine_.setCancelFlag({});
     lastResult_ = result.isFail() ? engineLastResult : result.value();
     rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
@@ -2491,6 +2610,14 @@ void MainWindow::finishWorkflowExecution(int generation,
     }
 
     if (result.isFail()) {
+        if (result.error() == "执行已取消") {
+            appendLog("执行已取消");
+            setExecutionBusy(false);
+            if (workbenchBridge_) {
+                workbenchBridge_->setStatusText("执行已取消");
+            }
+            return;
+        }
         appendLog(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
         appendProblem(QString("执行失败：%1").arg(result.error()), lastResult_.failedNodeId);
         focusFailedNode(lastResult_.failedNodeId);
@@ -2513,7 +2640,11 @@ void MainWindow::finishLivePreview(int generation,
     if (generation != livePreviewGeneration_ || executionBusy_) {
         return;
     }
+    if (result.isFail() && result.error() == "执行已取消") {
+        return; // 预览被更新的请求作废，静默丢弃
+    }
     engine_ = updatedEngine;
+    engine_.setCancelFlag({});
     lastResult_ = result.isFail() ? engineLastResult : result.value();
     rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
@@ -2535,11 +2666,20 @@ void MainWindow::finishLivePreview(int generation,
 void MainWindow::runWorkflow()
 {
     if (executionBusy_) {
-        appendLog("已有工作流正在执行，已忽略重复执行请求");
+        const auto choice = QMessageBox::question(this, "工作流正在执行",
+                                                  "已有工作流正在执行。是否取消当前执行？",
+                                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (choice == QMessageBox::Yes && executionCancelFlag_) {
+            executionCancelFlag_->store(true);
+            appendLog("已请求取消当前执行（正在运行的节点结束后停止）");
+        }
         return;
     }
     if (livePreviewTimer_) {
         livePreviewTimer_->stop();
+    }
+    if (livePreviewCancelFlag_) {
+        livePreviewCancelFlag_->store(true);
     }
     ++livePreviewGeneration_;
     const int generation = ++executionGeneration_;
@@ -2551,7 +2691,9 @@ void MainWindow::runWorkflow()
     appendLog("开始后台执行工作流");
 
     WorkflowGraph graphSnapshot = WorkflowCommands::cloneGraph(graph_);
+    executionCancelFlag_ = std::make_shared<std::atomic<bool>>(false);
     ExecutionEngine engineSnapshot = engine_;
+    engineSnapshot.setCancelFlag(executionCancelFlag_);
     QPointer<MainWindow> self(this);
     auto* thread = QThread::create([self, generation, graphSnapshot = std::move(graphSnapshot), engineSnapshot = std::move(engineSnapshot)]() mutable {
         auto postSummary = [self, generation](const NodeExecutionSummary& summary) {
@@ -2601,7 +2743,12 @@ void MainWindow::runLivePreview()
         workbenchBridge_->setStatusText(QString("实时预览 %1").arg(nodeLabel(previewNodeId)));
     }
     WorkflowGraph graphSnapshot = WorkflowCommands::cloneGraph(graph_);
+    if (livePreviewCancelFlag_) {
+        livePreviewCancelFlag_->store(true); // 作废上一次未完成的预览计算
+    }
+    livePreviewCancelFlag_ = std::make_shared<std::atomic<bool>>(false);
     ExecutionEngine engineSnapshot = engine_;
+    engineSnapshot.setCancelFlag(livePreviewCancelFlag_);
     QPointer<MainWindow> self(this);
     auto* thread = QThread::create([self,
                                     generation,
@@ -3982,6 +4129,10 @@ void MainWindow::showSettingsDialog()
     miniMapVisible->setText("显示画布小地图");
     miniMapVisible->setChecked(!miniMap_ || miniMap_->isVisible());
     miniMapVisible->setToolTip("显示或隐藏画布左下角小地图");
+    auto* snapToGrid = new QCheckBox;
+    snapToGrid->setText("节点对齐到网格");
+    snapToGrid->setChecked(QSettings().value("mainWindow/snapToGrid", false).toBool());
+    snapToGrid->setToolTip("拖动节点松开时自动对齐到 20 像素网格，便于排列整齐");
 
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "选择深色或浅色主题，并调整工作台整体缩放。");
@@ -4018,6 +4169,8 @@ void MainWindow::showSettingsDialog()
     auto* zoomSection = makeSection(canvasPage, "缩放", "鼠标滚轮缩放已改为低速步进，适合精细调整节点图。");
     makeRow(zoomSection, "当前画布缩放", canvasRow, "只影响中央画布，不改变工作台控件尺寸。");
     makeRow(zoomSection, "滚轮缩放速度", wheelZoomSpin, "每滚动一格的缩放比例。默认 4%，数值越小越慢。");
+    auto* arrangeSection = makeSection(canvasPage, "节点排列");
+    arrangeSection->addWidget(snapToGrid);
     canvasPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* workbenchPage = makePage();
@@ -4149,6 +4302,7 @@ void MainWindow::showSettingsDialog()
         }
         if (miniMap_) miniMap_->setVisible(miniMapVisible->isChecked());
         settings.setValue("mainWindow/showMiniMap", miniMapVisible->isChecked());
+        settings.setValue("mainWindow/snapToGrid", snapToGrid->isChecked());
     };
 
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
@@ -4370,6 +4524,13 @@ void MainWindow::closeEvent(QCloseEvent* event)
     // 关闭后到来的后台执行/实时预览回调按 generation 检查丢弃，避免回调进入正在销毁的窗口。
     ++executionGeneration_;
     ++livePreviewGeneration_;
+    // 请求取消进行中的执行/预览，缩短退出时等待后台线程的时间。
+    if (executionCancelFlag_) {
+        executionCancelFlag_->store(true);
+    }
+    if (livePreviewCancelFlag_) {
+        livePreviewCancelFlag_->store(true);
+    }
     if (livePreviewTimer_) {
         livePreviewTimer_->stop();
     }

@@ -57,6 +57,20 @@ QString nodeSignature(const QString& nodeId, const QSharedPointer<ImageNode>& no
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
 }
 
+quint64 outputsBytes(const QMap<QString, NodeData>& outputs)
+{
+    quint64 bytes = 0;
+    for (auto it = outputs.cbegin(); it != outputs.cend(); ++it) {
+        if (it.value().value.canConvert<QImage>()) {
+            const QImage image = it.value().value.value<QImage>();
+            bytes += quint64(image.sizeInBytes());
+        } else {
+            bytes += 64; // 非图片数据按小常量估算
+        }
+    }
+    return bytes;
+}
+
 QString nodeDataSignature(const NodeData& data)
 {
     QStringList parts;
@@ -186,6 +200,11 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
     }
 
     while (!ready.isEmpty()) {
+        if (isCancelled()) {
+            result.log.append("执行已取消");
+            lastResult_ = result;
+            return Result<ExecutionResult>::fail("执行已取消");
+        }
         std::vector<Job> jobs;
         QStringList completedThisRound;
 
@@ -229,8 +248,9 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             record(NodeExecutionSummary{nodeId, node->displayName(), NodeExecutionState::Running,
                                         QString("执行节点 %1").arg(nodeLabel)});
 
-            const auto cached = cache_.constFind(nodeId);
-            if (node->isCacheable() && cached != cache_.constEnd() && cached.value().signature == signature) {
+            const auto cached = cache_.find(nodeId);
+            if (node->isCacheable() && cached != cache_.end() && cached.value().signature == signature) {
+                cached.value().lastUse = ++cacheTick_;
                 result.nodeOutputs.insert(nodeId, cached.value().outputs);
                 result.log.append(QString("复用缓存 %1").arg(nodeLabel));
                 record(NodeExecutionSummary{nodeId, node->displayName(), NodeExecutionState::CacheHit,
@@ -267,7 +287,7 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             }
             result.nodeOutputs.insert(job.nodeId, outputs.value());
             if (job.cacheable) {
-                cache_.insert(job.nodeId, CacheEntry{job.signature, outputs.value()});
+                insertCacheEntry(job.nodeId, job.signature, outputs.value());
             }
             result.log.append(QString("节点完成 %1").arg(jobLabel));
             record(NodeExecutionSummary{job.nodeId, job.displayName, NodeExecutionState::Succeeded,
@@ -301,8 +321,38 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
     return Result<ExecutionResult>::ok(result);
 }
 
+void ExecutionEngine::insertCacheEntry(const QString& nodeId, const QString& signature,
+                                       const QMap<QString, NodeData>& outputs)
+{
+    const auto existing = cache_.constFind(nodeId);
+    if (existing != cache_.constEnd()) {
+        cacheBytes_ -= existing.value().bytes;
+        cache_.erase(existing);
+    }
+    const quint64 bytes = outputsBytes(outputs);
+    cache_.insert(nodeId, CacheEntry{signature, outputs, bytes, ++cacheTick_});
+    cacheBytes_ += bytes;
+
+    // 超出总量上限时按 LRU 逐出（至少保留刚插入的一条）。
+    // 缓存只影响重复执行的加速，逐出不影响本次执行结果的正确性。
+    while (cacheBytes_ > kMaxCacheBytes && cache_.size() > 1) {
+        auto oldest = cache_.begin();
+        for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+            if (it.key() != nodeId && it.value().lastUse < oldest.value().lastUse) {
+                oldest = it;
+            }
+        }
+        if (oldest.key() == nodeId) {
+            break;
+        }
+        cacheBytes_ -= oldest.value().bytes;
+        cache_.erase(oldest);
+    }
+}
+
 void ExecutionEngine::clearCache()
 {
     cache_.clear();
+    cacheBytes_ = 0;
     lastResult_ = {};
 }
