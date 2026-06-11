@@ -26,6 +26,7 @@ public:
 
     QVariant parameterValue(const QString& name) const override;
     Status setParameter(const QString& name, const QVariant& value) override;
+    void onExecutionContext(const std::shared_ptr<std::atomic<bool>>& cancelFlag) override;
 
     const WorkflowGraph& subgraph() const { return subgraph_; }
     WorkflowGraph& subgraph() { return subgraph_; }
@@ -42,6 +43,8 @@ private:
     WorkflowGraph subgraph_;
     QVector<MacroPortMapping> inputMappings_;
     QVector<MacroPortMapping> outputMappings_;
+    // 外层引擎注入的取消标志，execute() 时转交内部子图引擎。
+    std::shared_ptr<std::atomic<bool>> cancelFlag_;
 };
 
 void registerMacroNode(NodeFactory& factory);

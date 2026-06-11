@@ -10,8 +10,10 @@
 #include "workflow/WorkflowSerializer.h"
 #include "workflow/WorkflowValidator.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QRegularExpression>
 #include <QTextStream>
 
@@ -64,6 +66,7 @@ QString parameterTypeLabel(ParameterType type)
     case ParameterType::Color: return "颜色";
     case ParameterType::FileOpen: return "输入文件";
     case ParameterType::FileSave: return "输出文件";
+    case ParameterType::Directory: return "目录";
     }
     return "文本";
 }
@@ -525,12 +528,113 @@ int cmdRestore(const QStringList& args)
     return 0;
 }
 
+// batch：对目录内每张图片套用同一条线性流水线并导出到输出目录。
+// 不依赖 ImageList 的按元素迭代——直接对每个文件复用 buildPipeline（-i 文件 + 操作 + -o 输出），
+// 因此与 pipe 完全同一套操作语义，单图能跑的处理在 batch 里也能跑。
+int cmdBatch(const QStringList& args)
+{
+    QString inputDir;
+    QString outputDir;
+    QString format;       // 输出扩展名（留空则沿用每个文件原扩展名）
+    int maxCount = 0;     // 0 = 不限
+    QStringList opTokens; // 透传给每个文件的处理操作（与 pipe 的 --操作 一致）
+
+    for (int i = 0; i < args.size(); ++i) {
+        const QString& a = args.at(i);
+        auto takeValue = [&](QString& target) {
+            if (i + 1 < args.size()) {
+                target = args.at(++i);
+            }
+        };
+        if (a == "-d" || a == "--dir") {
+            takeValue(inputDir);
+        } else if (a == "-o" || a == "--out") {
+            takeValue(outputDir);
+        } else if (a == "--format") {
+            takeValue(format);
+        } else if (a == "--max") {
+            QString v;
+            takeValue(v);
+            maxCount = v.toInt();
+        } else {
+            opTokens << a; // 操作 flag 与其位置参数原样保留，交给 buildPipeline 解析
+        }
+    }
+
+    if (inputDir.isEmpty() || outputDir.isEmpty()) {
+        err() << "batch 需要 -d <输入目录> 和 -o <输出目录>" << Qt::endl;
+        return 1;
+    }
+    const QDir inDir(inputDir);
+    if (!inDir.exists()) {
+        err() << "输入目录不存在：" << inputDir << Qt::endl;
+        return 2;
+    }
+    QStringList filters;
+    for (const QByteArray& f : QImageReader::supportedImageFormats()) {
+        filters << QString("*.%1").arg(QString::fromLatin1(f).toLower());
+    }
+    QStringList files = inDir.entryList(filters, QDir::Files | QDir::Readable, QDir::Name);
+    if (files.isEmpty()) {
+        err() << "目录中没有可读取的图片：" << inputDir << Qt::endl;
+        return 2;
+    }
+    if (maxCount > 0 && files.size() > maxCount) {
+        files = files.mid(0, maxCount);
+    }
+    QDir outDir(outputDir);
+    if (!outDir.exists() && !outDir.mkpath(".")) {
+        err() << "无法创建输出目录：" << outputDir << Qt::endl;
+        return 2;
+    }
+    const QString ext = format.trimmed().isEmpty() ? QString() : format.trimmed().remove('.').toLower();
+
+    int okCount = 0;
+    int failCount = 0;
+    for (const QString& fileName : files) {
+        const QString inputPath = inDir.absoluteFilePath(fileName);
+        const QFileInfo info(fileName);
+        const QString outName = QString("%1.%2").arg(info.completeBaseName(), ext.isEmpty() ? info.suffix() : ext);
+        const QString outputPath = outDir.absoluteFilePath(outName);
+
+        QStringList tokens;
+        tokens << "-i" << inputPath << opTokens << "-o" << outputPath;
+        WorkflowGraph graph;
+        const auto built = buildPipeline(graph, tokens, nullptr);
+        if (built.isFail()) {
+            err() << "构建流水线失败（" << fileName << "）：" << built.error() << Qt::endl;
+            ++failCount;
+            continue;
+        }
+        const Status valid = WorkflowValidator().validate(graph);
+        if (valid.isFail()) {
+            err() << "校验未通过（" << fileName << "）：" << valid.error() << Qt::endl;
+            ++failCount;
+            continue;
+        }
+        ExecutionEngine engine;
+        const auto result = engine.execute(graph);
+        if (result.isFail()) {
+            err() << "处理失败（" << fileName << "）：" << result.error() << Qt::endl;
+            ++failCount;
+            continue;
+        }
+        out() << fileName << " -> " << outName << Qt::endl;
+        ++okCount;
+    }
+    out() << QString("批量完成：成功 %1，失败 %2，输出目录 %3").arg(okCount).arg(failCount).arg(outDir.absolutePath())
+          << Qt::endl;
+    return failCount == 0 ? 0 : 4;
+}
+
 int cmdHelp(const QStringList&)
 {
     out() << R"(picdeal — 节点式图像处理命令行（与图形界面共用核心与保存历史）
 
 用法：
   picdeal pipe -i 输入 [--操作 [键=值|值]...] -o 输出   ffmpeg 式线性流水线并执行
+  picdeal batch -d 输入目录 -o 输出目录 [--操作 ...] [--format png] [--max N]
+                                                         对目录内每张图片套用同一流水线并批量导出
   picdeal build -i ... [--操作 ...] --save 工作流.json    构建并保存为工作流（可在 GUI 打开）
   picdeal run 工作流.json                                 执行已保存的工作流
   picdeal validate 工作流.json                            仅校验工作流
@@ -552,6 +656,7 @@ int cmdHelp(const QStringList&)
 示例：
   picdeal pipe -i in.png --grayscale --blur 3 --resize 800x600 -o out.png
   picdeal pipe -i a.png --blend b.png opacity=0.4 -o merged.png
+  picdeal batch -d photos -o out --grayscale --resize 1024x768 --format png
   picdeal build -i in.png --brightness 20 contrast=1.2 --save flow.json
   picdeal save flow.json -m "初版" && picdeal log
 )" << Qt::endl;
@@ -562,7 +667,7 @@ int cmdHelp(const QStringList&)
 
 bool CommandLineApp::isSubcommand(const QString& token)
 {
-    static const QStringList subs = {"pipe", "build", "run", "validate", "nodes",
+    static const QStringList subs = {"pipe", "batch", "build", "run", "validate", "nodes",
                                      "save", "log", "restore", "help", "version"};
     return subs.contains(token);
 }
@@ -583,6 +688,7 @@ int CommandLineApp::run(const QStringList& args)
         return 0;
     }
     if (sub == "pipe") return cmdPipe(rest);
+    if (sub == "batch") return cmdBatch(rest);
     if (sub == "build") return cmdBuild(rest);
     if (sub == "run") return cmdRun(rest);
     if (sub == "validate") return cmdValidate(rest);

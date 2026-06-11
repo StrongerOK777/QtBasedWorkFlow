@@ -464,19 +464,60 @@ Result<QImage> hueSaturation(const QImage& image, int hueShift, int saturation, 
     }
     const double satFactor = 1.0 + saturation / 100.0;
     const double lightFactor = 1.0 + lightness / 100.0;
+
+    // 内联 RGB↔HSL 浮点转换，避免逐像素构造两次 QColor 的开销（大图约可快一个数量级）。
+    auto hueToChannel = [](double p, double q, double t) {
+        if (t < 0.0) t += 1.0;
+        if (t > 1.0) t -= 1.0;
+        if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+        if (t < 0.5) return q;
+        if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+        return p;
+    };
+
     QImage out = image.convertToFormat(QImage::Format_ARGB32);
     for (int y = 0; y < out.height(); ++y) {
         auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
         for (int x = 0; x < out.width(); ++x) {
-            const QColor c = QColor::fromRgba(line[x]);
-            int h = 0, s = 0, l = 0, a = 0;
-            c.getHsl(&h, &s, &l, &a);
-            if (h >= 0) {
-                h = (h + hueShift + 360) % 360;
+            const QRgb pixel = line[x];
+            const double rf = qRed(pixel) / 255.0;
+            const double gf = qGreen(pixel) / 255.0;
+            const double bf = qBlue(pixel) / 255.0;
+            const double maxc = std::max({rf, gf, bf});
+            const double minc = std::min({rf, gf, bf});
+
+            // RGB → HSL
+            double h = 0.0;
+            double s = 0.0;
+            double l = (maxc + minc) / 2.0;
+            const double delta = maxc - minc;
+            if (delta > 0.0) {
+                s = l > 0.5 ? delta / (2.0 - maxc - minc) : delta / (maxc + minc);
+                if (maxc == rf) {
+                    h = 60.0 * std::fmod((gf - bf) / delta + 6.0, 6.0);
+                } else if (maxc == gf) {
+                    h = 60.0 * ((bf - rf) / delta + 2.0);
+                } else {
+                    h = 60.0 * ((rf - gf) / delta + 4.0);
+                }
+                h = std::fmod(h + hueShift + 360.0, 360.0);
             }
-            s = std::max(0, std::min(255, int(s * satFactor)));
-            l = std::max(0, std::min(255, int(l * lightFactor)));
-            line[x] = QColor::fromHsl(h, s, l, a).rgba();
+            s = std::min(1.0, std::max(0.0, s * satFactor));
+            l = std::min(1.0, std::max(0.0, l * lightFactor));
+
+            // HSL → RGB
+            int r8, g8, b8;
+            if (s <= 0.0) {
+                r8 = g8 = b8 = clampByte(int(std::lround(l * 255.0)));
+            } else {
+                const double q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+                const double p = 2.0 * l - q;
+                const double hk = h / 360.0;
+                r8 = clampByte(int(std::lround(hueToChannel(p, q, hk + 1.0 / 3.0) * 255.0)));
+                g8 = clampByte(int(std::lround(hueToChannel(p, q, hk) * 255.0)));
+                b8 = clampByte(int(std::lround(hueToChannel(p, q, hk - 1.0 / 3.0) * 255.0)));
+            }
+            line[x] = qRgba(r8, g8, b8, qAlpha(pixel));
         }
     }
     return Result<QImage>::ok(out);
@@ -602,6 +643,35 @@ Result<QImage> imageOverlay(const QImage& base, const QImage& overlay, const QSt
     painter.setOpacity(opacity);
     painter.drawImage(pos, top);
     return Result<QImage>::ok(out);
+}
+
+Result<QVector<QImage>> gridSplit(const QImage& image, int rows, int columns)
+{
+    auto valid = requireImage(image);
+    if (valid.isFail()) return Result<QVector<QImage>>::fail(valid.error());
+    if (rows < 1 || rows > 3 || columns < 1 || columns > 3) {
+        return Result<QVector<QImage>>::fail("切分行列数必须在 1 到 3 之间");
+    }
+    const QImage src = image.convertToFormat(QImage::Format_ARGB32);
+    if (src.width() < columns || src.height() < rows) {
+        return Result<QVector<QImage>>::fail(QString("图片尺寸 %1x%2 不足以切成 %3x%4 网格")
+                                                 .arg(src.width()).arg(src.height()).arg(rows).arg(columns));
+    }
+    QVector<QImage> cells;
+    cells.reserve(rows * columns);
+    // 均匀切分；除不尽的余数并入最后一行/列，保证像素全覆盖且不重叠。
+    const int cellWidth = src.width() / columns;
+    const int cellHeight = src.height() / rows;
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            const int x = column * cellWidth;
+            const int y = row * cellHeight;
+            const int w = (column == columns - 1) ? src.width() - x : cellWidth;
+            const int h = (row == rows - 1) ? src.height() - y : cellHeight;
+            cells.append(src.copy(x, y, w, h));
+        }
+    }
+    return Result<QVector<QImage>>::ok(cells);
 }
 
 Result<QImage> pixelate(const QImage& image, int blockSize)

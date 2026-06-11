@@ -6,6 +6,7 @@
 #include "workflow/WorkflowValidator.h"
 
 #include <QCryptographicHash>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QImage>
@@ -42,6 +43,28 @@ QString inputFileIdentity(const QJsonObject& params)
     return parts.join("|");
 }
 
+// 批量读入节点的目录内容签名：目录里文件的名字 / 大小 / 修改时间任一变化都会改变签名，
+// 让本节点及下游缓存正确失效（与 ImageInput 的单文件签名同思路）。
+QString folderInputIdentity(const QJsonObject& params)
+{
+    const QString dirPath = params.value("dirPath").toString();
+    if (dirPath.isEmpty()) {
+        return "dir=";
+    }
+    const QDir dir(dirPath);
+    QStringList parts;
+    parts << QString("dir=%1").arg(dir.absolutePath());
+    parts << QString("exists=%1").arg(dir.exists() ? "1" : "0");
+    if (dir.exists()) {
+        const QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Readable, QDir::Name);
+        for (const QFileInfo& info : entries) {
+            parts << QString("%1:%2:%3").arg(info.fileName()).arg(info.size())
+                         .arg(info.lastModified().toMSecsSinceEpoch());
+        }
+    }
+    return parts.join("|");
+}
+
 QString nodeSignature(const QString& nodeId, const QSharedPointer<ImageNode>& node, const QStringList& inputParts)
 {
     QStringList parts;
@@ -52,6 +75,9 @@ QString nodeSignature(const QString& nodeId, const QSharedPointer<ImageNode>& no
     if (node->typeName() == "ImageInput") {
         parts << inputFileIdentity(params);
     }
+    if (node->typeName() == "FolderInput") {
+        parts << folderInputIdentity(params);
+    }
     parts << inputParts;
     const QByteArray bytes = parts.join("\n").toUtf8();
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
@@ -61,8 +87,13 @@ quint64 outputsBytes(const QMap<QString, NodeData>& outputs)
 {
     quint64 bytes = 0;
     for (auto it = outputs.cbegin(); it != outputs.cend(); ++it) {
-        if (it.value().value.canConvert<QImage>()) {
-            const QImage image = it.value().value.value<QImage>();
+        const QVariant& value = it.value().value;
+        if (it.value().type == PortType::ImageList) {
+            for (const QImage& image : value.value<QList<QImage>>()) {
+                bytes += quint64(image.sizeInBytes());
+            }
+        } else if (value.canConvert<QImage>()) {
+            const QImage image = value.value<QImage>();
             bytes += quint64(image.sizeInBytes());
         } else {
             bytes += 64; // 非图片数据按小常量估算
@@ -75,7 +106,13 @@ QString nodeDataSignature(const NodeData& data)
 {
     QStringList parts;
     parts << QString("type=%1").arg(portTypeName(data.type));
-    if (data.value.canConvert<QImage>()) {
+    if (data.type == PortType::ImageList) {
+        const QList<QImage> images = data.value.value<QList<QImage>>();
+        parts << QString("count=%1").arg(images.size());
+        for (const QImage& image : images) {
+            parts << QString("%1x%2:%3").arg(image.width()).arg(image.height()).arg(image.cacheKey());
+        }
+    } else if (data.value.canConvert<QImage>()) {
         const QImage image = data.value.value<QImage>();
         parts << QString("image=%1x%2:%3").arg(image.width()).arg(image.height()).arg(image.cacheKey());
     } else {
@@ -260,6 +297,8 @@ Result<ExecutionResult> ExecutionEngine::executeOrderedNodes(const WorkflowGraph
             }
 
             result.log.append(QString("执行节点 %1").arg(nodeLabel));
+            // 把本次执行的取消标志传给节点（宏节点会转交内部引擎，实现取消传播）。
+            node->onExecutionContext(cancelFlag_);
             jobs.push_back(Job{nodeId,
                                node->displayName(),
                                signature,

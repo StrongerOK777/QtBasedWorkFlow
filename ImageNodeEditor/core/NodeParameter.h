@@ -10,6 +10,7 @@ enum class ParameterType {
     Text,
     FileOpen,
     FileSave,
+    Directory,
     Choice,
     Boolean,
     Color

@@ -20,6 +20,68 @@
 
 ## 记录条目
 
+### 2026-06-11 / picdeal 批量子命令阶段
+
+类型：新增
+
+概述：
+按 plan.md 可选项实施命令行批量处理：新增 `picdeal batch -d 输入目录 -o 输出目录 [--操作 ...] [--format png] [--max N]`，对目录内每张图片套用同一条线性流水线并导出到输出目录。实现上不依赖 ImageList 的按元素迭代——直接对每个文件复用既有 `buildPipeline`（`-i 文件 + 操作 + -o 输出`），因此与 `pipe` 完全同一套操作语义（grayscale/blur/resize/hsl/sharpen/... 单图能跑的在 batch 里都能跑）；输出文件名沿用原名（可用 `--format` 改扩展名），逐文件校验+执行，末尾汇总「成功 N 失败 M」，任一失败返回码非零但不中断其余文件。
+
+影响范围：
+`app/CommandLineApp.cpp`（新增 `cmdBatch`、`isSubcommand` 加 "batch"、dispatch 分支、help/示例文案、补 `<QDir>`/`<QImageReader>` 头）。未改 GUI / third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动；CLI 与 GUI 仍共用 `WorkflowGraph`/`ExecutionEngine`/`WorkflowValidator` 核心。
+
+处理方式：
+batch 控制 flag（`-d/--dir`、`-o/--out`、`--format`、`--max`）在 cmdBatch 内先行剥离，其余 token 原样作为「操作序列」透传给每个文件的 `buildPipeline`，故操作顺序与参数解析与 pipe 一致、零重复实现。目录用 `QImageReader::supportedImageFormats()` 过滤、按文件名排序，`--max` 截断。
+
+当前状态：
+待验证（随本轮一并跑 `verify_build.bat`：构建 + `picdeal batch` 冒烟）。
+
+后续注意：
+batch 是「每图独立线性流水线」，不支持分支/汇合或跨图操作（如把整个目录拼成一张大图）——后者用 GUI 的 FolderInput→ListMerge，或后续单独子命令。GUI 侧「对 ImageList 每张应用子图/宏」仍列在 plan.md 可选项。
+
+---
+
+### 2026-06-11 / 第三批增强：ImageList 批量节点族与对齐参考线吸附阶段
+
+类型：新增 / 修改
+
+概述：
+按 plan.md 继续实施两项：1) ImageList 数据类型落地为「批量处理」节点类别——新增 批量读入 FolderInput（目录 + 数量上限 → 图片列表，按文件名排序，坏图/空目录明确报错）、列表取图 ListPick（1 起序号，越界报错）、列表拼接 ListMerge（横/纵/网格 + 列数 + 背景色，复用 merge 算法）、批量导出 ListExport（目录 + 前缀 + png/jpg，自动建目录、按 _01 序号命名、不可缓存）；新增参数类型 `ParameterType::Directory`（节点内参数面板提供目录选择按钮，序列化层把 dirPath/outputDir 也按 workflow 目录做相对路径解析与保存，CLI 按文本透传）；执行引擎为 FolderInput 增加目录内容签名（文件名/大小/mtime 任一变化即失效本节点及下游缓存，与 ImageInput 单文件签名同思路），缓存字节估算与外部输入签名补 QList<QImage> 分支。2) 拖动节点松开时吸附到对齐参考线——与拖动中虚线参考线呼应，按其他节点 左/中/右、上/中/下 共 6 类候选取最近增量（阈值 6px，逐轴独立），设置页「画布 › 节点排列」新增开关（默认开）；网格吸附只作用于未被参考线吸附的轴。tests 补 5 个批量节点用例（含目录变化使缓存失效的回归）与 dirPath/outputDir 相对路径解析用例。
+
+影响范围：
+`core/NodeParameter.h`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.cpp`、`workflow/WorkflowSerializer.cpp`、`gui/WorkflowNodeDelegate.cpp`、`gui/MainWindow.cpp`、`app/CommandLineApp.cpp`（参数类型标签）、`tests/test_nodes.cpp`、`tests/test_workflow_json.cpp`。未改 third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动。
+
+处理方式：
+ImageList 端口数据容器为 `QList<QImage>`（Qt6 对 QList<T> 自动注册元类型，QVariant 直接装取）；端口类型矩阵不变（列表只连列表），GUI 侧 dataType id "image-list" 已有映射与青色着色。新类别「批量处理」走 categoryColor/categoryShapePath 的默认分支（默认蓝 + 圆角矩形）。吸附计算用 `nodeItems_` 的 sceneBoundingRect 求尺寸，候选增量逐轴取最小绝对值，命中即平移目标位置，沿用既有「快照命令跳过首次 redo 时显式回写 + 重建」路径。
+
+当前状态：
+待验证（与第二批一并跑 verify_build.bat + GUI 确认；用例已覆盖核心行为）。
+
+后续注意：
+FolderInput 目录签名按目录直接子文件计算（不递归），与读取行为一致。批量逐图应用子图、picdeal 批量子命令列入 plan.md 可选项。「批量处理」类别如需专属类别色/外形，在 AppTheme::categoryColor 与 painter 的 categoryShapePath 各加一分支即可。
+
+---
+
+### 2026-06-11 / 第二批增强：HSL 提速、取消传播、九宫格切分、对齐线与端口提示阶段
+
+类型：修改 / 新增
+
+概述：
+按 plan.md 可选增强继续实施五项：1) `hueSaturation` 去掉逐像素两次 QColor 构造，改内联浮点 RGB↔HSL 转换（大图约快一个数量级）；2) 取消令牌传播进宏节点——`ImageNode` 新增虚函数 `onExecutionContext(cancelFlag)`（默认空实现），引擎调度节点前注入，`MacroNode` 转交内部子图引擎，「取消执行」现在能停止宏内部未调度节点；3) 新增「九宫格切分 GridSplit」节点（几何变换类，固定 cell1..cell9 九个输出口，rows/columns 1–3，行优先编号，余数并入末行/列；超出 rows*columns 的端口无输出，下游连接会得到明确的「上游输出不存在」错误）；4) 拖动节点时实时显示与其他节点左/中/右、上/中/下的虚线对齐参考线（阈值 5px，限 6 条，松开/提交即清除）；5) 鼠标悬停端口圆点显示「方向 + 端口名 + 数据类型」提示。tests/test_nodes.cpp 同步补 gridSplit 像素覆盖、节点输出口与 HSL 恒等回归用例。
+
+影响范围：
+`processing/ImageProcessors.{h,cpp}`、`nodes/ImageNode.{h,cpp}`、`nodes/MacroNode.{h,cpp}`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.cpp`、`gui/WorkflowCanvas.cpp`、`tests/test_nodes.cpp`。未改 third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动。
+
+处理方式：
+对齐线画在 `WorkflowGraphicsView::drawForeground`（cosmetic 虚线、取主题 accent 色），数据来自 `BasicGraphicsScene::nodeMoved` 信号实时计算；端口悬停在 view 的 `mouseMoveEvent` 中按 `portScenePosition` 距离命中，经 `QToolTip` 显示，文案取 `PortRole::Caption` 与 `NodeDataType.name`（中文）。`onExecutionContext` 在引擎线程于 async 派发前调用，宏节点成员写入先行于工作线程读取。
+
+当前状态：
+待验证。上一批（性能/健壮性/界面/节点四方向）已在用户 VS 构建实测「生成: 1 成功, 0 失败」且程序正常启动；verify_build.bat 全量重编所有源文件零错误，仅链接因正在运行的程序实例占用 exe 失败（LNK1104，环境占用而非代码问题）。本批改动需关闭运行中实例后重跑 verify_build.bat 确认构建 + ctest + CLI 冒烟。
+
+后续注意：
+对齐参考线目前只做视觉提示，不吸附；网格吸附仍按设置页开关在松开时生效。GridSplit 的 9 个输出口是固定声明，画布上始终可见 9 个口，属设计取舍（QtNodes 动态端口重建成本高）。
+---
+
 ### 2026-06-11 / 仓库整洁化：本地开发文件不入库阶段
 
 类型：修改

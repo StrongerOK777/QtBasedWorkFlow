@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageReader>
 #include <QJsonValue>
 #include <QPainter>
 #include <QSharedPointer>
@@ -57,6 +58,33 @@ Result<OutputMap> imageOutput(const QImage& image)
     return Result<OutputMap>::ok(OutputMap{{"output", NodeData{PortType::ImageRGBA, QVariant::fromValue(image)}}});
 }
 
+// 图片列表输入：ImageList 端口的数据容器为 QList<QImage>（Qt6 对 QList<T> 自动注册元类型）。
+Result<QList<QImage>> inputImageList(const QMap<QString, NodeData>& inputs, const QString& port)
+{
+    if (!inputs.contains(port)) {
+        return Result<QList<QImage>>::fail(QString("缺少输入端口：%1").arg(port));
+    }
+    const NodeData data = inputs.value(port);
+    if (data.type != PortType::ImageList) {
+        return Result<QList<QImage>>::fail(QString("输入端口 %1 类型不兼容（需要图片列表）").arg(port));
+    }
+    const QList<QImage> images = data.value.value<QList<QImage>>();
+    if (images.isEmpty()) {
+        return Result<QList<QImage>>::fail(QString("输入端口 %1 的图片列表为空").arg(port));
+    }
+    return Result<QList<QImage>>::ok(images);
+}
+
+// 目录中按文件名排序列出 Qt 可读取的图片文件。
+QStringList listImageFiles(const QDir& dir)
+{
+    QStringList filters;
+    for (const QByteArray& format : QImageReader::supportedImageFormats()) {
+        filters.append(QString("*.%1").arg(QString::fromLatin1(format).toLower()));
+    }
+    return dir.entryList(filters, QDir::Files | QDir::Readable, QDir::Name);
+}
+
 class SimpleNode final : public ImageNode {
 public:
     SimpleNode(QString typeName, QString displayName, QVector<PortInfo> inputs, QVector<PortInfo> outputs,
@@ -100,7 +128,8 @@ public:
                 }
             }
             if ((p.type == ParameterType::Text || p.type == ParameterType::FileOpen || p.type == ParameterType::FileSave
-                 || p.type == ParameterType::Choice || p.type == ParameterType::Color) && !value.isString()) {
+                 || p.type == ParameterType::Directory || p.type == ParameterType::Choice
+                 || p.type == ParameterType::Color) && !value.isString()) {
                 return Status::fail(QString("%1 参数必须是字符串").arg(p.displayName));
             }
             if (p.type == ParameterType::Choice && !p.options.isEmpty() && !p.options.contains(value.toString())) {
@@ -465,4 +494,134 @@ void registerBasicNodes(NodeFactory& factory)
                      if (result.isFail()) return Result<OutputMap>::fail(result.error());
                      return imageOutput(result.value());
                  });
+
+    // 九宫格切分：固定提供 9 个输出口（cell1..cell9，按行优先编号）。
+    // 实际行列由参数决定，超出 rows*columns 的端口没有输出；
+    // 下游若连接了这些端口，执行时会得到「上游输出不存在」的明确错误。
+    {
+        QVector<PortInfo> cellOutputs;
+        for (int i = 1; i <= 9; ++i) {
+            cellOutputs.append(out(QString("cell%1").arg(i), QString("单元格 %1").arg(i)));
+        }
+        registerNode(factory, "GridSplit", "九宫格切分", "几何变换", {in("image", "图片")}, cellOutputs,
+                     {param("rows", "行数", ParameterType::Integer, 3, 1, 3),
+                      param("columns", "列数", ParameterType::Integer, 3, 1, 3)},
+                     [](const QJsonObject& p, const QMap<QString, NodeData>& inputs) {
+                         auto img = inputImage(inputs, "image");
+                         if (img.isFail()) return Result<OutputMap>::fail(img.error());
+                         auto result = ImageProcessors::gridSplit(img.value(), p.value("rows").toInt(),
+                                                                  p.value("columns").toInt());
+                         if (result.isFail()) return Result<OutputMap>::fail(result.error());
+                         OutputMap outputs;
+                         const auto& cells = result.value();
+                         for (int i = 0; i < cells.size(); ++i) {
+                             outputs.insert(QString("cell%1").arg(i + 1),
+                                            NodeData{PortType::ImageRGBA, QVariant::fromValue(cells[i])});
+                         }
+                         return Result<OutputMap>::ok(outputs);
+                     });
+    }
+
+    // ---- 批量处理（ImageList 数据类型）----
+    // 列表端口只能连接列表端口（类型矩阵不做隐式转换），用「列表取图」回到单图管线。
+
+    registerNode(factory, "FolderInput", "批量读入", "批量处理", {},
+                 {out("images", "图片列表", PortType::ImageList)},
+                 {param("dirPath", "图片目录", ParameterType::Directory, QString()),
+                  param("maxCount", "数量上限", ParameterType::Integer, 16, 1, 64)},
+                 [](const QJsonObject& p, const QMap<QString, NodeData>&) {
+                     const QString dirPath = p.value("dirPath").toString();
+                     if (dirPath.isEmpty()) {
+                         return Result<OutputMap>::fail("批量读入节点缺少图片目录");
+                     }
+                     const QDir dir(dirPath);
+                     if (!dir.exists()) {
+                         return Result<OutputMap>::fail(QString("图片目录不存在：%1").arg(dirPath));
+                     }
+                     const int maxCount = p.value("maxCount").toInt();
+                     QList<QImage> images;
+                     for (const QString& fileName : listImageFiles(dir)) {
+                         if (images.size() >= maxCount) {
+                             break;
+                         }
+                         const QString filePath = dir.absoluteFilePath(fileName);
+                         QImage image(filePath);
+                         if (image.isNull()) {
+                             return Result<OutputMap>::fail(QString("无法读取图片：%1").arg(filePath));
+                         }
+                         images.append(image.convertToFormat(QImage::Format_ARGB32));
+                     }
+                     if (images.isEmpty()) {
+                         return Result<OutputMap>::fail(QString("目录中没有可读取的图片：%1").arg(dirPath));
+                     }
+                     return Result<OutputMap>::ok(OutputMap{
+                         {"images", NodeData{PortType::ImageList, QVariant::fromValue(images)}}});
+                 });
+
+    registerNode(factory, "ListPick", "列表取图", "批量处理",
+                 {in("images", "图片列表", true, PortType::ImageList)}, {out()},
+                 {param("index", "序号(从1起)", ParameterType::Integer, 1, 1, 64)},
+                 [](const QJsonObject& p, const QMap<QString, NodeData>& inputs) {
+                     auto images = inputImageList(inputs, "images");
+                     if (images.isFail()) return Result<OutputMap>::fail(images.error());
+                     const int index = p.value("index").toInt();
+                     if (index < 1 || index > images.value().size()) {
+                         return Result<OutputMap>::fail(QString("列表取图序号越界：列表共 %1 张，请求第 %2 张")
+                                                            .arg(images.value().size())
+                                                            .arg(index));
+                     }
+                     return imageOutput(images.value().at(index - 1));
+                 });
+
+    registerNode(factory, "ListMerge", "列表拼接", "批量处理",
+                 {in("images", "图片列表", true, PortType::ImageList)}, {out()},
+                 {param("mode", "布局", ParameterType::Choice, QString("grid"), 0, 0,
+                        {"horizontal", "vertical", "grid"}),
+                  param("columns", "网格列数", ParameterType::Integer, 3, 1, 9),
+                  param("background", "背景色", ParameterType::Color, QString("#00000000"))},
+                 [](const QJsonObject& p, const QMap<QString, NodeData>& inputs) {
+                     auto images = inputImageList(inputs, "images");
+                     if (images.isFail()) return Result<OutputMap>::fail(images.error());
+                     QVector<QImage> vector;
+                     vector.reserve(images.value().size());
+                     for (const QImage& image : images.value()) {
+                         vector.append(image);
+                     }
+                     auto result = ImageProcessors::merge(vector, p.value("mode").toString(),
+                                                          p.value("columns").toInt(),
+                                                          QColor::fromString(p.value("background").toString()));
+                     if (result.isFail()) return Result<OutputMap>::fail(result.error());
+                     return imageOutput(result.value());
+                 });
+
+    registerNode(factory, "ListExport", "批量导出", "批量处理",
+                 {in("images", "图片列表", true, PortType::ImageList)}, {},
+                 {param("outputDir", "导出目录", ParameterType::Directory, QString("output")),
+                  param("baseName", "文件名前缀", ParameterType::Text, QString("image")),
+                  param("format", "格式", ParameterType::Choice, QString("png"), 0, 0, {"png", "jpg"})},
+                 [](const QJsonObject& p, const QMap<QString, NodeData>& inputs) {
+                     auto images = inputImageList(inputs, "images");
+                     if (images.isFail()) return Result<OutputMap>::fail(images.error());
+                     const QString outputDir = p.value("outputDir").toString();
+                     if (outputDir.isEmpty()) {
+                         return Result<OutputMap>::fail("批量导出节点缺少导出目录");
+                     }
+                     QDir dir(outputDir);
+                     if (!dir.exists() && !dir.mkpath(".")) {
+                         return Result<OutputMap>::fail(QString("无法创建导出目录：%1").arg(dir.absolutePath()));
+                     }
+                     const QString baseName = p.value("baseName").toString().trimmed().isEmpty()
+                                                  ? QString("image")
+                                                  : p.value("baseName").toString().trimmed();
+                     const QString format = p.value("format").toString();
+                     for (int i = 0; i < images.value().size(); ++i) {
+                         const QString filePath = dir.absoluteFilePath(
+                             QString("%1_%2.%3").arg(baseName).arg(i + 1, 2, 10, QChar('0')).arg(format));
+                         if (!images.value().at(i).save(filePath)) {
+                             return Result<OutputMap>::fail(QString("图片保存失败：%1").arg(filePath));
+                         }
+                     }
+                     return Result<OutputMap>::ok(OutputMap{});
+                 },
+                 false);
 }

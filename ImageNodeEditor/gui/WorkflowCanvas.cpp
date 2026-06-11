@@ -31,12 +31,14 @@
 #include <QDropEvent>
 #include <QImageReader>
 #include <QKeyEvent>
+#include <QLineF>
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
 #include <QScrollBar>
 #include <QTimer>
+#include <QToolTip>
 #include <QUrl>
 #include <QVariant>
 #include <QWheelEvent>
@@ -300,6 +302,19 @@ public:
           filesDropped_(std::move(filesDropped))
     {
         setAcceptDrops(true);
+        setMouseTracking(true);  // 端口悬停提示需要无按键的 mouseMoveEvent
+    }
+
+    // ---- 拖动节点时的对齐辅助线 ----
+    void setAlignmentGuides(QVector<QLineF> guides)
+    {
+        if (guides == alignmentGuides_) {
+            return;
+        }
+        alignmentGuides_ = std::move(guides);
+        if (viewport()) {
+            viewport()->update();
+        }
     }
 
     void onDeleteSelectedObjects() override
@@ -318,13 +333,96 @@ public:
 
     void clearTransientItems()
     {
-        // 已无落点预测框等临时图元，保留为空操作以兼容 rebuild() 的调用点。
+        setAlignmentGuides({});
     }
 
 protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override
     {
         paintCanvasGrid(painter, rect, uiScale_ ? *uiScale_ : 1.0);
+    }
+
+    void drawForeground(QPainter* painter, const QRectF& rect) override
+    {
+        QtNodes::GraphicsView::drawForeground(painter, rect);
+        if (alignmentGuides_.isEmpty()) {
+            return;
+        }
+        painter->save();
+        QPen pen(AppTheme::palette().accent, 0);  // 宽度 0 = cosmetic，缩放下保持 1px
+        pen.setStyle(Qt::DashLine);
+        painter->setPen(pen);
+        for (const QLineF& guide : alignmentGuides_) {
+            painter->drawLine(guide);
+        }
+        painter->restore();
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        QtNodes::GraphicsView::mouseReleaseEvent(event);
+        setAlignmentGuides({});
+    }
+
+    // 端口悬停提示：鼠标靠近端口圆点时显示「方向 + 端口名 + 数据类型」。
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        QtNodes::GraphicsView::mouseMoveEvent(event);
+        if (event->buttons() != Qt::NoButton || !nodeScene()) {
+            return;
+        }
+        const QPointF scenePos = mapToScene(event->position().toPoint());
+        auto& graphModel = nodeScene()->graphModel();
+        auto& geometry = nodeScene()->nodeGeometry();
+        const double hitRadius = QtNodes::StyleCollection::connectionStyle().pointDiameter() / 2.0 + 4.0;
+
+        QString tooltip;
+        const QList<QGraphicsItem*> hits = items(event->position().toPoint());
+        for (QGraphicsItem* item : hits) {
+            auto* nodeObject = dynamic_cast<QtNodes::NodeGraphicsObject*>(item);
+            if (!nodeObject) {
+                continue;
+            }
+            const auto nodeId = nodeObject->nodeId();
+            for (auto portType : {QtNodes::PortType::In, QtNodes::PortType::Out}) {
+                const auto countRole = portType == QtNodes::PortType::In ? QtNodes::NodeRole::InPortCount
+                                                                         : QtNodes::NodeRole::OutPortCount;
+                const unsigned int count = graphModel.nodeData(nodeId, countRole).toUInt();
+                for (unsigned int i = 0; i < count; ++i) {
+                    const QPointF portPos =
+                        geometry.portScenePosition(nodeId, portType, i, nodeObject->sceneTransform());
+                    if (QLineF(portPos, scenePos).length() > hitRadius) {
+                        continue;
+                    }
+                    const QString caption =
+                        graphModel.portData(nodeId, portType, i, QtNodes::PortRole::Caption).toString();
+                    const auto dataType = graphModel.portData(nodeId, portType, i, QtNodes::PortRole::DataType)
+                                              .value<QtNodes::NodeDataType>();
+                    tooltip = QString("%1端口「%2」 · 数据类型：%3")
+                                  .arg(portType == QtNodes::PortType::In ? "输入" : "输出",
+                                       caption.isEmpty() ? dataType.name : caption,
+                                       dataType.name);
+                    break;
+                }
+                if (!tooltip.isEmpty()) {
+                    break;
+                }
+            }
+            if (!tooltip.isEmpty()) {
+                break;
+            }
+        }
+
+        if (tooltip.isEmpty()) {
+            if (!portTooltipVisible_) {
+                return;
+            }
+            portTooltipVisible_ = false;
+            QToolTip::hideText();
+            return;
+        }
+        portTooltipVisible_ = true;
+        QToolTip::showText(viewport()->mapToGlobal(event->position().toPoint()), tooltip, viewport());
     }
 
     void keyPressEvent(QKeyEvent* event) override
@@ -441,6 +539,8 @@ private:
     std::function<void(const QString&, const QPointF&)> nodeDropped_;
     std::function<void(double)> wheelZoomRequested_;
     std::function<void(const QStringList&, const QPointF&)> filesDropped_;
+    QVector<QLineF> alignmentGuides_;
+    bool portTooltipVisible_ = false;
 };
 
 class WorkflowGraphicsScene final : public QtNodes::DataFlowGraphicsScene {
@@ -758,8 +858,58 @@ void WorkflowCanvas::connectSceneCallbacks()
             callbacks_.nodeDoubleClicked(qtToWorkflowNode_.value(nodeId));
         }
     });
+    // 拖动过程中实时计算与其他节点的对齐辅助线（左/中/右、上/中/下，阈值内画虚线）。
+    QObject::connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeMoved, owner_,
+                     [this](QtNodes::NodeId nodeId, const QPointF& newLocation) {
+        auto* view = static_cast<WorkflowGraphicsView*>(view_);
+        if (syncing_ || !scene_ || !view) {
+            return;
+        }
+        constexpr double kSnapThreshold = 5.0;
+        const QSizeF movingSize = scene_->nodeGeometry().size(nodeId);
+        const QRectF moving(newLocation, movingSize);
+        const double movingXs[] = {moving.left(), moving.center().x(), moving.right()};
+        const double movingYs[] = {moving.top(), moving.center().y(), moving.bottom()};
+
+        QVector<QLineF> guides;
+        for (auto it = workflowToQtNode_.cbegin(); it != workflowToQtNode_.cend(); ++it) {
+            if (it.value() == nodeId) {
+                continue;
+            }
+            auto* other = scene_->nodeGraphicsObject(it.value());
+            if (!other) {
+                continue;
+            }
+            const QRectF rect(other->pos(), scene_->nodeGeometry().size(it.value()));
+            const double otherXs[] = {rect.left(), rect.center().x(), rect.right()};
+            const double otherYs[] = {rect.top(), rect.center().y(), rect.bottom()};
+            for (double mx : movingXs) {
+                for (double ox : otherXs) {
+                    if (std::abs(mx - ox) <= kSnapThreshold) {
+                        const double top = std::min(moving.top(), rect.top()) - 24.0;
+                        const double bottom = std::max(moving.bottom(), rect.bottom()) + 24.0;
+                        guides.append(QLineF(ox, top, ox, bottom));
+                    }
+                }
+            }
+            for (double my : movingYs) {
+                for (double oy : otherYs) {
+                    if (std::abs(my - oy) <= kSnapThreshold) {
+                        const double left = std::min(moving.left(), rect.left()) - 24.0;
+                        const double right = std::max(moving.right(), rect.right()) + 24.0;
+                        guides.append(QLineF(left, oy, right, oy));
+                    }
+                }
+            }
+            if (guides.size() >= 6) {
+                break;  // 限制数量，避免密集图上画满参考线
+            }
+        }
+        view->setAlignmentGuides(std::move(guides));
+    });
     QObject::connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeClicked, owner_,
                      [this](QtNodes::NodeId nodeId) {
+        static_cast<WorkflowGraphicsView*>(view_)->setAlignmentGuides({});
         if (syncing_ || !graph_ || !callbacks_.nodeMoved) {
             return;
         }

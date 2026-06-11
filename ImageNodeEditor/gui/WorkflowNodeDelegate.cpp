@@ -354,7 +354,7 @@ QWidget* WorkflowNodeDelegate::makeParameterEditor(const NodeParameter& paramete
     edit->setText(value.toString());
     layout->addWidget(edit);
     if (parameter.type == ParameterType::FileOpen || parameter.type == ParameterType::FileSave ||
-        parameter.type == ParameterType::Color) {
+        parameter.type == ParameterType::Directory || parameter.type == ParameterType::Color) {
         auto* button = new QPushButton("...");
         button->setFixedWidth(AppTheme::px(26, uiScale_));
         layout->addWidget(button);
@@ -364,6 +364,8 @@ QWidget* WorkflowNodeDelegate::makeParameterEditor(const NodeParameter& paramete
                 next = QFileDialog::getOpenFileName(edit, "选择图片", {}, "图片 (*.png *.jpg *.jpeg *.bmp *.webp);;所有文件 (*)");
             } else if (parameter.type == ParameterType::FileSave) {
                 next = QFileDialog::getSaveFileName(edit, "选择导出路径", edit->text(), "PNG 图片 (*.png);;JPEG 图片 (*.jpg);;所有文件 (*)");
+            } else if (parameter.type == ParameterType::Directory) {
+                next = QFileDialog::getExistingDirectory(edit, "选择目录", edit->text());
             } else {
                 const QColor color = QColorDialog::getColor(QColor(edit->text()), edit);
                 if (color.isValid()) {

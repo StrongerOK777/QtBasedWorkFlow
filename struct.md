@@ -91,7 +91,7 @@ ImageNodeEditor/app/
 
 职责：
 
-- 解析并调度 picdeal 子命令：`pipe`（ffmpeg 式线性流水线并执行）、`build`（构建并存为 workflow.json）、
+- 解析并调度 picdeal 子命令：`pipe`（ffmpeg 式线性流水线并执行）、`batch`（对目录内每张图片套用同一流水线并批量导出，复用 `buildPipeline` 逐文件执行）、`build`（构建并存为 workflow.json）、
   `run`、`validate`、`nodes`（列出节点与参数）、`save`/`log`/`restore`（类 git 的保存历史回溯）、`help`/`version`。
 - 把 `--操作 [键=值|值]` 映射为节点并用 `setParameter` 设参；ImageInput/Output 文件路径转绝对路径再存。
 - 与 GUI 共用核心（`NodeFactory`/`WorkflowGraph`/`ExecutionEngine`/`WorkflowSerializer`/`WorkflowValidator`）
@@ -259,6 +259,7 @@ ImageNodeEditor/nodes/
 - `TextOverlayNode`：在图片上绘制文字。
 - `BlendNode`：接收两张图片并按透明度混合，用于分支汇合。
 - `ImageMergeNode`：接收多张图片并横向、纵向或网格拼接。
+- 批量处理类（ImageList 数据类型，端口仅与同类互连）：`FolderInput` 按目录批量读入为图片列表；`ListPick` 从列表取第 N 张回到单图管线；`ListMerge` 把列表拼接为单图；`ListExport` 把列表按序号批量保存到目录。目录类参数使用 `ParameterType::Directory`，序列化时与文件路径一样按 workflow 目录处理相对路径。
 
 节点类不应该做：
 

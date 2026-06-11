@@ -61,7 +61,7 @@ Result<WorkflowGraph> WorkflowSerializer::fromJson(const QByteArray& bytes, cons
         auto created = factory.create(type);
         if (created.isFail()) return Result<WorkflowGraph>::fail(created.error());
         QJsonObject params = n.value("params").toObject();
-        for (const QString& key : {"filePath", "outputPath"}) {
+        for (const QString& key : {"filePath", "outputPath", "dirPath", "outputDir"}) {
             if (params.contains(key) && params.value(key).isString()) {
                 params.insert(key, PathUtils::resolveAgainstFile(params.value(key).toString(), workflowFile));
             }
@@ -95,7 +95,7 @@ Result<QByteArray> WorkflowSerializer::toJson(const WorkflowGraph& graph, const 
         n.insert("x", record.position.x());
         n.insert("y", record.position.y());
         QJsonObject params = record.node->saveParams();
-        for (const QString& key : {"filePath", "outputPath"}) {
+        for (const QString& key : {"filePath", "outputPath", "dirPath", "outputDir"}) {
             if (params.contains(key) && params.value(key).isString()) {
                 params.insert(key, PathUtils::relativeToFile(params.value(key).toString(), workflowFile));
             }

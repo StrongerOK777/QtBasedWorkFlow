@@ -34,5 +34,7 @@ Result<QImage> maskBlend(const QImage& foreground, const QImage& background, con
 Result<QImage> imageOverlay(const QImage& base, const QImage& overlay, const QString& anchor, int offsetX,
                             int offsetY, double scalePercent, double opacity);
 Result<QImage> pixelate(const QImage& image, int blockSize);
+// 把图片按 rows x columns 均匀切分，按行优先顺序返回各单元格（用于九宫格等场景）。
+Result<QVector<QImage>> gridSplit(const QImage& image, int rows, int columns);
 
 }

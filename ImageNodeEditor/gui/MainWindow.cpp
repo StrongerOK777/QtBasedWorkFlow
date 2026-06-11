@@ -1366,13 +1366,59 @@ void MainWindow::commitNodeMove(const QString& nodeId, const QPointF& beforePosi
         return;
     }
     QPointF targetPosition = afterPosition;
+    bool snappedX = false;
+    bool snappedY = false;
     {
-        // 网格吸附（设置页开关，默认关闭）：松开鼠标时把节点位置对齐到网格。
+        // 对齐吸附（设置页开关，默认开启）：松开鼠标时吸附到与其他节点
+        // 左/中/右、上/中/下对齐的位置，与拖动过程中的虚线参考线呼应。
         QSettings settings;
+        if (settings.value("mainWindow/snapToGuides", true).toBool()) {
+            if (auto* movingItem = nodeItems_.value(nodeId)) {
+                constexpr double kSnapThreshold = 6.0;
+                const QSizeF size = movingItem->sceneBoundingRect().size();
+                double bestDx = kSnapThreshold + 1.0;
+                double bestDy = kSnapThreshold + 1.0;
+                for (auto it = nodeItems_.cbegin(); it != nodeItems_.cend(); ++it) {
+                    if (it.key() == nodeId || !it.value()) {
+                        continue;
+                    }
+                    const QRectF other = it.value()->sceneBoundingRect();
+                    const double movingXs[] = {targetPosition.x(), targetPosition.x() + size.width() / 2.0,
+                                               targetPosition.x() + size.width()};
+                    const double otherXs[] = {other.left(), other.center().x(), other.right()};
+                    const double movingYs[] = {targetPosition.y(), targetPosition.y() + size.height() / 2.0,
+                                               targetPosition.y() + size.height()};
+                    const double otherYs[] = {other.top(), other.center().y(), other.bottom()};
+                    for (int i = 0; i < 3; ++i) {
+                        const double dx = otherXs[i] - movingXs[i];
+                        if (std::abs(dx) < std::abs(bestDx)) {
+                            bestDx = dx;
+                        }
+                        const double dy = otherYs[i] - movingYs[i];
+                        if (std::abs(dy) < std::abs(bestDy)) {
+                            bestDy = dy;
+                        }
+                    }
+                }
+                if (std::abs(bestDx) <= kSnapThreshold) {
+                    targetPosition.setX(targetPosition.x() + bestDx);
+                    snappedX = true;
+                }
+                if (std::abs(bestDy) <= kSnapThreshold) {
+                    targetPosition.setY(targetPosition.y() + bestDy);
+                    snappedY = true;
+                }
+            }
+        }
+        // 网格吸附（设置页开关，默认关闭）：未被参考线吸附的轴再对齐到网格。
         if (settings.value("mainWindow/snapToGrid", false).toBool()) {
             constexpr double kGridStep = 20.0;
-            targetPosition = QPointF(std::round(afterPosition.x() / kGridStep) * kGridStep,
-                                     std::round(afterPosition.y() / kGridStep) * kGridStep);
+            if (!snappedX) {
+                targetPosition.setX(std::round(targetPosition.x() / kGridStep) * kGridStep);
+            }
+            if (!snappedY) {
+                targetPosition.setY(std::round(targetPosition.y() / kGridStep) * kGridStep);
+            }
         }
     }
     if (qFuzzyCompare(beforePosition.x(), targetPosition.x()) && qFuzzyCompare(beforePosition.y(), targetPosition.y())) {
@@ -4133,6 +4179,10 @@ void MainWindow::showSettingsDialog()
     snapToGrid->setText("节点对齐到网格");
     snapToGrid->setChecked(QSettings().value("mainWindow/snapToGrid", false).toBool());
     snapToGrid->setToolTip("拖动节点松开时自动对齐到 20 像素网格，便于排列整齐");
+    auto* snapToGuides = new QCheckBox;
+    snapToGuides->setText("吸附到对齐参考线");
+    snapToGuides->setChecked(QSettings().value("mainWindow/snapToGuides", true).toBool());
+    snapToGuides->setToolTip("拖动节点松开时吸附到与其他节点左/中/右、上/中/下对齐的位置（与拖动时的虚线参考线呼应）");
 
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "选择深色或浅色主题，并调整工作台整体缩放。");
@@ -4170,6 +4220,7 @@ void MainWindow::showSettingsDialog()
     makeRow(zoomSection, "当前画布缩放", canvasRow, "只影响中央画布，不改变工作台控件尺寸。");
     makeRow(zoomSection, "滚轮缩放速度", wheelZoomSpin, "每滚动一格的缩放比例。默认 4%，数值越小越慢。");
     auto* arrangeSection = makeSection(canvasPage, "节点排列");
+    arrangeSection->addWidget(snapToGuides);
     arrangeSection->addWidget(snapToGrid);
     canvasPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
@@ -4303,6 +4354,7 @@ void MainWindow::showSettingsDialog()
         if (miniMap_) miniMap_->setVisible(miniMapVisible->isChecked());
         settings.setValue("mainWindow/showMiniMap", miniMapVisible->isChecked());
         settings.setValue("mainWindow/snapToGrid", snapToGrid->isChecked());
+        settings.setValue("mainWindow/snapToGuides", snapToGuides->isChecked());
     };
 
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
