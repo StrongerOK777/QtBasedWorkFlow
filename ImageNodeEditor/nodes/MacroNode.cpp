@@ -163,6 +163,9 @@ Status MacroNode::loadParams(const QJsonObject& object)
 Result<QMap<QString, NodeData>> MacroNode::execute(const QMap<QString, NodeData>& inputs)
 {
     ExecutionEngine engine;
+    // 取消传播：外层引擎在调度本节点前注入的取消标志，转交内部子图引擎，
+    // 使「取消执行」也能停止宏节点内部尚未调度的节点。
+    engine.setCancelFlag(cancelFlag_);
     ExecutionEngine::ExternalInputMap externalInputs;
     for (const auto& mapping : inputMappings_) {
         if (!inputs.contains(mapping.macroPort)) {
@@ -202,6 +205,11 @@ Status MacroNode::setParameter(const QString& name, const QVariant& value)
         return Status::ok();
     }
     return Status::fail(QString("未知参数：%1").arg(name));
+}
+
+void MacroNode::onExecutionContext(const std::shared_ptr<std::atomic<bool>>& cancelFlag)
+{
+    cancelFlag_ = cancelFlag;
 }
 
 void MacroNode::setSubgraph(const WorkflowGraph& graph)

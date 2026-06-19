@@ -9,6 +9,9 @@
 #include <QString>
 #include <QVector>
 
+#include <atomic>
+#include <memory>
+
 class ImageNode {
 public:
     virtual ~ImageNode() = default;
@@ -25,4 +28,8 @@ public:
 
     virtual QVariant parameterValue(const QString& name) const;
     virtual Status setParameter(const QString& name, const QVariant& value);
+
+    // 执行上下文：引擎在调度本节点前调用，传入本次执行的取消标志。
+    // 默认空实现；含内部子图的节点（如宏节点）可保存并传给内部引擎，实现取消传播。
+    virtual void onExecutionContext(const std::shared_ptr<std::atomic<bool>>& cancelFlag);
 };

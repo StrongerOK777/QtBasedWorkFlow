@@ -18,3 +18,8 @@ Status ImageNode::setParameter(const QString& name, const QVariant& value)
     object.insert(name, QJsonValue::fromVariant(value));
     return loadParams(object);
 }
+
+void ImageNode::onExecutionContext(const std::shared_ptr<std::atomic<bool>>& cancelFlag)
+{
+    Q_UNUSED(cancelFlag);
+}

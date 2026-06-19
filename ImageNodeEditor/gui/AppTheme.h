@@ -116,6 +116,10 @@ Colors colors();
 Palette palette();
 Palette darkPalette();
 Palette lightPalette();
+// 数据类型 → 连线/端口颜色（"image" / "number" / "text" / "mask" / "image-list"）
+QColor portTypeColor(const QString& dataTypeId);
+// 节点类别 → 强调色（随深浅主题自适应，画布节点与类别标识共用）
+QColor categoryColor(const QString& category);
 QFont appFont(double uiScale);
 QString styleSheet(double uiScale);
 int px(double value, double uiScale);

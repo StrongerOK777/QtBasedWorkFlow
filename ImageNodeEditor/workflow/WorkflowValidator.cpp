@@ -1,5 +1,6 @@
 #include "workflow/WorkflowValidator.h"
 
+#include "core/NodeLabel.h"
 #include "nodes/ImageNode.h"
 #include "workflow/WorkflowGraph.h"
 
@@ -17,6 +18,15 @@ const PortInfo* findPort(const QVector<PortInfo>& ports, const QString& name)
     return nullptr;
 }
 
+// 错误信息统一使用「中文名 #序号」标签；节点不存在时退回原始 ID。
+QString labelFor(const WorkflowGraph& graph, const QString& nodeId)
+{
+    if (auto node = graph.node(nodeId)) {
+        return formatNodeLabel(node->displayName(), nodeId);
+    }
+    return nodeId;
+}
+
 }
 
 Status WorkflowValidator::validateEdge(const WorkflowGraph& graph, const Edge& edge) const
@@ -29,8 +39,8 @@ Status WorkflowValidator::validateEdge(const WorkflowGraph& graph, const Edge& e
 
     const PortInfo* fromPort = findPort(from->outputPorts(), edge.fromPort);
     const PortInfo* toPort = findPort(to->inputPorts(), edge.toPort);
-    if (!fromPort) return Status::fail(QString("输出端口不存在：%1.%2").arg(edge.fromNode, edge.fromPort));
-    if (!toPort) return Status::fail(QString("输入端口不存在：%1.%2").arg(edge.toNode, edge.toPort));
+    if (!fromPort) return Status::fail(QString("输出端口不存在：%1 的 %2").arg(labelFor(graph, edge.fromNode), edge.fromPort));
+    if (!toPort) return Status::fail(QString("输入端口不存在：%1 的 %2").arg(labelFor(graph, edge.toNode), edge.toPort));
     if (!portTypesCompatible(fromPort->type, toPort->type)) {
         return Status::fail(QString("端口类型不兼容：%1 -> %2").arg(portTypeName(fromPort->type), portTypeName(toPort->type)));
     }
@@ -38,7 +48,7 @@ Status WorkflowValidator::validateEdge(const WorkflowGraph& graph, const Edge& e
     if (!toPort->allowMultipleConnections) {
         for (const auto& existing : graph.edges()) {
             if (existing.toNode == edge.toNode && existing.toPort == edge.toPort) {
-                return Status::fail(QString("输入端口只能连接一次：%1.%2").arg(edge.toNode, edge.toPort));
+                return Status::fail(QString("输入端口只能连接一次：%1 的 %2").arg(labelFor(graph, edge.toNode), toPort->displayName));
             }
         }
     }
@@ -63,21 +73,22 @@ Status WorkflowValidator::validate(const WorkflowGraph& graph) const
         if (edge.fromNode == edge.toNode) return Status::fail("不允许节点连接到自身");
         const PortInfo* fromPort = findPort(from->outputPorts(), edge.fromPort);
         const PortInfo* toPort = findPort(to->inputPorts(), edge.toPort);
-        if (!fromPort) return Status::fail(QString("输出端口不存在：%1.%2").arg(edge.fromNode, edge.fromPort));
-        if (!toPort) return Status::fail(QString("输入端口不存在：%1.%2").arg(edge.toNode, edge.toPort));
+        if (!fromPort) return Status::fail(QString("输出端口不存在：%1 的 %2").arg(labelFor(graph, edge.fromNode), edge.fromPort));
+        if (!toPort) return Status::fail(QString("输入端口不存在：%1 的 %2").arg(labelFor(graph, edge.toNode), edge.toPort));
         if (!portTypesCompatible(fromPort->type, toPort->type)) {
             return Status::fail(QString("端口类型不兼容：%1 -> %2").arg(portTypeName(fromPort->type), portTypeName(toPort->type)));
         }
         const QString key = edge.toNode + "." + edge.toPort;
         if (toPort && !toPort->allowMultipleConnections && seenInputs.contains(key)) {
-            return Status::fail(QString("输入端口被多次连接：%1").arg(key));
+            return Status::fail(QString("输入端口被多次连接：%1 的 %2").arg(labelFor(graph, edge.toNode), toPort->displayName));
         }
         seenInputs.insert(key);
     }
     for (const auto& record : graph.nodes()) {
         for (const auto& port : record.node->inputPorts()) {
             if (port.required && !seenInputs.contains(record.id + "." + port.name)) {
-                return Status::fail(QString("节点 %1 缺少必需输入：%2").arg(record.id, port.displayName));
+                return Status::fail(QString("节点 %1 缺少必需输入：%2")
+                                        .arg(formatNodeLabel(record.node->displayName(), record.id), port.displayName));
             }
         }
     }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    本地调试设置：F5 运行 VS 原生编译出的程序，并把 Qt 的 bin 目录加入 PATH，
+    确保能加载到 Qt6*.dll 运行库。QtDir 默认 C:\Qt\6.8.3\msvc2022_64，可用环境变量 QTDIR 覆盖。
+  -->
+  <PropertyGroup>
+    <QtDir Condition="'$(QtDir)'==''">$(QTDIR)</QtDir>
+    <QtDir Condition="'$(QtDir)'==''">C:\Qt\6.8.3\msvc2022_64</QtDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LocalDebuggerCommand>$(SolutionDir)out\Release\ImageNodeEditor.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(SolutionDir)out\Release</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerEnvironment>PATH=$(QtDir)\bin;%PATH%</LocalDebuggerEnvironment>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+</Project>

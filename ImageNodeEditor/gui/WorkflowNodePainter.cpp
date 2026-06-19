@@ -4,8 +4,10 @@
 #include "gui/WorkflowNodeDelegate.h"
 
 #include <QtNodes/DataFlowGraphModel>
+#include <QtNodes/internal/AbstractNodeGeometry.hpp>
 #include <QtNodes/internal/BasicGraphicsScene.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
+#include <QtNodes/internal/StyleCollection.hpp>
 
 #include <QLinearGradient>
 #include <QPainter>
@@ -15,31 +17,6 @@
 #include <cmath>
 
 namespace {
-
-struct CategoryVisual {
-    QColor accent;
-    QColor stripe;
-};
-
-CategoryVisual categoryVisual(const QString& category)
-{
-    if (category == "输入输出") {
-        return {QColor("#4fc1ff"), QColor("#264f78")};
-    }
-    if (category == "几何变换") {
-        return {QColor("#c586c0"), QColor("#5a3f5d")};
-    }
-    if (category == "色彩处理") {
-        return {QColor("#ce9178"), QColor("#704d3f")};
-    }
-    if (category == "滤波处理") {
-        return {QColor("#4ec9b0"), QColor("#315f57")};
-    }
-    if (category == "合成处理") {
-        return {QColor("#dcdcaa"), QColor("#6a6636")};
-    }
-    return {QColor("#9cdcfe"), QColor("#3c3c3c")};
-}
 
 QColor stateAccent(const WorkflowNodeDelegate* delegate, const QColor& normal)
 {
@@ -110,10 +87,9 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     auto* graph = dynamic_cast<QtNodes::DataFlowGraphModel*>(&graphicsNode.graphModel());
     auto* delegate = graph ? graph->delegateModel<WorkflowNodeDelegate>(graphicsNode.nodeId()) : nullptr;
     const QString category = delegate ? delegate->category() : QString();
-    const CategoryVisual visual = categoryVisual(category);
     const AppTheme::Colors colors = AppTheme::colors();
     const QRectF body(QPointF(0, 0), graphicsNode.nodeScene()->nodeGeometry().size(graphicsNode.nodeId()));
-    const QColor categoryColor = stateAccent(delegate, visual.accent);
+    const QColor categoryColor = stateAccent(delegate, AppTheme::categoryColor(category));
     const QRectF shadowRect = body.translated(0, 4);
     const QRectF borderRect = body.adjusted(0.5, 0.5, -0.5, -0.5);
     const QRectF headerRect(body.left(), body.top(), body.width(), 32.0);
@@ -187,4 +163,26 @@ void WorkflowNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsObject& 
     defaultPainter_.drawValidationIcon(painter, graphicsNode);
     defaultPainter_.drawProcessingIndicator(painter, graphicsNode);
     defaultPainter_.drawProgressValue(painter, graphicsNode);
+
+    // 端口圆点按数据类型着色覆绘：已连接实心、未连接空心，便于一眼识别可连端口。
+    if (delegate) {
+        auto& graphModel = graphicsNode.graphModel();
+        auto& geometry = graphicsNode.nodeScene()->nodeGeometry();
+        const auto nodeId = graphicsNode.nodeId();
+        const double radius = QtNodes::StyleCollection::connectionStyle().pointDiameter() / 2.0;
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        for (auto portType : {QtNodes::PortType::In, QtNodes::PortType::Out}) {
+            const unsigned int count = delegate->nPorts(portType);
+            for (unsigned int i = 0; i < count; ++i) {
+                const QColor typeColor = AppTheme::portTypeColor(delegate->dataType(portType, i).id);
+                const QPointF pos = geometry.portPosition(nodeId, portType, i);
+                const bool connected = !graphModel.connections(nodeId, portType, i).empty();
+                painter->setPen(QPen(typeColor, 1.6));
+                painter->setBrush(connected ? typeColor : colors.nodeTop);
+                painter->drawEllipse(pos, radius, radius);
+            }
+        }
+        painter->restore();
+    }
 }

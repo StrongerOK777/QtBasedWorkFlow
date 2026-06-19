@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/PortType.h"
 #include "workflow/ExecutionEngine.h"
 #include "workflow/WorkflowGraph.h"
 
@@ -9,6 +10,7 @@
 #include <QStringList>
 #include <QVariant>
 #include <QVector>
+#include <atomic>
 #include <memory>
 
 class QAction;
@@ -84,6 +86,8 @@ private:
     void createLayout();
     void rebuildNodeMenus();
     void addNodeFromMenu(const QString& typeName);
+    void handleCanvasFilesDropped(const QStringList& files, const QPointF& scenePos);
+    void updateEmptyCanvasHint();
     void rebuildProperties();
     bool acceptCanvasEdge(const Edge& edge);
     void removeCanvasEdge(const Edge& edge);
@@ -116,9 +120,18 @@ private:
     void restoreTimelineEntry(const QString& timelineId);
     void saveCurrentWorkflowAsTemplate();
     void applyWorkflowTemplate(const QString& templateId);
+    void renameWorkflowTemplate(const QString& templateId);
+    void deleteWorkflowTemplate(const QString& templateId);
+    void exportWorkflowTemplate(const QString& templateId);
+    void importWorkflowTemplate();
     void createWorkflowCheckpoint();
     void restoreWorkflowCheckpoint(const QString& checkpointId);
     void branchFromWorkflowCheckpoint(const QString& checkpointId);
+    void renameWorkflowCheckpoint(const QString& checkpointId);
+    void deleteWorkflowCheckpoint(const QString& checkpointId);
+    void exportWorkflowCheckpoint(const QString& checkpointId);
+    QImage captureWorkflowResultThumbnail() const;
+    void showCheckpointDiffDialog();
     bool confirmSaveIfNeeded();
     bool ensureSavePath();
     void updateWindowTitle();
@@ -132,6 +145,16 @@ private:
                               const QString& selectedAfter,
                               const QString& mergeKey = {});
     void removeEdgeByIndex(int edgeIndex);
+    void showConnectionSuggestionPalette(const QString& originNodeId,
+                                         const QString& originPortName,
+                                         PortDirection originDirection,
+                                         const QPointF& scenePosition);
+    void addNodeConnectedToPort(const QString& typeName,
+                                const QString& counterpartPort,
+                                const QString& originNodeId,
+                                const QString& originPortName,
+                                PortDirection originDirection,
+                                const QPointF& position);
     QPointF findAvailableNodePosition(const QPointF& requested) const;
     void setPreviewImage(const QImage& image);
     void updatePreviewForSelection();
@@ -147,6 +170,7 @@ private:
     void setSelectedNodeParameter(const QString& name, const QVariant& value);
     void resetNodeRunStates();
     void applyNodeRunState(const QString& nodeId, NodeExecutionState state);
+    void publishNodeThumbnails(const ExecutionResult& result);
     void handleNodeExecutionEvent(const NodeExecutionSummary& summary);
     void setExecutionBusy(bool busy);
     bool rejectGraphReplacementWhileBusy(const QString& actionName);
@@ -249,6 +273,8 @@ private:
     QMenu* settingsMenu_ = nullptr;
     QMenu* layoutMenu_ = nullptr;
     QMenu* commandCenterMenu_ = nullptr;
+    // 顶部标题栏菜单按钮按序映射到这些原生菜单（与 WorkbenchBridge::headerMenuTitles 一一对应）。
+    QList<QMenu*> headerMenus_;
     QAction* commandCenterAction_ = nullptr;
     QAction* newWorkbookAction_ = nullptr;
     QAction* returnToParentAction_ = nullptr;
@@ -260,19 +286,25 @@ private:
     QAction* previewToggleAction_ = nullptr;
     QAction* bottomToggleAction_ = nullptr;
     QWidget* miniMap_ = nullptr;
+    QLabel* emptyCanvasHint_ = nullptr;
     QString currentWorkflowBranch_ = "main";
     QTimer* livePreviewTimer_ = nullptr;
     QTimer* runAnimationTimer_ = nullptr;
+    QTimer* autoSaveTimer_ = nullptr;
     QVector<QThread*> workerThreads_;
     bool executionBusy_ = false;
     int executionGeneration_ = 0;
     int livePreviewGeneration_ = 0;
+    // 当前执行/预览的取消标志；引擎快照共享同一标志，置 true 后引擎在下一调度轮停止。
+    std::shared_ptr<std::atomic<bool>> executionCancelFlag_;
+    std::shared_ptr<std::atomic<bool>> livePreviewCancelFlag_;
     QFrame* tooltipPopup_ = nullptr;
     QLabel* tooltipLabel_ = nullptr;
     QUndoStack* undoStack_ = nullptr;
     QMap<QString, QGraphicsItem*> nodeItems_;
     QMap<QString, NodeExecutionState> nodeRunStates_;
     QMap<QString, qint64> nodeElapsedMs_;
+    QMap<QString, QImage> nodeThumbnails_;
     int runAnimationPhase_ = 0;
     QImage currentPreviewImage_;
 };

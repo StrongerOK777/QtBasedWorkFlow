@@ -20,6 +20,342 @@
 
 ## 记录条目
 
+### 2026-06-19 / 误删原生 VS 提交工程后按作业要求恢复阶段
+
+类型：修复
+
+概述：
+上一步把「为 macOS 迁移/去 .bat」误判为可删整套手写 VS 工程，删除了根 `ImageNodeEditor.slnx`、`ImageNodeEditor/ImageNodeEditor.vcxproj`/`.filters`/`.user`、`GeneratedFiles/`、`third_party/QtNodes/prebuilt/QtNodes.lib`。但**课程作业硬性要求**：根目录含解决方案文件（VS2026 为 `.slnx`）、存在与之同名的项目目录、项目目录内含同名 `.vcxproj`/`.vcxproj.filters`/`.vcxproj.user` 与 `main.cpp`。该结构不可删。已用 `git checkout HEAD --` 全量恢复上述跟踪文件（含 `regen.bat`），README/struct 一并恢复回文档化 VS 结构的版本；并补 `gui/WorkflowDiffDialog.h`（本轮新增头）到 `.vcxproj`/`.filters` 的 ClInclude。因恢复的预生成 moc/rcc 早于本轮功能改动（WorkbenchModels.h 新增多个信号、WorkbenchSidebar.qml 变更），直接用 moc.exe/rcc.exe 刷新 `GeneratedFiles/` 使其与当前源码一致（校验 checkpointCompareRequested 等新信号已进 moc）。原生 `.vcxproj` 本就含 `MultiProcessorCompilation=true`（多核编译）与 PostBuild windeployqt（带 `--qmldir`）。
+
+影响范围：
+恢复 `ImageNodeEditor.slnx`、`ImageNodeEditor/ImageNodeEditor.vcxproj`/`.filters`/`.user`、`GeneratedFiles/*`、`third_party/QtNodes/prebuilt/QtNodes.lib`、`README.md`、`struct.md`；刷新 `GeneratedFiles/` 的 5 个 moc/rcc；`.vcxproj`/`.filters` 增 WorkflowDiffDialog.h。保留本轮对 `CMakeLists.txt` 的有益增强（`/MP` 多核、windeployqt POST_BUILD 含 qoffscreen 复制）——CMake 是跨平台/ macOS 路径，与原生 VS 工程并存，互不冲突。功能源码（缩略图/diff/拖线推荐/UI 修复）保持不变。
+
+处理方式：
+原生 VS 工程（VS/MSVC 直接编译源码、链接 prebuilt QtNodes.lib、PostBuild windeployqt 到 `out/Release/`）= 作业提交主路径，双击根 `ImageNodeEditor.slnx` → F5。CMakeLists = 跨平台主路径（macOS）。两者并存是原始设计，不该二选一删除。`.bat`（regen.bat）作为 moc/rcc 刷新器随原生工程保留；它仅服务于 Windows-only 的 vcxproj，macOS 用 CMake 不触及它，故不阻碍跨平台。
+
+当前状态：
+结构已恢复、moc 已刷新；MSBuild 原生 slnx 构建验证进行中（`MSBuild ImageNodeEditor.slnx -p:Configuration=Release -p:Platform=x64 -m`）。
+
+后续注意：
+删除提交所需文件前必须先核对作业结构要求，不能因「整洁/可移植」自作主张删 `.slnx`/`.vcxproj*`/`main.cpp`/`GeneratedFiles`/`prebuilt`。改 Q_OBJECT 头或 qml 后原生工程需重跑 `GeneratedFiles/regen.bat` 刷新 moc/rcc（CMake 路径用 AUTOMOC 不需要）。若仍想消灭 regen.bat 而保留 vcxproj，可把 moc/rcc 命令内联进 vcxproj 的构建步骤——属可选项，需用户确认后再做。
+
+---
+
+### 2026-06-13 / 命令面板悬停提示串文与浅色主题黑角修复阶段
+
+类型：修复
+
+概述：
+用户反馈两个命令面板（快速访问）问题：1) 悬停命令行时显示「隐藏预览」等别处提示文案；2) 浅色主题下面板圆角外露出四个黑色方角。根因各一：提示串文——命令面板打开时全屏遮罩（ClickScrim，QWidget）盖住所有 QML 表面，先前悬停的按钮（如标题栏/活动栏的预览开关）收不到 hover 退出事件、hovered 卡在 true，其 WorkbenchTooltip 的 450ms 延迟计时器照常触发，而共享提示框按**当前光标位置**弹出——于是旧按钮的文案弹在光标所在的命令行上；黑角——makeQuickSurface 只设了 `setClearColor(Qt::transparent)` 而未设 `WA_TranslucentBackground`，QQuickWidget 的透明清屏色实际按黑色渲染，QML 圆角卡片外的四角即黑色（深色主题下与底色相近不可见，浅色主题暴露）。
+
+影响范围：
+`gui/MainWindow.cpp`（showWorkbenchTooltip 两道守卫 + 打开命令面板即隐藏提示的 connect + 补 `<QQuickWidget>` 头）、`gui/WorkbenchHostWidget.{h,cpp}`（新增 isQuickAccessOpen()；命令面板表面加 WA_TranslucentBackground）。未改 QML 与提示协议本身。
+
+处理方式：
+showWorkbenchTooltip 在显示前拒绝两类场景：命令面板可见时一律不显示；`QApplication::widgetAt(QCursor::pos())` 不是 QQuickWidget（光标被面板、遮罩、原生菜单、画布等覆盖）时不显示——后者把同类「hover 卡死 + 迟到计时器」问题在原生菜单等场景下一并堵住。quickAccessRequested 信号同时连到 hideWorkbenchTooltip，收掉面板弹出前已显示的提示。
+
+当前状态：
+已修复（待 F5 重建后目检：浅色主题下命令面板四角透出底层内容、无黑角；面板打开期间悬停命令行不再出现无关提示；正常悬停活动栏/标题栏按钮提示照常）。
+
+后续注意：
+WorkbenchHostWidget.h（Q_OBJECT）有改动，QtRegen 目标会在下次构建自动刷新 moc，无需手动 regen。若日后为命令行加行级悬停提示，需先放开 showWorkbenchTooltip 的「面板打开即拒绝」守卫并改为按请求来源判断。
+
+---
+
+### 2026-06-13 / F5 一键构建修复：moc/rcc 快照自动刷新阶段
+
+类型：修复 / 修改
+
+概述：
+用户报告 VS 中 F5 无法直接运行项目。根因：原生 VS 工程编译的是 `GeneratedFiles/` 预生成 moc/rcc 快照，而第四、五批改了 `WorkbenchModels.h`（Q_OBJECT，新增多个信号/invokable）与 `WorkbenchSidebar.qml`，`regen.bat` 未运行 → 过期 moc 缺新信号符号、链接失败（rcc 过期则 QML 面板缺新按钮）。修复改为**构建期自动刷新**：vcxproj 末尾新增 MSBuild 目标 `QtRegen`（BeforeTargets=ClCompile，Inputs=3 个 Q_OBJECT 头 + workbench.qrc + qml\*.qml + codicons qrc/ttf，Outputs=5 个生成的 .cpp），任一输入比快照新时自动以 `QTDIR=$(QtDir)` 调用 regen.bat；输入未变时 MSBuild 跳过该目标，不影响增量构建速度。`regen.bat` 同步加错误传播（任一 moc/rcc 失败 exit /b 1 并提示检查 QTDIR），失败能中止构建而不是编译旧快照。
+
+影响范围：
+`ImageNodeEditor/ImageNodeEditor.vcxproj`（新增 QtRegenInput 项组与 QtRegen 目标）、`ImageNodeEditor/GeneratedFiles/regen.bat`（错误传播）。构建期对 Qt 工具的依赖与既有 PostBuild 的 windeployqt 同源（$(QtDir)），未新增依赖类别；CMake 路径（AUTOMOC/AUTORCC）不受影响；手动运行 regen.bat 的旧流程仍可用。
+
+处理方式：
+增量式 MSBuild 目标而非无条件 PreBuildEvent：避免每次 F5 都重写快照导致 5 个 .cpp 永远重编。vcxproj 注释遵守「不出现连续两个连字符」的既有坑位说明。
+
+当前状态：
+已修复（待本机 F5 实测确认；若第五批新代码有编译错误会在此次构建暴露，属正常验证流程）。
+
+后续注意：
+今后改 Q_OBJECT 头或 qml 后直接 F5 即可，无需手动 regen；新增第 4 个 Q_OBJECT 头时需同时更新 regen.bat 与 vcxproj 的 QtRegenInput/Outputs 两处清单。
+
+---
+
+### 2026-06-12 / 第五批增强：节点缩略图、保存点 diff、拖线智能推荐阶段
+
+类型：新增
+
+概述：
+按用户选定的三个创新方向实施：1) 节点卡片内嵌输出缩略图——`WorkflowNodeDelegate` 的 embeddedWidget 改为「缩略图 + 参数面板」容器（所有节点都有容器，缩略图执行后常显、参数面板仍选中展开），执行/实时预览完成后 MainWindow 把 `ExecutionResult.nodeOutputs` 各节点首个图像输出缩成小图（宽 184×scale、棋盘格底）灌进画布，rebuild 时回灌；整图替换场景（新建/打开/恢复/切画布等 13 处）清空，参数修改与撤销不清（保留旧图等实时预览刷新）；设置页「画布 › 节点排列」新增开关 `mainWindow/nodeThumbnails`（默认开，切换时重建画布）。2) 工作流版本 diff——进度记录面板头部新增「对比…」按钮，新 header-only 对话框 `gui/WorkflowDiffDialog.h`（沿用 PreviewWidgets.h 模式，无 Q_OBJECT）：两侧下拉选「当前画布 / 各保存点」，上半区并排输出缩略图（棋盘格底、点击经 ImagePopupWindow 看大图、无图显示占位说明），下半区分组变更清单（新增/删除节点、参数修改 旧值→新值（中文参数名）、连线增删、位置移动汇总一行；同 id 异类型按删+增）；保存点缩略图在「保存当前进度」时从最近一次执行结果截存（优先终端 Preview 节点，≤320px PNG 存 `WorkflowHistory::thumbnailPath`），remove/容量逐出时连同删除。3) 拖线空白处智能推荐——`WorkflowGraphicsView::mouseReleaseEvent` 在基类处理前侦测 QtNodes 草稿连线（ConnectionId 恰一侧 InvalidNodeId），松开点不在任何节点上时把起点（业务节点 id、端口名、方向）与落点经新回调 `connectionDroppedAtEmpty` 上抛；MainWindow 用 `portTypesCompatible`（core/PortType.h，与连线校验同源）预过滤出对侧有兼容端口的节点类型，按方向感知类别排序（输出口拖出→处理类优先，输入口拖出→读入类优先），复用 QuickNodePalettePopup（新增预过滤列表 + 提示行构造参数）弹出；选中后「创建节点 + 自动连线」走单条撤销命令，连线先过 validateEdge，失败保留节点并说明原因。未改 vendored QtNodes。
+
+影响范围：
+`gui/WorkflowNodeDelegate.{h,cpp}`、`gui/WorkflowCanvas.{h,cpp}`、`gui/MainWindow.{h,cpp}`、`gui/WorkflowDiffDialog.h`（新增，header-only）、`gui/WorkbenchModels.{h,cpp}`（Q_OBJECT，需 regen）、`qml/WorkbenchSidebar.qml`（需 regen）、`workflow/WorkflowHistory.{h,cpp}`（thumbnailPath + remove/逐出删缩略图）、`CMakeLists.txt`、`ImageNodeEditor.vcxproj`/`.filters`（新头文件登记）。未改 third_party / 执行引擎核心 / JSON 格式 / CLI。
+
+处理方式：
+缩略图推送沿用 setExecutionState 的「canvas → delegateModel → delegate」链路与 rebuild 回灌模式；MainWindow 持 `nodeThumbnails_`（已缩小图）控内存。拖线拦截为纯应用层（view 在基类销毁草稿前后各做一次探测），与既有对齐线清理共存于同一 mouseReleaseEvent。diff 对话框纯内存比较（WorkflowGraph::nodes/edges + saveParams JSON 键比对）。
+
+当前状态：
+待验证（须 regen.bat 后跑 verify_build.bat + GUI 目检三项功能；本批与此前批次合并验证）。
+
+后续注意：
+ImageList 输出的缩略图取列表首张；分支创建的保存点因图已替换、无执行结果，不会有缩略图（对话框显示占位说明）。推荐排序为类别优先级表，后续若加使用频率统计可在 showConnectionSuggestionPalette 内叠加。无参数节点现在也有空容器 embeddedWidget（高度 0），目检时留意节点外观是否与改前一致。
+
+---
+
+### 2026-06-11 / 模板与进度记录管理操作阶段
+
+类型：新增 / 修改
+
+概述：
+按 plan.md 可选项实施「模板/进度记录面板提供删除、重命名、导入导出」：方案库面板新增「导入模板」按钮（选 workflow JSON → 起名 → 存为用户模板）；每条模板行新增 套用/改名/导出/删除 操作（预设方案只有 套用/导出；改名/删除仅限用户模板，C++ 侧在 QML 隐藏入口外再兜底校验）；进度记录面板每条保存点行在 恢复/分支 外新增 改名/导出/删除。导出统一经 WorkflowSerializer 重存而非复制快照文件，使路径参数按导出位置重新计算相对路径；导入按来源文件目录解析相对路径后再入库。存储变更收敛到 WorkflowHistory 新增的 remove()/setTitle()（QSettings 设置项 + 快照文件一并处理，remove 幂等），并顺手把 saveCurrentWorkflowAsTemplate 与 branchFromWorkflowCheckpoint 中两处手写快照存储替换为 WorkflowHistory::save，删除 MainWindow.cpp 中由此失效的 workflowDataDir/workflowSnapshotPath 辅助函数。QML 侧新增统一的 ActionChip 行内小按钮组件，模板与保存点行按钮均用之；时间线（自动记录、30 条封顶）维持只读，不加管理操作。
+
+影响范围：
+`workflow/WorkflowHistory.{h,cpp}`、`gui/WorkbenchModels.{h,cpp}`（含 Q_OBJECT，需 regen）、`gui/MainWindow.{h,cpp}`、`qml/WorkbenchSidebar.qml`（需 regen）。未改 third_party / 节点 / 执行引擎 / JSON 格式；CLI 的 save/log/restore 与 GUI 数据继续互通。
+
+处理方式：
+沿用既有「QML invokable → WorkbenchBridge 信号 → MainWindow 槽」中继模式与 QSettings(workflowTemplates/workflowCheckpoints) + AppData 快照存储格式。删除均有确认弹窗；重命名/导入用 QInputDialog；导出文件名建议经 sanitizeFileName 清洗 Windows 非法字符（保存点默认名含冒号的场景）。
+
+当前状态：
+待验证（改了 Q_OBJECT 头与 qml，须先运行 `GeneratedFiles/regen.bat` 再跑 `verify_build.bat`，并在 GUI 中确认两个面板的操作行为）。
+
+后续注意：
+WorkflowHistory::remove/setTitle 暂无单元测试（QSettings 写真实用户配置，隔离成本高），以 GUI 手动验证为准。模板导出对预设方案同样可用（由内置图直接生成 JSON）。
+
+---
+
+### 2026-06-11 / picdeal 批量子命令阶段
+
+类型：新增
+
+概述：
+按 plan.md 可选项实施命令行批量处理：新增 `picdeal batch -d 输入目录 -o 输出目录 [--操作 ...] [--format png] [--max N]`，对目录内每张图片套用同一条线性流水线并导出到输出目录。实现上不依赖 ImageList 的按元素迭代——直接对每个文件复用既有 `buildPipeline`（`-i 文件 + 操作 + -o 输出`），因此与 `pipe` 完全同一套操作语义（grayscale/blur/resize/hsl/sharpen/... 单图能跑的在 batch 里都能跑）；输出文件名沿用原名（可用 `--format` 改扩展名），逐文件校验+执行，末尾汇总「成功 N 失败 M」，任一失败返回码非零但不中断其余文件。
+
+影响范围：
+`app/CommandLineApp.cpp`（新增 `cmdBatch`、`isSubcommand` 加 "batch"、dispatch 分支、help/示例文案、补 `<QDir>`/`<QImageReader>` 头）。未改 GUI / third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动；CLI 与 GUI 仍共用 `WorkflowGraph`/`ExecutionEngine`/`WorkflowValidator` 核心。
+
+处理方式：
+batch 控制 flag（`-d/--dir`、`-o/--out`、`--format`、`--max`）在 cmdBatch 内先行剥离，其余 token 原样作为「操作序列」透传给每个文件的 `buildPipeline`，故操作顺序与参数解析与 pipe 一致、零重复实现。目录用 `QImageReader::supportedImageFormats()` 过滤、按文件名排序，`--max` 截断。
+
+当前状态：
+待验证（随本轮一并跑 `verify_build.bat`：构建 + `picdeal batch` 冒烟）。
+
+后续注意：
+batch 是「每图独立线性流水线」，不支持分支/汇合或跨图操作（如把整个目录拼成一张大图）——后者用 GUI 的 FolderInput→ListMerge，或后续单独子命令。GUI 侧「对 ImageList 每张应用子图/宏」仍列在 plan.md 可选项。
+
+---
+
+### 2026-06-11 / 第三批增强：ImageList 批量节点族与对齐参考线吸附阶段
+
+类型：新增 / 修改
+
+概述：
+按 plan.md 继续实施两项：1) ImageList 数据类型落地为「批量处理」节点类别——新增 批量读入 FolderInput（目录 + 数量上限 → 图片列表，按文件名排序，坏图/空目录明确报错）、列表取图 ListPick（1 起序号，越界报错）、列表拼接 ListMerge（横/纵/网格 + 列数 + 背景色，复用 merge 算法）、批量导出 ListExport（目录 + 前缀 + png/jpg，自动建目录、按 _01 序号命名、不可缓存）；新增参数类型 `ParameterType::Directory`（节点内参数面板提供目录选择按钮，序列化层把 dirPath/outputDir 也按 workflow 目录做相对路径解析与保存，CLI 按文本透传）；执行引擎为 FolderInput 增加目录内容签名（文件名/大小/mtime 任一变化即失效本节点及下游缓存，与 ImageInput 单文件签名同思路），缓存字节估算与外部输入签名补 QList<QImage> 分支。2) 拖动节点松开时吸附到对齐参考线——与拖动中虚线参考线呼应，按其他节点 左/中/右、上/中/下 共 6 类候选取最近增量（阈值 6px，逐轴独立），设置页「画布 › 节点排列」新增开关（默认开）；网格吸附只作用于未被参考线吸附的轴。tests 补 5 个批量节点用例（含目录变化使缓存失效的回归）与 dirPath/outputDir 相对路径解析用例。
+
+影响范围：
+`core/NodeParameter.h`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.cpp`、`workflow/WorkflowSerializer.cpp`、`gui/WorkflowNodeDelegate.cpp`、`gui/MainWindow.cpp`、`app/CommandLineApp.cpp`（参数类型标签）、`tests/test_nodes.cpp`、`tests/test_workflow_json.cpp`。未改 third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动。
+
+处理方式：
+ImageList 端口数据容器为 `QList<QImage>`（Qt6 对 QList<T> 自动注册元类型，QVariant 直接装取）；端口类型矩阵不变（列表只连列表），GUI 侧 dataType id "image-list" 已有映射与青色着色。新类别「批量处理」走 categoryColor/categoryShapePath 的默认分支（默认蓝 + 圆角矩形）。吸附计算用 `nodeItems_` 的 sceneBoundingRect 求尺寸，候选增量逐轴取最小绝对值，命中即平移目标位置，沿用既有「快照命令跳过首次 redo 时显式回写 + 重建」路径。
+
+当前状态：
+待验证（与第二批一并跑 verify_build.bat + GUI 确认；用例已覆盖核心行为）。
+
+后续注意：
+FolderInput 目录签名按目录直接子文件计算（不递归），与读取行为一致。批量逐图应用子图、picdeal 批量子命令列入 plan.md 可选项。「批量处理」类别如需专属类别色/外形，在 AppTheme::categoryColor 与 painter 的 categoryShapePath 各加一分支即可。
+
+---
+
+### 2026-06-11 / 第二批增强：HSL 提速、取消传播、九宫格切分、对齐线与端口提示阶段
+
+类型：修改 / 新增
+
+概述：
+按 plan.md 可选增强继续实施五项：1) `hueSaturation` 去掉逐像素两次 QColor 构造，改内联浮点 RGB↔HSL 转换（大图约快一个数量级）；2) 取消令牌传播进宏节点——`ImageNode` 新增虚函数 `onExecutionContext(cancelFlag)`（默认空实现），引擎调度节点前注入，`MacroNode` 转交内部子图引擎，「取消执行」现在能停止宏内部未调度节点；3) 新增「九宫格切分 GridSplit」节点（几何变换类，固定 cell1..cell9 九个输出口，rows/columns 1–3，行优先编号，余数并入末行/列；超出 rows*columns 的端口无输出，下游连接会得到明确的「上游输出不存在」错误）；4) 拖动节点时实时显示与其他节点左/中/右、上/中/下的虚线对齐参考线（阈值 5px，限 6 条，松开/提交即清除）；5) 鼠标悬停端口圆点显示「方向 + 端口名 + 数据类型」提示。tests/test_nodes.cpp 同步补 gridSplit 像素覆盖、节点输出口与 HSL 恒等回归用例。
+
+影响范围：
+`processing/ImageProcessors.{h,cpp}`、`nodes/ImageNode.{h,cpp}`、`nodes/MacroNode.{h,cpp}`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.cpp`、`gui/WorkflowCanvas.cpp`、`tests/test_nodes.cpp`。未改 third_party / qml / 含 Q_OBJECT 的头，原生 VS 工程无需 regen.bat 与 vcxproj 改动。
+
+处理方式：
+对齐线画在 `WorkflowGraphicsView::drawForeground`（cosmetic 虚线、取主题 accent 色），数据来自 `BasicGraphicsScene::nodeMoved` 信号实时计算；端口悬停在 view 的 `mouseMoveEvent` 中按 `portScenePosition` 距离命中，经 `QToolTip` 显示，文案取 `PortRole::Caption` 与 `NodeDataType.name`（中文）。`onExecutionContext` 在引擎线程于 async 派发前调用，宏节点成员写入先行于工作线程读取。
+
+当前状态：
+待验证。上一批（性能/健壮性/界面/节点四方向）已在用户 VS 构建实测「生成: 1 成功, 0 失败」且程序正常启动；verify_build.bat 全量重编所有源文件零错误，仅链接因正在运行的程序实例占用 exe 失败（LNK1104，环境占用而非代码问题）。本批改动需关闭运行中实例后重跑 verify_build.bat 确认构建 + ctest + CLI 冒烟。
+
+后续注意：
+对齐参考线目前只做视觉提示，不吸附；网格吸附仍按设置页开关在松开时生效。GridSplit 的 9 个输出口是固定声明，画布上始终可见 9 个口，属设计取舍（QtNodes 动态端口重建成本高）。
+---
+
+### 2026-06-11 / 仓库整洁化：本地开发文件不入库阶段
+
+类型：修改
+
+概述：
+按用户要求，把仅供本地开发使用的文件排除出提交仓库：`plan.md`、`tests/`、`verify_build.bat`（及输出 `verify_report.txt`）加入 `.gitignore`；同时补充忽略 `.claude/`（辅助工具会话目录）与 `x64/`（MSBuild 中间目录）。这些文件此前均未被 Git 跟踪，无需 git rm。
+
+影响范围：
+`.gitignore`、`CMakeLists.txt`（测试块加 `EXISTS tests/` 守卫）、`struct.md`（标注 plan.md / tests/ 为本地文件）。
+
+处理方式：
+因 `tests/` 不再随仓库分发，CMake 单元测试块改为「目录存在且找到 Qt6Test」才启用，保证全新克隆直接配置不报错。`aqtinstall.log` 与各验证日志已被既有 `*.log` 规则覆盖。另：清理了挂载盘上一次 git 操作残留的 `.git/index.lock` 空锁文件。
+
+当前状态：
+已解决（git check-ignore 验证通过）。
+
+后续注意：
+`agent.md` 要求阅读的 `plan.md` 在全新克隆中可能不存在，属预期；本地开发机上保留。`.vcxproj.user` 按课程提交要求继续保留跟踪，不忽略。
+
+---
+
+### 2026-06-11 / 全项目审查后的性能、健壮性、界面与节点扩展阶段
+
+类型：修改 / 新增
+
+概述：
+按全项目代码审查结论实施四个方向的改进（用户确认全做）：1) 性能——boxBlur 改滑动窗口（O(w·h)，与半径无关，去掉逐邻居 QImage::pixel/QColor）、brightnessContrast 改 256 项查找表、执行缓存加 512MB LRU 上限、执行/实时预览支持取消令牌；2) 健壮性——Choice 参数校验取值必须在 options 内、声明范围的数值参数加载时拒绝越界、ImageMerge 不再静默丢弃坏输入、验证器错误信息统一中文标签（formatNodeLabel）、新建 tests/（QtTest 三个测试程序，CMake 可选接入，找不到 Qt6Test 自动跳过）；3) 界面——拖图片文件进画布自动建「读入图片」节点（多图级联摆放）、拖 .json 直接打开、连线与端口圆点按数据类型着色（应用层自定义 ConnectionPainter，不动 third_party 也不需重编 QtNodes.lib）、预览透明棋盘格底 + 悬停像素坐标/颜色 + 大图弹窗滚轮缩放/拖拽平移/双击 100%、空画布引导层、节点网格吸附（设置页开关，默认关）、dirty 状态每 5 分钟自动保存时间线快照、节点类别色并入 AppTheme 并适配浅色主题；4) 节点——新增锐化/边缘检测/反色/阈值二值化/色相饱和度/通道拆分/通道合并/蒙版混合/图片水印/像素化共 10 种（合计 22 种 + 宏节点），ImageMerge 补 grid 布局+列数+背景色，Blend 补 7 种混合模式+尺寸策略，TextOverlay 补锚点/字体/粗体/描边/不透明度并改用 pixelSize；picdeal 命令行 opTable 同步新增 sharpen/edge/invert/threshold/hsl/pixelate/watermark。
+
+影响范围：
+`processing/ImageProcessors.{h,cpp}`、`nodes/BasicNodes.cpp`、`workflow/ExecutionEngine.{h,cpp}`、`workflow/WorkflowValidator.cpp`、`gui/MainWindow.{h,cpp}`、`gui/WorkflowCanvas.{h,cpp}`、`gui/WorkflowNodePainter.cpp`、`gui/AppTheme.{h,cpp}`、`gui/PreviewWidgets.h`、`app/CommandLineApp.cpp`、`CMakeLists.txt`、`tests/`（新增）、`plan.md`（新建路线图）、`verify_build.bat`（新增一键验证脚本）。未改 third_party、未改 qml/、未新增含 Q_OBJECT 的头（原生 VS 工程无需 regen.bat，vcxproj 无需改动；tests 仅走 CMake）。
+
+处理方式：
+执行取消采用 shared_ptr<atomic<bool>> 随引擎快照共享，按调度轮粒度停止；执行期间「执行」按钮改为取消入口（再次触发询问取消），关闭窗口时同时置取消标志缩短退出等待。缓存 LRU 按估算字节数逐出，至少保留最新一条，不影响单次执行正确性。连线着色经 BasicGraphicsScene::setConnectionPainter 注入应用层 painter；端口圆点在 WorkflowNodePainter 中按 dataType 覆绘（实心=已连接、空心=未连接）。兼容性：旧 workflow JSON 默认值全部保持旧行为（TextOverlay 锚点默认 custom 即原基线定位、Blend 默认 stretch+normal、Merge 默认 horizontal）；TextOverlay 字号从 pointSize 改 pixelSize，仅当输入图片带非常规 DPI 元数据时渲染大小与旧版略有差异。
+
+当前状态：
+待验证。沙盒无法安装 Qt（网络代理封锁 qt.io），需在 Windows 本机运行 `verify_build.bat`（MSBuild 构建 + CLI 冒烟 + ctest 单元测试，报告写入 verify_report.txt），并在 Visual Studio 中构建运行确认 GUI 交互。computer-use 权限请求两次超时未获批准。
+
+后续注意：
+宏节点内部子图执行不传播取消令牌（宏整体作为一个节点参与取消粒度）。executeForNode 实时预览沿用未验证路径，新节点的输入缺失在执行期报错。若 ctest 在本机首次配置较慢属正常（需配置 build-vs 并编译核心源码两份）。
+
+---
+
+### 2026-06-09 / 顶部菜单与标题栏合并为单行阶段
+
+类型：修改
+
+概述：
+Windows 上窗口顶部原为两行（第 1 行 `QMenuBar`，第 2 行 QML 标题栏）。将菜单并入 QML 标题栏最左侧，合并为单行：`菜单 | 导航键 | 标题框 | 右侧按钮`。
+
+影响范围：
+`ImageNodeEditor/gui/WorkbenchModels.h`/`.cpp`（`WorkbenchBridge`）、`ImageNodeEditor/gui/MainWindow.h`/`.cpp`、`ImageNodeEditor/qml/WorkbenchTitleBar.qml`；另修了 `ImageNodeEditor/GeneratedFiles/regen.bat`。
+
+处理方式：
+- `WorkbenchBridge` 新增 `headerMenuTitles` 属性、`openHeaderMenu(index, globalPos)` 方法、`headerMenuRequested` 信号（沿用既有「QML 调用→发信号→MainWindow 执行」中继模式）。
+- `WorkbenchTitleBar.qml` 在导航键左侧用 `Repeater` 渲染菜单标题文字按钮（`MenuButton` 组件，复用命令按钮样式），点击调用 `openHeaderMenu(index, mapToGlobal(0, height))`，仅非 macOS 显示。
+- `MainWindow` 建立 `headerMenus_`（按序映射 6 个现有原生 `QMenu`），连接 `headerMenuRequested` → `menu->popup()` 在按钮正下方弹出原生菜单——菜单内容（含动态「节点操作」子菜单）完全复用，不重写。
+- 非 macOS 隐藏 `menuBar()`；macOS 仍用系统菜单栏、标题栏不显示菜单按钮。
+- 坑（已修）：隐藏 `menuBar()` 后，菜单内动作的快捷键会失效。已把带快捷键的动作递归 `addAction` 到主窗口（仅非 macOS），复用同一 `QAction` 不产生歧义；实测 `Ctrl+K`（快捷添加节点）等正常触发。
+- 工具：`GeneratedFiles/regen.bat` 原有两处 bug——`set "INC=…"` 外层引号与内层路径引号冲突、且中文注释在不匹配的控制台代码页下被当成命令——已改为 `set INC=`（去外层引号）并全部用 ASCII 注释，实测可正常重生成 moc/rcc。
+
+当前状态：
+已解决。原生构建实测：顶部为单行，6 个菜单点击均在按钮下方弹出对应原生菜单（含动态节点子菜单），菜单快捷键正常，拖动/最小化/最大化/关闭不受影响。
+
+后续注意：
+- 标题框居中沿用 QML 两个 `fillWidth` 占位符，左侧多了菜单按钮后略向右偏，属预期。
+- 改了 `WorkbenchModels.h`（含 `Q_OBJECT`）或 `WorkbenchTitleBar.qml` 后，务必先运行 `GeneratedFiles/regen.bat` 再构建（原生工程用预生成 moc/rcc）。
+
+---
+
+### 2026-06-09 / Windows 无边框窗口阶段
+
+类型：修改
+
+概述：
+Windows 上原生标题栏与程序自带的 QML 标题栏同时出现，右上角出现两套最小化/最大化/关闭按钮。实现 Windows 无边框窗口，隐藏原生标题栏，只保留程序自带操作区。
+
+影响范围：
+`ImageNodeEditor/gui/NativeWindowChrome.cpp`（仅 Windows 分支）。未改 `MainWindow`、`NativeWindowChrome_mac.mm`、QML 标题栏与 `WorkbenchBridge`。
+
+处理方式：
+此前 `NativeWindowChrome::configure()` 在非 macOS 上是空实现，故 Windows 原生标题栏没被隐藏。改为：在 Windows 分支用 `QAbstractNativeEventFilter` 处理 `WM_NCCALCSIZE`（把整窗作为客户区以去掉可见标题栏；最大化时按外框内缩，避免裁切并让任务栏可见）与 `WM_NCHITTEST`（在窗口边缘返回 HTLEFT/HTTOP… 实现拖边缩放）。保留窗口原生样式（不设 `FramelessWindowHint`），因此 Aero 贴边、最大化动画、投影都保持原生；投影另用 `DwmExtendFrameIntoClientArea` 保证。窗口拖动、最小化、最大化、关闭沿用既有 `WorkbenchBridge -> MainWindow`（`startSystemMove` / `showMinimized` / `showMaximized` / `close`）接线，无需改动。`dwmapi.lib` 用 `#pragma comment(lib, ...)` 自动链接，CMake 与原生 vcxproj 都无需改构建配置。
+
+当前状态：
+已解决。原生 VS 构建实测：原生标题栏消失、右上角仅剩程序自带按钮；拖动、最大化/还原、缩放均正常，最大化无裁切、任务栏可见。
+
+后续注意：
+- 仅 Windows 生效；macOS 仍由 `NativeWindowChrome_mac.mm` 处理，Linux 为空实现，三端均可编译。
+- 自定义标题栏顶部约 6px 为缩放抓取带，与按钮的极窄重叠可接受；如需可在 QML 标题栏顶部留出对应留白。
+- 自动隐藏任务栏在最大化时的弹出未特殊处理（少见场景）。
+
+---
+
+### 2026-06-09 / 原生 VS 工程改为由 VS 直接编译源码阶段
+
+类型：修改
+
+概述：
+按用户要求，把根目录 VS 工程从“委托 CMake 的 Makefile 壳”改为**真正由 VS/MSVC 直接编译本项目源码**的原生 Application 工程。双击根目录 `ImageNodeEditor.slnx` → F5 即可编译运行，全程不经过 CMake、不需要 Qt VS Tools 扩展。
+
+影响范围：
+`ImageNodeEditor/ImageNodeEditor.vcxproj`（重写为 Application）、`.vcxproj.filters`、`.vcxproj.user`；新增 `ImageNodeEditor/qml/workbench.qrc`、`third_party/codicons/codicons.qrc`、`ImageNodeEditor/GeneratedFiles/`（预生成 moc/rcc + `regen.bat`）、`third_party/QtNodes/prebuilt/QtNodes.lib`；`README.md`。未改动任何 `ImageNodeEditor/` 业务源码与 `CMakeLists.txt`。
+
+处理方式：
+- moc/rcc 采用**预生成**策略：用 Qt 6.8.3 的 moc 处理 3 个含 `Q_OBJECT` 的头（`CanvasTabBar.h`、`WorkbenchHostWidget.h`、`WorkbenchModels.h`），rcc 处理两份资源（`/workbench` QML、`/codicons` 字体），产物放入 `GeneratedFiles/` 作为普通 `.cpp` 编译，使 VS 构建不依赖命令行 Qt 工具。`regen.bat` 供改动后刷新。
+- 第三方 QtNodes 用 CMake 预编译的 `QtNodes.lib` 链接（放 `third_party/QtNodes/prebuilt/`，避开 `.gitignore` 的 `lib/` 规则）；因其为静态库且内置默认样式资源，链接器加 `/WHOLEARCHIVE:QtNodes.lib` 防止资源自注册被裁剪；编译期需定义 `NODE_EDITOR_STATIC`（否则 `Export.hpp` 报“Choose whether to link against shared or static”）。
+- 链接 Qt6 模块导入库（Core/Gui/Widgets/OpenGL/Qml/Quick/QuickControls2/QuickWidgets + EntryPoint），`/MD`、C++17、`/permissive-`、`/Zc:__cplusplus`、`/utf-8`；GUI 子系统。
+- PostBuild 调 `windeployqt` 自动部署运行库到 `out/Release/`。
+
+当前状态：
+已解决。命令行 `MSBuild ImageNodeEditor.slnx /p:Configuration=Release /p:Platform=x64`（不调用 CMake）实测编译链接通过；CLI（`version`）与 GUI 均成功运行。
+
+后续注意：
+- 工具集 v145、Windows SDK 10.0.26100.0、仅 `Release|x64`。Debug 需另装 debug 版 Qt。
+- moc/rcc 是预生成快照：新增/修改 `Q_OBJECT` 类或改 qml 后须运行 `GeneratedFiles/regen.bat`（否则 VS 里会缺符号/资源）；日常活跃开发也可继续用 CMake 构建（AUTOMOC 自动处理）。
+- `QtNodes.lib` 为 Release/x64/MSVC 专用预编译产物；升级 Qt 或换工具链需用 CMake 重新生成后替换。
+- `out/` 已 gitignore；`GeneratedFiles/` 与 `prebuilt/QtNodes.lib` 需随提交保留。
+- 坑（已修）：PostBuild 的 windeployqt 起初没带 `qmldir` 选项，未部署 Qt Quick/QML 模块（QtQuick / Controls / Layouts / QtQml），导致工作台 QML 侧边栏（节点库、活动栏）整块**黑屏**。已在 PostBuild 加 `--qmldir "$(ProjectDir)qml"`，让 windeployqt 扫描 qml 源码并部署所需模块到 `out\Release\qml\`。注意 vcxproj 的 XML 注释里不能出现连续两个连字符（会触发 MSB4025），描述该选项时改用“qmldir 选项”等措辞。
+
+---
+
+### 2026-06-09 / 新增原生 VS 2026 提交工程结构阶段
+
+类型：修改
+
+概述：
+按课程提交要求，在仓库中新增原生 Visual Studio 2026 解决方案布局：根目录 `ImageNodeEditor.slnx`（新版 XML 解决方案格式），同名项目目录 `ImageNodeEditor/` 下新增 `ImageNodeEditor.vcxproj` / `.vcxproj.filters` / `.vcxproj.user`，`main.cpp` 已在该目录内。未改动任何源码、`CMakeLists.txt` 或 `third_party/`。
+
+影响范围：
+`ImageNodeEditor.slnx`（新增）、`ImageNodeEditor/ImageNodeEditor.vcxproj` / `.filters` / `.user`（新增）、`README.md`。
+
+处理方式：
+`.vcxproj` 采用 **Makefile（NMake）类型**，把“生成”动作委托给现有 CMake（`cmake --build build-vs --config Release`，首次自动配置 `build-vs/`），即真正编译仍走 CMake，避免在 VS 与 CMake 间维护两份编译配置，也无需安装 Qt VS Tools 扩展（该扩展对全新 VS 2026/v18 兼容性未知）。`.filters` 按 app/core/gui/nodes/processing/util/workflow/qml 镜像目录树；`.user` 把 F5 调试目标指向 CMake 产物并把 Qt bin 注入 PATH。Qt 路径用属性 `QtDir`（默认 `C:\Qt\6.8.3\msvc2022_64`，可由环境变量 `QTDIR` 覆盖）。本机仅装 Release 版 Qt，故只提供 `Release|x64` 单配置。
+
+当前状态：
+已解决。命令行 `MSBuild ImageNodeEditor.slnx /p:Configuration=Release /p:Platform=x64` 实测通过：自动配置 CMake、编译出 `QtNodes.lib` 与 `ImageNodeEditor.exe`。
+
+后续注意：
+- 跨平台与 macOS 仍以根目录 `CMakeLists.txt` 为准；原生 `.vcxproj` 是 Windows 专用、提交结构用，不参与 macOS 构建。
+- 该原生工程依赖 `build-vs/` 由 CMake 配置（NMake 命令里已含“缺失则自动配置”）；换机器时若 Qt 路径不同，改 `QtDir` 默认值或设 `QTDIR`。
+- 若日后需要 VS 内真正的 Debug 单步，需用 aqt 另装 debug 版 Qt 并在 `.vcxproj` 增加 `Debug|x64` 配置。
+- 坑：CMake 在 `build-vs/` 里也会生成一个**同名** `ImageNodeEditor.slnx`，且其默认启动项目是不可运行的 `ALL_BUILD`，直接 F5 会报“无法启动程序 …ALL_BUILD / 拒绝访问”。已在 `CMakeLists.txt` 加 `set_property(DIRECTORY ... PROPERTY VS_STARTUP_PROJECT ImageNodeEditor)`，把生成解决方案的启动项目设为 `ImageNodeEditor`，两个 slnx 现在 F5 均可运行。日常/提交请开**根目录**的 `ImageNodeEditor.slnx`；`build-vs/` 已加入 `.gitignore`。
+
+---
+
+### 2026-06-09 / Windows 首次搭建 Qt 环境并用 VS 2026 编译阶段
+
+类型：决策 / 修改
+
+概述：
+本机原本只有 Visual Studio 2026 Community（v18.6.2，MSVC 14.51，自带 CMake 4.2.3 + Ninja），没有 Qt，也没有可用的 Python（仅 Microsoft Store 占位 alias）。为在 Windows 上重新编译出 `.exe`，新引入开发环境依赖并完成一次完整 Release 构建与运行验证。
+
+影响范围：
+仅开发环境与 `build-vs/` 构建产物，未改动任何源码、`CMakeLists.txt`、JSON 格式或节点接口。
+
+处理方式：
+1. winget 安装 Python 3.12（消除 Store alias），`pip install --user aqtinstall`。
+2. `aqt install-qt windows desktop 6.8.3 win64_msvc2022_64`（基础包已含 qtdeclarative，即 Qml/Quick/QuickControls2/QuickWidgets），再补 `-m qtshadertools`（Qt Quick 在 CMake 配置时会传递性要求它）。安装到 `C:\Qt`。VS 2026 的 MSVC 与 Qt 的 msvc2022_64 二进制 ABI 兼容。
+3. 用 VS 自带 cmake 配置：`cmake -S . -B build-vs -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64`，生成 `.sln`；`cmake --build build-vs --config Release` 通过。
+4. `windeployqt --release` 部署运行期 DLL 与插件。
+
+当前状态：
+已解决。CLI（`version`/`nodes` 等）与 GUI 均成功运行。
+
+后续注意：
+- `windeployqt` 默认只部署 `platforms/qwindows.dll`。本项目命令行模式在 `main.cpp` 里运行时设 `QT_QPA_PLATFORM=offscreen`，windeployqt 无法感知，导致缺 `platforms/qoffscreen.dll`，CLI 启动即 `0xC0000409`（平台插件加载失败 abort）。需手动从 `C:\Qt\6.8.3\msvc2022_64\plugins\platforms\qoffscreen.dll` 复制到部署目录；GUI 模式用 qwindows，不受影响。
+- 构建尾部 `'pwsh.exe' 不是内部命令` 与 windeployqt 的 `dxcompiler/dxil.dll`、`VCINSTALLDIR` 警告均无害，不影响产物。
+
+---
+
 ### 2026-05-21 / Qt GUI 候选原型验证阶段
 
 类型：修改

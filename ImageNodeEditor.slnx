@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Release" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="ImageNodeEditor/ImageNodeEditor.vcxproj" Id="2f8e9a1b-7c3d-4e5f-a6b7-c8d9e0f1a2b3" />
+</Solution>

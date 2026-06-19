@@ -29,6 +29,9 @@ struct Entry {
 // 返回 <group> 快照目录（必要时创建）。
 QString dataDir(const QString& group);
 
+// 某条历史的输出缩略图约定路径（<dataDir>/<id>.png）。文件可能不存在（保存时未执行过）。
+QString thumbnailPath(const QString& group, const QString& id);
+
 // 列出某分组的历史，newest-first（按 QSettings 中 ids 顺序）。
 QVector<Entry> list(const QString& group);
 
@@ -39,5 +42,11 @@ Result<QString> save(const QString& group, const WorkflowGraph& graph,
 
 // 按 id 载入某分组的快照为图。
 Result<WorkflowGraph> load(const QString& group, const QString& id);
+
+// 删除某分组中的一条历史：设置项与快照文件一并清除。id 不存在时视为成功（幂等）。
+Status remove(const QString& group, const QString& id);
+
+// 更新某条历史的 title 元数据；id 不存在或标题为空时返回失败。
+Status setTitle(const QString& group, const QString& id, const QString& title);
 
 }

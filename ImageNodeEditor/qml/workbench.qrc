@@ -1,0 +1,15 @@
+<!-- Qt 资源清单：把 qml/ 下的工作台界面打包到 :/workbench 前缀。
+     与 CMakeLists.txt 中 qt_add_resources(... PREFIX "/workbench") 等价，
+     供原生 Visual Studio 工程用 rcc 生成 qrc_workbench_qml.cpp。 -->
+<RCC>
+  <qresource prefix="/workbench">
+    <file>WorkbenchActivityBar.qml</file>
+    <file>WorkbenchEditorHeader.qml</file>
+    <file>WorkbenchIcon.qml</file>
+    <file>WorkbenchQuickAccess.qml</file>
+    <file>WorkbenchSidebar.qml</file>
+    <file>WorkbenchStatusBar.qml</file>
+    <file>WorkbenchTitleBar.qml</file>
+    <file>WorkbenchTooltip.qml</file>
+  </qresource>
+</RCC>

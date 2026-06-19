@@ -50,11 +50,59 @@ Rectangle {
         }
     }
 
+    // 文字菜单按钮：显示菜单标题（文件/编辑/…），点击时由 C++ 在按钮正下方弹出对应原生菜单。
+    component MenuButton: ToolButton {
+        id: menuButton
+        property string label: ""
+        height: 28
+        padding: 0
+        leftInset: 0
+        rightInset: 0
+        implicitWidth: menuLabel.implicitWidth + Math.round(18 * theme.scale)
+        hoverEnabled: true
+        background: Rectangle {
+            color: "transparent"
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 3
+                radius: 6
+                color: (menuButton.hovered || menuButton.down) ? theme.elevated : "transparent"
+                Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            }
+        }
+        contentItem: Text {
+            id: menuLabel
+            text: menuButton.label
+            color: menuButton.hovered ? theme.textPrimary : theme.textSecondary
+            font.pixelSize: root.fs(13)
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
         Item { Layout.preferredWidth: Qt.platform.os === "osx" ? 78 : 8 }
+
+        // 顶部菜单（macOS 用系统菜单栏，这里只在其它平台显示，与导航键合并到同一行）。
+        Repeater {
+            model: workbenchBridge.headerMenuTitles
+            delegate: MenuButton {
+                required property int index
+                required property string modelData
+                label: modelData
+                visible: Qt.platform.os !== "osx"
+                onClicked: workbenchBridge.openHeaderMenu(index, mapToGlobal(0, height))
+            }
+        }
+
+        Item {
+            Layout.preferredWidth: Qt.platform.os === "osx" ? 0 : 6
+            visible: Qt.platform.os !== "osx"
+        }
 
         CommandButton {
             iconName: "back"

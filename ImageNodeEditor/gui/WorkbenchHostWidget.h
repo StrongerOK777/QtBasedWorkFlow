@@ -39,6 +39,7 @@ public:
     QWidget* previewSidebar() const { return previewSidebar_; }
     QWidget* bottomPanel() const { return bottomPanel_; }
     void showQuickAccess();
+    bool isQuickAccessOpen() const { return quickAccessPopup_ && quickAccessPopup_->isVisible(); }
     void setUiScale(double uiScale);
     // 在 bridge / 各 Model 被销毁前调用，清空所有 QML 表面，断开桥接连接，
     // 避免退出时 QML 绑定访问悬空对象而报错。

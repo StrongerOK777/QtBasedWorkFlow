@@ -44,7 +44,7 @@ ImageNodeEditor/
 - `struct.md`：项目结构索引，说明目录、文件和类职责。
 - `log.md`：开发和运行问题记录，记录重要修改、遇到的问题、解决方式和遗留事项。
 - `agent.md`：给辅助编码工具的最终指导文件，规定编码风格、排错方式和修改边界。
-- `plan.md`：后续优化计划，只保存尚未完成的任务、优先级和验收方向。
+- `plan.md`：后续优化计划，只保存尚未完成的任务、优先级和验收方向。**仅本地开发使用，已加入 `.gitignore`，不进入提交仓库**；新克隆环境中此文件可能不存在。
 - `ImageNodeEditor/`：与项目同名的源码目录，`main.cpp` 放在这里，其他模块按职责分子目录放置。
 - `resources.qrc`：可选 Qt 资源入口；只有需要把图标、示例图片、示例 workflow 打包进程序时才加入。
 
@@ -91,7 +91,7 @@ ImageNodeEditor/app/
 
 职责：
 
-- 解析并调度 picdeal 子命令：`pipe`（ffmpeg 式线性流水线并执行）、`build`（构建并存为 workflow.json）、
+- 解析并调度 picdeal 子命令：`pipe`（ffmpeg 式线性流水线并执行）、`batch`（对目录内每张图片套用同一流水线并批量导出，复用 `buildPipeline` 逐文件执行）、`build`（构建并存为 workflow.json）、
   `run`、`validate`、`nodes`（列出节点与参数）、`save`/`log`/`restore`（类 git 的保存历史回溯）、`help`/`version`。
 - 把 `--操作 [键=值|值]` 映射为节点并用 `setParameter` 设参；ImageInput/Output 文件路径转绝对路径再存。
 - 与 GUI 共用核心（`NodeFactory`/`WorkflowGraph`/`ExecutionEngine`/`WorkflowSerializer`/`WorkflowValidator`）
@@ -259,6 +259,7 @@ ImageNodeEditor/nodes/
 - `TextOverlayNode`：在图片上绘制文字。
 - `BlendNode`：接收两张图片并按透明度混合，用于分支汇合。
 - `ImageMergeNode`：接收多张图片并横向、纵向或网格拼接。
+- 批量处理类（ImageList 数据类型，端口仅与同类互连）：`FolderInput` 按目录批量读入为图片列表；`ListPick` 从列表取第 N 张回到单图管线；`ListMerge` 把列表拼接为单图；`ListExport` 把列表按序号批量保存到目录。目录类参数使用 `ParameterType::Directory`，序列化时与文件路径一样按 workflow 目录处理相对路径。
 
 节点类不应该做：
 
@@ -653,6 +654,10 @@ tests/
   test_graph_validation.cpp
   test_nodes.cpp
 ```
+
+说明：`tests/` 仅本地开发使用，已加入 `.gitignore`，不进入提交仓库。CMake 在 `tests/`
+目录缺失或找不到 Qt6Test 时会自动跳过测试目标，不影响全新克隆的配置与构建。同属本地
+辅助文件的还有 `verify_build.bat`（一键构建验证脚本）及其输出 `verify_report.txt`。
 
 ### `test_workflow_json.cpp`
 

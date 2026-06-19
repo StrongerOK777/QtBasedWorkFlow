@@ -1,5 +1,18 @@
 /nodeeditor
 /build-prototypes
+
+# --- 本地开发辅助文件（不进入最终提交仓库）---
+# 开发计划与单元测试仅供本地迭代使用；verify_build.bat 为一键构建验证脚本，
+# 运行产物 verify_report.txt 与各 *.log 一并忽略（*.log 规则已有）。
+/plan.md
+/tests/
+/verify_build.bat
+/verify_report.txt
+# Claude / 辅助工具会话目录
+.claude/
+# MSBuild 中间目录（根目录与 ImageNodeEditor/ 下均会生成）
+x64/
+
 # --- C++ & CMake ---
 CMakeCache.txt
 CMakeFiles/
@@ -22,8 +35,12 @@ lib/
 *.out
 *.app/
 build/
+build-vs/
 out/
 .qt/
+# Visual Studio 本地缓存目录（不进仓库）。
+# 注意：.vcxproj.user 按课程提交要求需保留，故不忽略。
+.vs/
 
 # --- Python ---
 __pycache__/

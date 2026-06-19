@@ -13,6 +13,8 @@
 #include <memory>
 
 class ImageNode;
+class QImage;
+class QLabel;
 class QWidget;
 
 class WorkflowNodeDelegate final : public QtNodes::NodeDelegateModel {
@@ -50,6 +52,8 @@ public:
     void setExecutionState(NodeExecutionState state);
     void setElapsedMs(qint64 elapsedMs);
     void setAnimationPhase(int phase);
+    // 在卡片内显示该节点最近一次执行的输出缩略图；空图或设置关闭时隐藏。
+    void setOutputThumbnail(const QImage& image);
 
 private:
     QWidget* buildParameterPanel();
@@ -60,8 +64,11 @@ private:
     QSharedPointer<ImageNode> node_;
     double uiScale_ = 1.0;
     ParameterChanged parameterChanged_;
+    QWidget* container_ = nullptr;
+    QLabel* thumbLabel_ = nullptr;
     QWidget* parameterPanel_ = nullptr;
     bool expanded_ = false;
+    bool thumbnailsEnabled_ = true;
     NodeExecutionState executionState_ = NodeExecutionState::NotExecuted;
     qint64 elapsedMs_ = -1;
     int animationPhase_ = 0;

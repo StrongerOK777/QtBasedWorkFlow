@@ -713,6 +713,15 @@ void WorkbenchBridge::setWindowMaximized(bool maximized)
     Q_EMIT windowMaximizedChanged();
 }
 
+void WorkbenchBridge::setHeaderMenuTitles(const QStringList& titles)
+{
+    if (headerMenuTitles_ == titles) {
+        return;
+    }
+    headerMenuTitles_ = titles;
+    Q_EMIT headerMenuTitlesChanged();
+}
+
 void WorkbenchBridge::createNode(const QString& typeName)
 {
     if (!typeName.trimmed().isEmpty()) {
@@ -795,6 +804,32 @@ void WorkbenchBridge::applyWorkflowTemplate(const QString& templateId)
     }
 }
 
+void WorkbenchBridge::renameWorkflowTemplate(const QString& templateId)
+{
+    if (!templateId.trimmed().isEmpty()) {
+        Q_EMIT workflowTemplateRenameRequested(templateId);
+    }
+}
+
+void WorkbenchBridge::deleteWorkflowTemplate(const QString& templateId)
+{
+    if (!templateId.trimmed().isEmpty()) {
+        Q_EMIT workflowTemplateDeleteRequested(templateId);
+    }
+}
+
+void WorkbenchBridge::exportWorkflowTemplate(const QString& templateId)
+{
+    if (!templateId.trimmed().isEmpty()) {
+        Q_EMIT workflowTemplateExportRequested(templateId);
+    }
+}
+
+void WorkbenchBridge::importWorkflowTemplate()
+{
+    Q_EMIT workflowTemplateImportRequested();
+}
+
 void WorkbenchBridge::createCheckpoint()
 {
     Q_EMIT checkpointCreateRequested();
@@ -812,6 +847,32 @@ void WorkbenchBridge::branchFromCheckpoint(const QString& checkpointId)
     if (!checkpointId.trimmed().isEmpty()) {
         Q_EMIT checkpointBranchRequested(checkpointId);
     }
+}
+
+void WorkbenchBridge::renameCheckpoint(const QString& checkpointId)
+{
+    if (!checkpointId.trimmed().isEmpty()) {
+        Q_EMIT checkpointRenameRequested(checkpointId);
+    }
+}
+
+void WorkbenchBridge::deleteCheckpoint(const QString& checkpointId)
+{
+    if (!checkpointId.trimmed().isEmpty()) {
+        Q_EMIT checkpointDeleteRequested(checkpointId);
+    }
+}
+
+void WorkbenchBridge::exportCheckpoint(const QString& checkpointId)
+{
+    if (!checkpointId.trimmed().isEmpty()) {
+        Q_EMIT checkpointExportRequested(checkpointId);
+    }
+}
+
+void WorkbenchBridge::compareCheckpoints()
+{
+    Q_EMIT checkpointCompareRequested();
 }
 
 void WorkbenchBridge::restoreTimeline(const QString& timelineId)
@@ -839,6 +900,11 @@ void WorkbenchBridge::requestWindowMaximizeToggle()
 void WorkbenchBridge::requestWindowClose()
 {
     Q_EMIT windowCloseRequested();
+}
+
+void WorkbenchBridge::openHeaderMenu(int index, const QPointF& globalPos)
+{
+    Q_EMIT headerMenuRequested(index, globalPos);
 }
 
 void WorkbenchBridge::showTooltip(const QString& text, const QString& placement)
