@@ -168,7 +168,8 @@ void WorkflowNodeDelegate::setInData(std::shared_ptr<QtNodes::NodeData> nodeData
 
 QWidget* WorkflowNodeDelegate::embeddedWidget()
 {
-    // 所有节点都返回一个容器：缩略图（执行后常显）在上，参数面板（选中展开时可见）在下。
+    // 所有节点都返回一个容器：缩略图（执行后常显）在上，参数面板始终可见在下——
+    // 节点不必被选中也展示自己的全部属性，不做隐藏/缩小处理。
     // QtNodes 只在建图元时取一次 embeddedWidget，因此容器必须从一开始就存在。
     if (!container_) {
         container_ = new QWidget;
@@ -184,7 +185,7 @@ QWidget* WorkflowNodeDelegate::embeddedWidget()
 
         if (node_ && !node_->parameterDefinitions().isEmpty()) {
             parameterPanel_ = buildParameterPanel();
-            parameterPanel_->setVisible(expanded_);
+            parameterPanel_->setVisible(true);
             layout->addWidget(parameterPanel_);
         }
         container_->adjustSize();
@@ -194,18 +195,9 @@ QWidget* WorkflowNodeDelegate::embeddedWidget()
 
 void WorkflowNodeDelegate::setExpanded(bool expanded)
 {
-    if (expanded_ == expanded) {
-        return;
-    }
+    // 参数面板现在始终可见（选中与否都展示全部属性），此处仅保留选中状态记录，
+    // 不再随选中切换显示/隐藏面板。
     expanded_ = expanded;
-    if (parameterPanel_) {
-        parameterPanel_->setVisible(expanded_);
-        parameterPanel_->adjustSize();
-        if (container_) {
-            container_->adjustSize();
-        }
-    }
-    Q_EMIT requestNodeUpdate();
 }
 
 void WorkflowNodeDelegate::setOutputThumbnail(const QImage& image)
