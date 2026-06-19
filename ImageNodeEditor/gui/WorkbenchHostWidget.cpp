@@ -144,7 +144,11 @@ WorkbenchHostWidget::WorkbenchHostWidget(WorkbenchBridge* bridge,
     popupFrame->setStyleSheet("QFrame#quickAccessPopup { background: transparent; border: 0px; }");
     auto* popupLayout = new QVBoxLayout(popupFrame);
     popupLayout->setContentsMargins(0, 0, 0, 0);
-    popupLayout->addWidget(makeQuickSurface(QUrl(kQuickAccessSource), popupFrame));
+    auto* quickAccessSurface = makeQuickSurface(QUrl(kQuickAccessSource), popupFrame);
+    // 透明清屏色必须配合 WA_TranslucentBackground 才真正透明；否则 QML 圆角卡片
+    // 之外的四角会按黑色渲染（深色主题下不可见，浅色主题立刻露出黑角）。
+    quickAccessSurface->setAttribute(Qt::WA_TranslucentBackground, true);
+    popupLayout->addWidget(quickAccessSurface);
     quickAccessPopup_ = popupFrame;
     quickAccessPopup_->hide();
 

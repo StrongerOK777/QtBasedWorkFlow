@@ -2,6 +2,7 @@
 
 #include "core/NodeParameter.h"
 #include "gui/AppTheme.h"
+#include "gui/PreviewWidgets.h"
 #include "nodes/ImageNode.h"
 
 #include <QCheckBox>
@@ -14,8 +15,12 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
+#include <QSettings>
 #include <QSpinBox>
+#include <QVBoxLayout>
 #include <QWidget>
 
 namespace {
@@ -101,7 +106,8 @@ WorkflowNodeDelegate::WorkflowNodeDelegate(QString workflowNodeId,
       category_(std::move(category)),
       node_(std::move(node)),
       uiScale_(uiScale),
-      parameterChanged_(std::move(parameterChanged))
+      parameterChanged_(std::move(parameterChanged)),
+      thumbnailsEnabled_(QSettings().value("mainWindow/nodeThumbnails", true).toBool())
 {
 }
 
@@ -162,11 +168,28 @@ void WorkflowNodeDelegate::setInData(std::shared_ptr<QtNodes::NodeData> nodeData
 
 QWidget* WorkflowNodeDelegate::embeddedWidget()
 {
-    if (!parameterPanel_ && node_ && !node_->parameterDefinitions().isEmpty()) {
-        parameterPanel_ = buildParameterPanel();
-        parameterPanel_->setVisible(expanded_);
+    // 所有节点都返回一个容器：缩略图（执行后常显）在上，参数面板（选中展开时可见）在下。
+    // QtNodes 只在建图元时取一次 embeddedWidget，因此容器必须从一开始就存在。
+    if (!container_) {
+        container_ = new QWidget;
+        auto* layout = new QVBoxLayout(container_);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(AppTheme::px(4, uiScale_));
+
+        thumbLabel_ = new QLabel;
+        thumbLabel_->setFixedWidth(AppTheme::px(184, uiScale_));
+        thumbLabel_->setAlignment(Qt::AlignCenter);
+        thumbLabel_->setVisible(false);
+        layout->addWidget(thumbLabel_);
+
+        if (node_ && !node_->parameterDefinitions().isEmpty()) {
+            parameterPanel_ = buildParameterPanel();
+            parameterPanel_->setVisible(expanded_);
+            layout->addWidget(parameterPanel_);
+        }
+        container_->adjustSize();
     }
-    return parameterPanel_;
+    return container_;
 }
 
 void WorkflowNodeDelegate::setExpanded(bool expanded)
@@ -178,7 +201,48 @@ void WorkflowNodeDelegate::setExpanded(bool expanded)
     if (parameterPanel_) {
         parameterPanel_->setVisible(expanded_);
         parameterPanel_->adjustSize();
+        if (container_) {
+            container_->adjustSize();
+        }
     }
+    Q_EMIT requestNodeUpdate();
+}
+
+void WorkflowNodeDelegate::setOutputThumbnail(const QImage& image)
+{
+    if (!thumbLabel_) {
+        embeddedWidget();
+    }
+    if (!thumbLabel_) {
+        return;
+    }
+    const bool wasVisible = thumbLabel_->isVisible();
+    if (!thumbnailsEnabled_ || image.isNull()) {
+        if (!wasVisible) {
+            return;
+        }
+        thumbLabel_->clear();
+        thumbLabel_->setVisible(false);
+        thumbLabel_->setFixedHeight(0);
+    } else {
+        const int width = AppTheme::px(184, uiScale_);
+        const int maxHeight = AppTheme::px(118, uiScale_);
+        const QImage scaled = image.scaled(width, maxHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QPixmap pixmap(scaled.size());
+        pixmap.fill(Qt::transparent);
+        {
+            QPainter painter(&pixmap);
+            PreviewInternal::drawCheckerboard(painter, QRectF(QPointF(0, 0), QSizeF(scaled.size())));
+            painter.drawImage(0, 0, scaled);
+        }
+        thumbLabel_->setFixedHeight(scaled.height());
+        thumbLabel_->setPixmap(pixmap);
+        thumbLabel_->setVisible(true);
+    }
+    if (container_) {
+        container_->adjustSize();
+    }
+    Q_EMIT embeddedWidgetSizeUpdated();
     Q_EMIT requestNodeUpdate();
 }
 

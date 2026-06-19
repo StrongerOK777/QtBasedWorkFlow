@@ -43,6 +43,11 @@ QString dataDir(const QString& group)
     return group.isEmpty() ? dir.absolutePath() : dir.absoluteFilePath(group);
 }
 
+QString thumbnailPath(const QString& group, const QString& id)
+{
+    return QDir(dataDir(group)).absoluteFilePath(id + ".png");
+}
+
 QVector<Entry> list(const QString& group)
 {
     QVector<Entry> entries;
@@ -93,6 +98,7 @@ Result<QString> save(const QString& group, const WorkflowGraph& graph,
             if (!stalePath.isEmpty()) {
                 QFile::remove(stalePath);
             }
+            QFile::remove(thumbnailPath(group, stale));
             settings.remove("file/" + stale);
             for (const QString& key : metaKeys()) {
                 settings.remove(key + "/" + stale);
@@ -119,6 +125,51 @@ Result<WorkflowGraph> load(const QString& group, const QString& id)
     }
     WorkflowSerializer serializer;
     return serializer.loadFile(path);
+}
+
+Status remove(const QString& group, const QString& id)
+{
+    if (id.trimmed().isEmpty()) {
+        return Status::fail("历史记录 id 不能为空");
+    }
+    QSettings settings;
+    settings.beginGroup(settingsGroup(group));
+    QStringList ids = settings.value("ids").toStringList();
+    ids.removeAll(id);
+    settings.setValue("ids", ids);
+    const QString path = settings.value("file/" + id).toString();
+    settings.remove("file/" + id);
+    for (const QString& key : metaKeys()) {
+        settings.remove(key + "/" + id);
+    }
+    settings.endGroup();
+    // 缩略图是辅助数据：存在才删，删除失败不视为错误。
+    const QString thumb = thumbnailPath(group, id);
+    if (QFileInfo::exists(thumb)) {
+        QFile::remove(thumb);
+    }
+    if (!path.isEmpty() && QFileInfo::exists(path) && !QFile::remove(path)) {
+        return Status::fail(QString("历史记录已移除，但快照文件删除失败：%1").arg(path));
+    }
+    return Status::ok();
+}
+
+Status setTitle(const QString& group, const QString& id, const QString& title)
+{
+    if (title.trimmed().isEmpty()) {
+        return Status::fail("名称不能为空");
+    }
+    QSettings settings;
+    settings.beginGroup(settingsGroup(group));
+    const bool known = settings.value("ids").toStringList().contains(id);
+    if (known) {
+        settings.setValue("title/" + id, title.trimmed());
+    }
+    settings.endGroup();
+    if (!known) {
+        return Status::fail(QString("找不到历史记录：%1").arg(id));
+    }
+    return Status::ok();
 }
 
 }

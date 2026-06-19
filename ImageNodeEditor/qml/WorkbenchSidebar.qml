@@ -41,6 +41,34 @@ Rectangle {
         ScrollBar.vertical: ScrollBar {}
     }
 
+    // 列表行内的小操作按钮（套用/恢复/改名/导出/删除等），统一外观与悬停反馈。
+    component ActionChip: Rectangle {
+        id: chip
+        property string label
+        property bool accent: false
+        property bool danger: false
+        signal activated()
+        width: sidebar.fs(40)
+        height: sidebar.fs(24)
+        radius: 7
+        color: chip.accent ? (chipMouse.containsMouse ? theme.accentHover : theme.accent)
+                           : (chipMouse.containsMouse ? theme.elevatedHover : theme.elevated)
+        border.color: chip.accent ? "transparent" : theme.border
+        border.width: chip.accent ? 0 : 1
+        Text {
+            anchors.centerIn: parent
+            text: chip.label
+            color: chip.accent ? theme.onAccent : (chip.danger ? theme.danger : theme.textPrimary)
+            font.pixelSize: sidebar.fs(12)
+        }
+        MouseArea {
+            id: chipMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: chip.activated()
+        }
+    }
+
     StackLayout {
         anchors.fill: parent
         // 子面板物理顺序为 0 节点库 / 1 方案库 / 2 进度记录 / 3 工作流 / 4 搜索 / 5 问题 / 6 运行诊断，
@@ -182,23 +210,46 @@ Rectangle {
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
-                Rectangle {
+                RowLayout {
                     Layout.fillWidth: true
-                    height: sidebar.fs(34)
-                    radius: 8
-                    color: templateSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
-                    border.color: theme.border
-                    Text {
-                        anchors.centerIn: parent
-                        text: "保存当前为模板"
-                        color: theme.textPrimary
-                        font.pixelSize: sidebar.fs(14)
+                    spacing: 8
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: sidebar.fs(34)
+                        radius: 8
+                        color: templateSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                        border.color: theme.border
+                        Text {
+                            anchors.centerIn: parent
+                            text: "保存当前为模板"
+                            color: theme.textPrimary
+                            font.pixelSize: sidebar.fs(14)
+                        }
+                        MouseArea {
+                            id: templateSaveMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.saveWorkflowTemplate()
+                        }
                     }
-                    MouseArea {
-                        id: templateSaveMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: workbenchBridge.saveWorkflowTemplate()
+                    Rectangle {
+                        Layout.preferredWidth: sidebar.fs(88)
+                        Layout.preferredHeight: sidebar.fs(34)
+                        radius: 8
+                        color: templateImportMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                        border.color: theme.border
+                        Text {
+                            anchors.centerIn: parent
+                            text: "导入模板"
+                            color: theme.textPrimary
+                            font.pixelSize: sidebar.fs(14)
+                        }
+                        MouseArea {
+                            id: templateImportMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.importWorkflowTemplate()
+                        }
                     }
                 }
                 ResultList {
@@ -212,7 +263,7 @@ Rectangle {
                         required property string source
                         required property bool builtIn
                         width: ListView.view.width
-                        height: 72
+                        height: 112
                         radius: 8
                         color: templateMouse.containsMouse ? theme.elevated : "transparent"
                         Rectangle {
@@ -225,9 +276,10 @@ Rectangle {
                         Column {
                             anchors.left: parent.left
                             anchors.leftMargin: 10
-                            anchors.right: applyTemplateButton.left
+                            anchors.right: parent.right
                             anchors.rightMargin: 8
-                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.top: parent.top
+                            anchors.topMargin: 7
                             spacing: 3
                             Text {
                                 text: title
@@ -254,26 +306,32 @@ Rectangle {
                                 width: parent.width
                             }
                         }
-                        Rectangle {
-                            id: applyTemplateButton
-                            anchors.right: parent.right
-                            anchors.rightMargin: 4
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: sidebar.fs(46)
-                            height: sidebar.fs(26)
-                            radius: 7
-                            color: applyTemplateMouse.containsMouse ? theme.accentHover : theme.accent
-                            Text {
-                                anchors.centerIn: parent
-                                text: "套用"
-                                color: theme.onAccent
-                                font.pixelSize: sidebar.fs(13)
+                        Row {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 6
+                            spacing: 5
+                            ActionChip {
+                                label: "套用"
+                                accent: true
+                                width: sidebar.fs(44)
+                                onActivated: workbenchBridge.applyWorkflowTemplate(templateId)
                             }
-                            MouseArea {
-                                id: applyTemplateMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: workbenchBridge.applyWorkflowTemplate(templateId)
+                            ActionChip {
+                                label: "改名"
+                                visible: !builtIn
+                                onActivated: workbenchBridge.renameWorkflowTemplate(templateId)
+                            }
+                            ActionChip {
+                                label: "导出"
+                                onActivated: workbenchBridge.exportWorkflowTemplate(templateId)
+                            }
+                            ActionChip {
+                                label: "删除"
+                                danger: true
+                                visible: !builtIn
+                                onActivated: workbenchBridge.deleteWorkflowTemplate(templateId)
                             }
                         }
                         MouseArea {
@@ -386,23 +444,46 @@ Rectangle {
                     text: "保存点"
                     Layout.fillWidth: true
                 }
-                Rectangle {
+                RowLayout {
                     Layout.fillWidth: true
-                    height: sidebar.fs(34)
-                    radius: 8
-                    color: checkpointSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
-                    border.color: theme.border
-                    Text {
-                        anchors.centerIn: parent
-                        text: "保存当前进度"
-                        color: theme.textPrimary
-                        font.pixelSize: sidebar.fs(14)
+                    spacing: 8
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: sidebar.fs(34)
+                        radius: 8
+                        color: checkpointSaveMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                        border.color: theme.border
+                        Text {
+                            anchors.centerIn: parent
+                            text: "保存当前进度"
+                            color: theme.textPrimary
+                            font.pixelSize: sidebar.fs(14)
+                        }
+                        MouseArea {
+                            id: checkpointSaveMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.createCheckpoint()
+                        }
                     }
-                    MouseArea {
-                        id: checkpointSaveMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: workbenchBridge.createCheckpoint()
+                    Rectangle {
+                        Layout.preferredWidth: sidebar.fs(72)
+                        Layout.preferredHeight: sidebar.fs(34)
+                        radius: 8
+                        color: checkpointCompareMouse.containsMouse ? theme.elevatedHover : theme.elevated
+                        border.color: theme.border
+                        Text {
+                            anchors.centerIn: parent
+                            text: "对比…"
+                            color: theme.textPrimary
+                            font.pixelSize: sidebar.fs(14)
+                        }
+                        MouseArea {
+                            id: checkpointCompareMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: workbenchBridge.compareCheckpoints()
+                        }
                     }
                 }
                 ResultList {
@@ -447,33 +528,33 @@ Rectangle {
                             anchors.leftMargin: 8
                             anchors.bottom: parent.bottom
                             anchors.bottomMargin: 6
-                            spacing: 6
-                            Rectangle {
-                                width: sidebar.fs(52)
-                                height: sidebar.fs(24)
-                                radius: 7
-                                color: restoreMouse.containsMouse ? theme.accentHover : theme.accent
-                                Text { anchors.centerIn: parent; text: "恢复"; color: theme.onAccent; font.pixelSize: sidebar.fs(13) }
-                                MouseArea {
-                                    id: restoreMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: workbenchBridge.restoreCheckpoint(checkpointId)
-                                }
+                            spacing: 4
+                            ActionChip {
+                                label: "恢复"
+                                accent: true
+                                width: sidebar.fs(36)
+                                onActivated: workbenchBridge.restoreCheckpoint(checkpointId)
                             }
-                            Rectangle {
-                                width: sidebar.fs(52)
-                                height: sidebar.fs(24)
-                                radius: 7
-                                color: branchMouse.containsMouse ? theme.elevatedHover : theme.elevated
-                                border.color: theme.border
-                                Text { anchors.centerIn: parent; text: "分支"; color: theme.textPrimary; font.pixelSize: sidebar.fs(13) }
-                                MouseArea {
-                                    id: branchMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: workbenchBridge.branchFromCheckpoint(checkpointId)
-                                }
+                            ActionChip {
+                                label: "分支"
+                                width: sidebar.fs(36)
+                                onActivated: workbenchBridge.branchFromCheckpoint(checkpointId)
+                            }
+                            ActionChip {
+                                label: "改名"
+                                width: sidebar.fs(36)
+                                onActivated: workbenchBridge.renameCheckpoint(checkpointId)
+                            }
+                            ActionChip {
+                                label: "导出"
+                                width: sidebar.fs(36)
+                                onActivated: workbenchBridge.exportCheckpoint(checkpointId)
+                            }
+                            ActionChip {
+                                label: "删除"
+                                danger: true
+                                width: sidebar.fs(36)
+                                onActivated: workbenchBridge.deleteCheckpoint(checkpointId)
                             }
                         }
                         MouseArea {

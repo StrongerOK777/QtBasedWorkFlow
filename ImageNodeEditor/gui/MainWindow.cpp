@@ -7,6 +7,7 @@
 #include "gui/MiniMapWidget.h"
 #include "gui/NativeWindowChrome.h"
 #include "gui/PreviewWidgets.h"
+#include "gui/WorkflowDiffDialog.h"
 #include "gui/TerminalPanel.h"
 #include "gui/WorkbenchHostWidget.h"
 #include "gui/WorkbenchModels.h"
@@ -65,6 +66,7 @@
 #include <QProcess>
 #include <QPointer>
 #include <QPushButton>
+#include <QQuickWidget>
 #include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScreen>
@@ -204,15 +206,13 @@ void suppressMenuIcons(QMenu* menu)
     }
 }
 
-QString workflowDataDir(const QString& child)
+QString sanitizeFileName(const QString& name)
 {
-    // 与命令行共用同一套保存历史的存储位置（单一事实源）。
-    return WorkflowHistory::dataDir(child);
-}
-
-QString workflowSnapshotPath(const QString& group, const QString& id)
-{
-    return QDir(workflowDataDir(group)).absoluteFilePath(id + ".json");
+    // 模板/保存点名称可能含 Windows 文件名非法字符（如「保存点 06-11 14:30」中的冒号）。
+    QString cleaned = name.trimmed();
+    static const QRegularExpression illegal(R"([\\/:*?"<>|])");
+    cleaned.replace(illegal, "-");
+    return cleaned.isEmpty() ? QStringLiteral("workflow") : cleaned;
 }
 
 Result<WorkflowGraph> builtInTemplateGraph(const QString& id)
@@ -285,7 +285,10 @@ Result<WorkflowGraph> builtInTemplateGraph(const QString& id)
 
 class QuickNodePalettePopup final : public QDialog {
 public:
-    explicit QuickNodePalettePopup(double uiScale, QWidget* parent = nullptr)
+    // descriptors 非空时按给定列表与顺序展示（用于拖线推荐的预过滤候选），为空时展示全部节点。
+    explicit QuickNodePalettePopup(double uiScale, QWidget* parent = nullptr,
+                                   const QVector<NodeDescriptor>& descriptors = {},
+                                   const QString& hint = {})
         : QDialog(parent, Qt::Popup | Qt::FramelessWindowHint)
     {
         setObjectName("quickNodePalettePopup");
@@ -295,6 +298,12 @@ public:
         root->setContentsMargins(AppTheme::px(12, uiScale), AppTheme::px(12, uiScale),
                                  AppTheme::px(12, uiScale), AppTheme::px(12, uiScale));
         root->setSpacing(AppTheme::px(8, uiScale));
+
+        if (!hint.isEmpty()) {
+            auto* hintLabel = new QLabel(hint);
+            hintLabel->setObjectName("quickNodeHint");
+            root->addWidget(hintLabel);
+        }
 
         search_ = new QLineEdit;
         search_->setPlaceholderText("搜索节点名称、类型或分类");
@@ -310,7 +319,7 @@ public:
         list_->setMinimumHeight(AppTheme::px(260, uiScale));
         root->addWidget(list_);
 
-        descriptors_ = NodeFactory::instance().descriptors();
+        descriptors_ = descriptors.isEmpty() ? NodeFactory::instance().descriptors() : descriptors;
         refilter();
 
         connect(search_, &QLineEdit::textChanged, this, [this] { refilter(); });
@@ -406,6 +415,24 @@ private:
     QVector<NodeDescriptor> descriptors_;
     QString selectedType_;
 };
+
+// 把弹出面板放到画布某 scene 坐标附近，并夹取到屏幕可用区域内。
+void movePopupNearScenePosition(QDialog& popup, QGraphicsView* view, double uiScale, const QPointF& scenePosition)
+{
+    popup.adjustSize();
+    QPoint viewportPosition = view->mapFromScene(scenePosition);
+    if (!view->viewport()->rect().contains(viewportPosition)) {
+        viewportPosition = view->viewport()->rect().center();
+    }
+    QPoint popupPosition = view->viewport()->mapToGlobal(viewportPosition + QPoint(AppTheme::px(12, uiScale), AppTheme::px(12, uiScale)));
+    if (auto* screen = QGuiApplication::screenAt(popupPosition)) {
+        const QRect available = screen->availableGeometry().adjusted(8, 8, -8, -8);
+        const QSize size = popup.sizeHint();
+        popupPosition.setX(std::clamp(popupPosition.x(), available.left(), available.right() - size.width()));
+        popupPosition.setY(std::clamp(popupPosition.y(), available.top(), available.bottom() - size.height()));
+    }
+    popup.move(popupPosition);
+}
 
 bool findPortInfo(const QSharedPointer<ImageNode>& node, const QString& portName, PortDirection direction, PortInfo* out)
 {
@@ -749,6 +776,10 @@ void MainWindow::createLayout()
     canvasCallbacks.deleteSelection = [this] { removeSelectedItems(); };
     canvasCallbacks.copySelection = [this] { copySelectedNode(); };
     canvasCallbacks.quickPalette = [this](const QPointF& pos) { showQuickNodePaletteAt(pos); };
+    canvasCallbacks.connectionDroppedAtEmpty = [this](const QString& nodeId, const QString& portName,
+                                                      PortDirection direction, const QPointF& pos) {
+        showConnectionSuggestionPalette(nodeId, portName, direction, pos);
+    };
     canvasCallbacks.sceneContextMenu = [this](const QPointF& pos) { return createCanvasContextMenu(pos); };
     canvasCallbacks.nodeDropped = [this](const QString& typeName, const QPointF& pos) {
         addNodeFromType(typeName, pos);
@@ -1045,12 +1076,28 @@ void MainWindow::createLayout()
             this, &MainWindow::saveCurrentWorkflowAsTemplate);
     connect(workbenchBridge_, &WorkbenchBridge::workflowTemplateApplyRequested,
             this, &MainWindow::applyWorkflowTemplate);
+    connect(workbenchBridge_, &WorkbenchBridge::workflowTemplateRenameRequested,
+            this, &MainWindow::renameWorkflowTemplate);
+    connect(workbenchBridge_, &WorkbenchBridge::workflowTemplateDeleteRequested,
+            this, &MainWindow::deleteWorkflowTemplate);
+    connect(workbenchBridge_, &WorkbenchBridge::workflowTemplateExportRequested,
+            this, &MainWindow::exportWorkflowTemplate);
+    connect(workbenchBridge_, &WorkbenchBridge::workflowTemplateImportRequested,
+            this, &MainWindow::importWorkflowTemplate);
     connect(workbenchBridge_, &WorkbenchBridge::checkpointCreateRequested,
             this, &MainWindow::createWorkflowCheckpoint);
     connect(workbenchBridge_, &WorkbenchBridge::checkpointRestoreRequested,
             this, &MainWindow::restoreWorkflowCheckpoint);
     connect(workbenchBridge_, &WorkbenchBridge::checkpointBranchRequested,
             this, &MainWindow::branchFromWorkflowCheckpoint);
+    connect(workbenchBridge_, &WorkbenchBridge::checkpointRenameRequested,
+            this, &MainWindow::renameWorkflowCheckpoint);
+    connect(workbenchBridge_, &WorkbenchBridge::checkpointDeleteRequested,
+            this, &MainWindow::deleteWorkflowCheckpoint);
+    connect(workbenchBridge_, &WorkbenchBridge::checkpointExportRequested,
+            this, &MainWindow::exportWorkflowCheckpoint);
+    connect(workbenchBridge_, &WorkbenchBridge::checkpointCompareRequested,
+            this, &MainWindow::showCheckpointDiffDialog);
     connect(workbenchBridge_, &WorkbenchBridge::timelineRestoreRequested,
             this, &MainWindow::restoreTimelineEntry);
     connect(workbenchBridge_, &WorkbenchBridge::windowMoveRequested, this, [this] {
@@ -1095,6 +1142,8 @@ void MainWindow::createLayout()
 #endif
     connect(workbenchBridge_, &WorkbenchBridge::tooltipRequested, this, &MainWindow::showWorkbenchTooltip);
     connect(workbenchBridge_, &WorkbenchBridge::tooltipHideRequested, this, &MainWindow::hideWorkbenchTooltip);
+    // 命令面板弹出瞬间收掉已显示的悬停提示（被遮住的按钮不会再发 hide 请求）。
+    connect(workbenchBridge_, &WorkbenchBridge::quickAccessRequested, this, &MainWindow::hideWorkbenchTooltip);
     refreshRecentWorkflowModel();
     refreshWorkflowTemplateModel();
     refreshWorkflowCheckpointModel();
@@ -1907,6 +1956,7 @@ void MainWindow::enterMacroNodeInternal(const QString& nodeId, bool clearForward
     graph_ = WorkflowCommands::cloneGraph(macro->subgraph());
     selectedNodeId_.clear();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     engine_.clearCache();
     undoStack_->clear();
@@ -1956,6 +2006,7 @@ void MainWindow::leaveMacroNode()
     }
     selectedNodeId_ = context.macroNodeId;
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     engine_.clearCache();
     undoStack_->clear();
@@ -2019,24 +2070,131 @@ void MainWindow::showQuickNodePaletteAt(const QPointF& scenePosition)
     }
 
     QuickNodePalettePopup popup(uiScale_, this);
-    popup.adjustSize();
-    QPoint viewportPosition = view_->mapFromScene(scenePosition);
-    if (!view_->viewport()->rect().contains(viewportPosition)) {
-        viewportPosition = view_->viewport()->rect().center();
-    }
-    QPoint popupPosition = view_->viewport()->mapToGlobal(viewportPosition + QPoint(AppTheme::px(12, uiScale_), AppTheme::px(12, uiScale_)));
-    if (auto* screen = QGuiApplication::screenAt(popupPosition)) {
-        const QRect available = screen->availableGeometry().adjusted(8, 8, -8, -8);
-        const QSize size = popup.sizeHint();
-        popupPosition.setX(std::clamp(popupPosition.x(), available.left(), available.right() - size.width()));
-        popupPosition.setY(std::clamp(popupPosition.y(), available.top(), available.bottom() - size.height()));
-    }
-    popup.move(popupPosition);
+    movePopupNearScenePosition(popup, view_, uiScale_, scenePosition);
 
     if (popup.exec() == QDialog::Accepted && !popup.selectedType().isEmpty()) {
         addNodeFromType(popup.selectedType(), scenePosition);
     }
     view_->setFocus(Qt::ShortcutFocusReason);
+}
+
+void MainWindow::showConnectionSuggestionPalette(const QString& originNodeId,
+                                                 const QString& originPortName,
+                                                 PortDirection originDirection,
+                                                 const QPointF& scenePosition)
+{
+    if (!view_ || executionBusy_) {
+        return;
+    }
+    const auto originNode = graph_.node(originNodeId);
+    PortInfo originPort;
+    if (!findPortInfo(originNode, originPortName, originDirection, &originPort)) {
+        return;
+    }
+
+    // 候选：对侧存在类型兼容端口的节点类型，记下建议连接的端口名。
+    // 复用 core/PortType.h 的 portTypesCompatible，与连线校验同一套规则。
+    QVector<NodeDescriptor> ordered;
+    QMap<QString, QString> counterpartPortByType;
+    for (const auto& descriptor : NodeFactory::instance().descriptors()) {
+        auto created = NodeFactory::instance().create(descriptor.typeName);
+        if (created.isFail()) {
+            continue;
+        }
+        const QVector<PortInfo> counterparts = originDirection == PortDirection::Output
+                                                   ? created.value()->inputPorts()
+                                                   : created.value()->outputPorts();
+        for (const PortInfo& port : counterparts) {
+            const bool compatible = originDirection == PortDirection::Output
+                                        ? portTypesCompatible(originPort.type, port.type)
+                                        : portTypesCompatible(port.type, originPort.type);
+            if (compatible) {
+                ordered.append(descriptor);
+                counterpartPortByType.insert(descriptor.typeName, port.name);
+                break;
+            }
+        }
+    }
+    if (ordered.isEmpty()) {
+        return;
+    }
+
+    // 方向感知排序：从输出端口拖出优先推荐「往下游加工」的处理类节点；
+    // 从输入端口拖出优先推荐「补上游来源」的读入类节点。类别内保持注册顺序。
+    const QStringList categoryOrder =
+        originDirection == PortDirection::Output
+            ? QStringList{"几何变换", "色彩处理", "滤波处理", "合成处理", "批量处理", "输入输出", "高级功能"}
+            : QStringList{"输入输出", "批量处理", "几何变换", "色彩处理", "滤波处理", "合成处理", "高级功能"};
+    std::stable_sort(ordered.begin(), ordered.end(), [&](const NodeDescriptor& a, const NodeDescriptor& b) {
+        int indexA = categoryOrder.indexOf(a.category);
+        int indexB = categoryOrder.indexOf(b.category);
+        if (indexA < 0) {
+            indexA = categoryOrder.size();
+        }
+        if (indexB < 0) {
+            indexB = categoryOrder.size();
+        }
+        return indexA < indexB;
+    });
+
+    const QString hint = QString("可连接到「%1」%2端口 · %3")
+                             .arg(originPort.displayName.isEmpty() ? originPortName : originPort.displayName,
+                                  originDirection == PortDirection::Output ? "输出" : "输入",
+                                  portTypeName(originPort.type));
+    QuickNodePalettePopup popup(uiScale_, this, ordered, hint);
+    movePopupNearScenePosition(popup, view_, uiScale_, scenePosition);
+
+    if (popup.exec() == QDialog::Accepted && !popup.selectedType().isEmpty()) {
+        addNodeConnectedToPort(popup.selectedType(),
+                               counterpartPortByType.value(popup.selectedType()),
+                               originNodeId, originPortName, originDirection, scenePosition);
+    }
+    view_->setFocus(Qt::ShortcutFocusReason);
+}
+
+void MainWindow::addNodeConnectedToPort(const QString& typeName,
+                                        const QString& counterpartPort,
+                                        const QString& originNodeId,
+                                        const QString& originPortName,
+                                        PortDirection originDirection,
+                                        const QPointF& position)
+{
+    if (rejectGraphReplacementWhileBusy("添加节点并连线")) {
+        return;
+    }
+    const WorkflowGraph before = WorkflowCommands::cloneGraph(graph_);
+    const QString selectedBefore = selectedNodeId_;
+    auto created = NodeFactory::instance().create(typeName);
+    if (created.isFail()) {
+        appendLog(created.error());
+        return;
+    }
+    const QString id = graph_.addNode(created.value(), findAvailableNodePosition(position));
+
+    Edge edge;
+    if (originDirection == PortDirection::Output) {
+        edge = {originNodeId, originPortName, id, counterpartPort};
+    } else {
+        edge = {id, counterpartPort, originNodeId, originPortName};
+    }
+    WorkflowValidator validator;
+    const Status valid = validator.validateEdge(graph_, edge);
+    if (valid.isOk()) {
+        graph_.addEdge(edge);
+        appendLog(QString("添加节点并连线：%1").arg(id), id);
+    } else {
+        // 候选已按类型预过滤，这里一般只剩「单输入端口已占用」等情况：保留节点、说明原因。
+        appendLog(QString("已添加节点 %1，但自动连线未完成：%2").arg(id, valid.error()), id);
+    }
+
+    selectedNodeId_ = id;
+    resetNodeRunStates();
+    rebuildScene();
+    if (auto* item = nodeItems_.value(id)) {
+        item->setSelected(true);
+    }
+    pushGraphEditCommand(QString("添加节点并连线 %1").arg(id), before, selectedBefore,
+                         WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 }
 
 QMenu* MainWindow::createCanvasContextMenu(const QPointF& scenePosition)
@@ -2237,7 +2395,7 @@ void MainWindow::rebuildScene()
     }
     if (canvas_) {
         canvas_->setUiScale(uiScale_);
-        canvas_->rebuild(graph_, nodeRunStates_, nodeElapsedMs_);
+        canvas_->rebuild(graph_, nodeRunStates_, nodeElapsedMs_, nodeThumbnails_);
         scene_ = canvas_->scene();
         nodeItems_ = canvas_->nodeItems();
     }
@@ -2416,6 +2574,43 @@ void MainWindow::resetNodeRunStates()
     }
 }
 
+void MainWindow::publishNodeThumbnails(const ExecutionResult& result)
+{
+    // 把执行结果中各节点的首个图像输出缩成小图，灌进画布节点卡片。
+    // 只存缩好的小图（宽 ≤184×scale），控制 nodeThumbnails_ 的内存占用。
+    if (!QSettings().value("mainWindow/nodeThumbnails", true).toBool()) {
+        return;
+    }
+    const int width = AppTheme::px(184, uiScale_);
+    const int maxHeight = AppTheme::px(118, uiScale_);
+    for (auto it = result.nodeOutputs.cbegin(); it != result.nodeOutputs.cend(); ++it) {
+        QImage image;
+        for (auto out = it.value().cbegin(); out != it.value().cend(); ++out) {
+            const NodeData& data = out.value();
+            if (data.type == PortType::ImageRGBA || data.type == PortType::ImageGray ||
+                data.type == PortType::Mask) {
+                image = data.value.value<QImage>();
+            } else if (data.type == PortType::ImageList) {
+                const auto list = data.value.value<QList<QImage>>();
+                if (!list.isEmpty()) {
+                    image = list.first();
+                }
+            }
+            if (!image.isNull()) {
+                break;
+            }
+        }
+        if (image.isNull()) {
+            continue;
+        }
+        const QImage thumb = image.scaled(width, maxHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        nodeThumbnails_.insert(it.key(), thumb);
+        if (canvas_) {
+            canvas_->setOutputThumbnail(it.key(), thumb);
+        }
+    }
+}
+
 void MainWindow::applyNodeRunState(const QString& nodeId, NodeExecutionState state)
 {
     if (nodeId.isEmpty()) {
@@ -2499,6 +2694,16 @@ void MainWindow::showWorkbenchTooltip(const QString& text, const QString& placem
 {
     if (text.trimmed().isEmpty()) {
         hideWorkbenchTooltip();
+        return;
+    }
+    // 命令面板打开时遮罩层盖住所有 QML 表面，被盖住的按钮收不到 hover 退出、
+    // 计时器照常触发，会把它的提示弹到当前光标处（表现为悬停命令行却显示
+    // 「隐藏预览」之类别处文案）。光标不在 QML 表面上（被面板、遮罩、原生菜单
+    // 覆盖）一律不显示。
+    if (workbenchHost_ && workbenchHost_->isQuickAccessOpen()) {
+        return;
+    }
+    if (!qobject_cast<QQuickWidget*>(QApplication::widgetAt(QCursor::pos()))) {
         return;
     }
     if (!tooltipPopup_) {
@@ -2650,6 +2855,7 @@ void MainWindow::finishWorkflowExecution(int generation,
     engine_ = updatedEngine;
     engine_.setCancelFlag({});
     lastResult_ = result.isFail() ? engineLastResult : result.value();
+    publishNodeThumbnails(lastResult_);
     rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
         appendLog(summary.message, summary.nodeId);
@@ -2692,6 +2898,7 @@ void MainWindow::finishLivePreview(int generation,
     engine_ = updatedEngine;
     engine_.setCancelFlag({});
     lastResult_ = result.isFail() ? engineLastResult : result.value();
+    publishNodeThumbnails(lastResult_);
     rebuildEdges();
     for (const auto& summary : lastResult_.nodeSummaries) {
         appendLog(summary.message, summary.nodeId);
@@ -2933,6 +3140,7 @@ void MainWindow::newWorkflow()
     currentWorkflowBranch_ = "main";
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
@@ -2999,6 +3207,7 @@ void MainWindow::openWorkflowPath(const QString& path, bool confirmCurrentWorkfl
     currentWorkflowBranch_ = "main";
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
@@ -3281,6 +3490,7 @@ void MainWindow::restoreTimelineEntry(const QString& timelineId)
     selectedNodeId_.clear();
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     resetNodeRunStates();
     updateNavigationActions();
@@ -3303,27 +3513,136 @@ void MainWindow::saveCurrentWorkflowAsTemplate()
     if (title.trimmed().isEmpty()) {
         return;
     }
-    const QString id = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
-    const QString path = workflowSnapshotPath("templates", id);
-    WorkflowSerializer serializer;
-    auto saved = serializer.saveFile(graphForPersistence(), path);
+    const auto saved = WorkflowHistory::save(WorkflowHistory::kTemplates, graphForPersistence(),
+                                             {{"title", title.trimmed()}});
     if (saved.isFail()) {
         appendProblem(QString("模板保存失败：%1").arg(saved.error()));
         QMessageBox::warning(this, "模板保存失败", saved.error());
         return;
     }
-
-    QSettings settings;
-    settings.beginGroup("workflowTemplates");
-    QStringList ids = settings.value("ids").toStringList();
-    ids.removeAll(id);
-    ids.prepend(id);
-    settings.setValue("ids", ids);
-    settings.setValue("title/" + id, title.trimmed());
-    settings.setValue("file/" + id, path);
-    settings.endGroup();
     refreshWorkflowTemplateModel();
     appendLog(QString("已保存模板：%1").arg(title.trimmed()));
+}
+
+void MainWindow::renameWorkflowTemplate(const QString& templateId)
+{
+    // 预设方案是内置生成的，没有可改的存储项；QML 已隐藏入口，这里再兜底一次。
+    if (!templateId.startsWith("user:")) {
+        return;
+    }
+    const QString id = templateId.mid(QString("user:").size());
+    QSettings settings;
+    settings.beginGroup("workflowTemplates");
+    const QString oldTitle = settings.value("title/" + id, id).toString();
+    settings.endGroup();
+
+    const QString title = QInputDialog::getText(this, "重命名模板", "模板名称：", QLineEdit::Normal, oldTitle);
+    if (title.trimmed().isEmpty() || title.trimmed() == oldTitle) {
+        return;
+    }
+    const Status renamed = WorkflowHistory::setTitle(WorkflowHistory::kTemplates, id, title.trimmed());
+    if (renamed.isFail()) {
+        appendProblem(QString("模板重命名失败：%1").arg(renamed.error()));
+        QMessageBox::warning(this, "模板重命名失败", renamed.error());
+        return;
+    }
+    refreshWorkflowTemplateModel();
+    appendLog(QString("已重命名模板：%1 → %2").arg(oldTitle, title.trimmed()));
+}
+
+void MainWindow::deleteWorkflowTemplate(const QString& templateId)
+{
+    if (!templateId.startsWith("user:")) {
+        return;
+    }
+    const QString id = templateId.mid(QString("user:").size());
+    QSettings settings;
+    settings.beginGroup("workflowTemplates");
+    const QString title = settings.value("title/" + id, id).toString();
+    settings.endGroup();
+
+    if (QMessageBox::question(this, "删除模板",
+                              QString("确定删除模板「%1」吗？删除后不可恢复。").arg(title),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    const Status removed = WorkflowHistory::remove(WorkflowHistory::kTemplates, id);
+    if (removed.isFail()) {
+        appendProblem(QString("模板删除失败：%1").arg(removed.error()));
+        QMessageBox::warning(this, "模板删除失败", removed.error());
+        return;
+    }
+    refreshWorkflowTemplateModel();
+    appendLog(QString("已删除模板：%1").arg(title));
+}
+
+void MainWindow::exportWorkflowTemplate(const QString& templateId)
+{
+    Result<WorkflowGraph> loaded = Result<WorkflowGraph>::fail("未知模板");
+    QString title = templateId;
+    if (templateId.startsWith("builtin:")) {
+        loaded = builtInTemplateGraph(templateId);
+        if (workflowTemplateModel_) {
+            title = workflowTemplateModel_->entryById(templateId).title;
+        }
+    } else if (templateId.startsWith("user:")) {
+        const QString id = templateId.mid(QString("user:").size());
+        QSettings settings;
+        settings.beginGroup("workflowTemplates");
+        title = settings.value("title/" + id, id).toString();
+        settings.endGroup();
+        loaded = WorkflowHistory::load(WorkflowHistory::kTemplates, id);
+    }
+    if (loaded.isFail()) {
+        appendProblem(QString("模板导出失败：%1").arg(loaded.error()));
+        QMessageBox::warning(this, "模板导出失败", loaded.error());
+        return;
+    }
+
+    const QString target = QFileDialog::getSaveFileName(this, "导出模板", sanitizeFileName(title) + ".json",
+                                                        "工作流 (*.json);;所有文件 (*)");
+    if (target.isEmpty()) {
+        return;
+    }
+    // 经序列化器重存（而不是复制快照文件），路径参数会改按导出位置重新计算相对路径。
+    WorkflowSerializer serializer;
+    const Status saved = serializer.saveFile(loaded.value(), target);
+    if (saved.isFail()) {
+        appendProblem(QString("模板导出失败：%1").arg(saved.error()));
+        QMessageBox::warning(this, "模板导出失败", saved.error());
+        return;
+    }
+    appendLog(QString("已导出模板：%1 → %2").arg(title, target));
+}
+
+void MainWindow::importWorkflowTemplate()
+{
+    const QString source = QFileDialog::getOpenFileName(this, "导入模板", {}, "工作流 (*.json);;所有文件 (*)");
+    if (source.isEmpty()) {
+        return;
+    }
+    WorkflowSerializer serializer;
+    auto loaded = serializer.loadFile(source);
+    if (loaded.isFail()) {
+        appendProblem(QString("模板导入失败：%1").arg(loaded.error()));
+        QMessageBox::warning(this, "模板导入失败", loaded.error());
+        return;
+    }
+
+    const QString title = QInputDialog::getText(this, "导入模板", "模板名称：", QLineEdit::Normal,
+                                                QFileInfo(source).completeBaseName());
+    if (title.trimmed().isEmpty()) {
+        return;
+    }
+    const auto saved = WorkflowHistory::save(WorkflowHistory::kTemplates, loaded.value(),
+                                             {{"title", title.trimmed()}});
+    if (saved.isFail()) {
+        appendProblem(QString("模板导入失败：%1").arg(saved.error()));
+        QMessageBox::warning(this, "模板导入失败", saved.error());
+        return;
+    }
+    refreshWorkflowTemplateModel();
+    appendLog(QString("已导入模板：%1（来自 %2）").arg(title.trimmed(), source));
 }
 
 void MainWindow::applyWorkflowTemplate(const QString& templateId)
@@ -3372,6 +3691,7 @@ void MainWindow::applyWorkflowTemplate(const QString& templateId)
     currentWorkflowBranch_ = "main";
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     resetNodeRunStates();
     updateNavigationActions();
@@ -3380,6 +3700,89 @@ void MainWindow::applyWorkflowTemplate(const QString& templateId)
     pushGraphEditCommand(QString("套用模板 %1").arg(title), before, selectedBefore,
                          WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
     appendLog(QString("已套用模板：%1").arg(title));
+}
+
+QImage MainWindow::captureWorkflowResultThumbnail() const
+{
+    // 取「最终输出」做版本缩略图：优先终端 Preview 节点，再任意终端节点，最后任意有图节点。
+    if (lastResult_.nodeOutputs.isEmpty()) {
+        return {};
+    }
+    QSet<QString> hasDownstream;
+    for (const Edge& edge : graph_.edges()) {
+        hasDownstream.insert(edge.fromNode);
+    }
+    auto firstImageOf = [this](const QString& nodeId) -> QImage {
+        const auto outputs = lastResult_.nodeOutputs.value(nodeId);
+        for (auto it = outputs.cbegin(); it != outputs.cend(); ++it) {
+            const NodeData& data = it.value();
+            if (data.type == PortType::ImageRGBA || data.type == PortType::ImageGray ||
+                data.type == PortType::Mask) {
+                const QImage image = data.value.value<QImage>();
+                if (!image.isNull()) {
+                    return image;
+                }
+            } else if (data.type == PortType::ImageList) {
+                const auto list = data.value.value<QList<QImage>>();
+                if (!list.isEmpty() && !list.first().isNull()) {
+                    return list.first();
+                }
+            }
+        }
+        return {};
+    };
+
+    QImage best;
+    for (int pass = 0; pass < 3 && best.isNull(); ++pass) {
+        for (const auto& record : graph_.nodes()) {
+            const bool terminal = !hasDownstream.contains(record.id);
+            if (pass == 0 && (!terminal || !record.node || record.node->typeName() != "Preview")) {
+                continue;
+            }
+            if (pass == 1 && !terminal) {
+                continue;
+            }
+            best = firstImageOf(record.id);
+            if (!best.isNull()) {
+                break;
+            }
+        }
+    }
+    if (best.isNull()) {
+        return {};
+    }
+    return best.width() > 320 || best.height() > 320
+               ? best.scaled(320, 320, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+               : best;
+}
+
+void MainWindow::showCheckpointDiffDialog()
+{
+    QVector<WorkflowDiffDialog::Entry> entries;
+    entries.append({QStringLiteral("当前画布"), WorkflowCommands::cloneGraph(graph_),
+                    captureWorkflowResultThumbnail()});
+    for (const auto& info : WorkflowHistory::list(WorkflowHistory::kCheckpoints)) {
+        auto loaded = WorkflowHistory::load(WorkflowHistory::kCheckpoints, info.id);
+        if (loaded.isFail()) {
+            continue;
+        }
+        QString label = info.meta.value("title", info.id);
+        const QString branch = info.meta.value("branch");
+        if (!branch.isEmpty() && branch != "main") {
+            label += QString(" [%1]").arg(branch);
+        }
+        label += QString(" · %1").arg(info.when.toString("MM-dd HH:mm"));
+        QImage thumbnail;
+        thumbnail.load(WorkflowHistory::thumbnailPath(WorkflowHistory::kCheckpoints, info.id));
+        entries.append({label, loaded.value(), thumbnail});
+    }
+    if (entries.size() < 2) {
+        QMessageBox::information(this, "对比工作流版本",
+                                 "还没有可对比的保存点。先在进度记录面板「保存当前进度」，再来对比。");
+        return;
+    }
+    WorkflowDiffDialog dialog(std::move(entries), uiScale_, this);
+    dialog.exec();
 }
 
 void MainWindow::createWorkflowCheckpoint()
@@ -3398,6 +3801,11 @@ void MainWindow::createWorkflowCheckpoint()
         appendProblem(QString("进度保存失败：%1").arg(saved.error()));
         QMessageBox::warning(this, "进度保存失败", saved.error());
         return;
+    }
+    // 顺带截存最近一次执行的最终输出，供「对比工作流版本」做缩略图对比；没执行过就略过。
+    const QImage thumbnail = captureWorkflowResultThumbnail();
+    if (!thumbnail.isNull()) {
+        thumbnail.save(WorkflowHistory::thumbnailPath(WorkflowHistory::kCheckpoints, saved.value()));
     }
     refreshWorkflowCheckpointModel();
     appendLog(QString("已保存进度：%1 [%2]").arg(title.trimmed(), currentWorkflowBranch_));
@@ -3440,6 +3848,7 @@ void MainWindow::restoreWorkflowCheckpoint(const QString& checkpointId)
     currentWorkflowBranch_ = branch;
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     resetNodeRunStates();
     updateNavigationActions();
@@ -3487,6 +3896,7 @@ void MainWindow::branchFromWorkflowCheckpoint(const QString& checkpointId)
     currentWorkflowBranch_ = branch.trimmed();
     engine_.clearCache();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     setPreviewImage({});
     resetNodeRunStates();
     updateNavigationActions();
@@ -3495,22 +3905,85 @@ void MainWindow::branchFromWorkflowCheckpoint(const QString& checkpointId)
     pushGraphEditCommand(QString("创建分支 %1").arg(currentWorkflowBranch_), before, selectedBefore,
                          WorkflowCommands::cloneGraph(graph_), selectedNodeId_);
 
-    const QString id = QDateTime::currentDateTimeUtc().toString("yyyyMMddHHmmsszzz");
-    const QString branchPath = workflowSnapshotPath("checkpoints", id);
-    auto saved = serializer.saveFile(graphForPersistence(), branchPath);
+    const auto saved = WorkflowHistory::save(WorkflowHistory::kCheckpoints, graphForPersistence(),
+                                             {{"title", QString("创建分支：%1").arg(currentWorkflowBranch_)},
+                                              {"branch", currentWorkflowBranch_}});
     if (saved.isOk()) {
-        QSettings branchSettings;
-        branchSettings.beginGroup("workflowCheckpoints");
-        QStringList ids = branchSettings.value("ids").toStringList();
-        ids.prepend(id);
-        branchSettings.setValue("ids", ids);
-        branchSettings.setValue("title/" + id, QString("创建分支：%1").arg(currentWorkflowBranch_));
-        branchSettings.setValue("branch/" + id, currentWorkflowBranch_);
-        branchSettings.setValue("file/" + id, branchPath);
-        branchSettings.endGroup();
         refreshWorkflowCheckpointModel();
     }
     appendLog(QString("从保存点创建分支：%1 ← %2").arg(currentWorkflowBranch_, oldTitle));
+}
+
+void MainWindow::renameWorkflowCheckpoint(const QString& checkpointId)
+{
+    QSettings settings;
+    settings.beginGroup("workflowCheckpoints");
+    const QString oldTitle = settings.value("title/" + checkpointId, checkpointId).toString();
+    settings.endGroup();
+
+    const QString title = QInputDialog::getText(this, "重命名保存点", "记录名称：", QLineEdit::Normal, oldTitle);
+    if (title.trimmed().isEmpty() || title.trimmed() == oldTitle) {
+        return;
+    }
+    const Status renamed = WorkflowHistory::setTitle(WorkflowHistory::kCheckpoints, checkpointId, title.trimmed());
+    if (renamed.isFail()) {
+        appendProblem(QString("保存点重命名失败：%1").arg(renamed.error()));
+        QMessageBox::warning(this, "保存点重命名失败", renamed.error());
+        return;
+    }
+    refreshWorkflowCheckpointModel();
+    appendLog(QString("已重命名保存点：%1 → %2").arg(oldTitle, title.trimmed()));
+}
+
+void MainWindow::deleteWorkflowCheckpoint(const QString& checkpointId)
+{
+    QSettings settings;
+    settings.beginGroup("workflowCheckpoints");
+    const QString title = settings.value("title/" + checkpointId, checkpointId).toString();
+    settings.endGroup();
+
+    if (QMessageBox::question(this, "删除保存点",
+                              QString("确定删除保存点「%1」吗？删除后不可恢复。").arg(title),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    const Status removed = WorkflowHistory::remove(WorkflowHistory::kCheckpoints, checkpointId);
+    if (removed.isFail()) {
+        appendProblem(QString("保存点删除失败：%1").arg(removed.error()));
+        QMessageBox::warning(this, "保存点删除失败", removed.error());
+        return;
+    }
+    refreshWorkflowCheckpointModel();
+    appendLog(QString("已删除保存点：%1").arg(title));
+}
+
+void MainWindow::exportWorkflowCheckpoint(const QString& checkpointId)
+{
+    QSettings settings;
+    settings.beginGroup("workflowCheckpoints");
+    const QString title = settings.value("title/" + checkpointId, checkpointId).toString();
+    settings.endGroup();
+
+    auto loaded = WorkflowHistory::load(WorkflowHistory::kCheckpoints, checkpointId);
+    if (loaded.isFail()) {
+        appendProblem(QString("保存点导出失败：%1").arg(loaded.error()));
+        QMessageBox::warning(this, "保存点导出失败", loaded.error());
+        return;
+    }
+
+    const QString target = QFileDialog::getSaveFileName(this, "导出保存点", sanitizeFileName(title) + ".json",
+                                                        "工作流 (*.json);;所有文件 (*)");
+    if (target.isEmpty()) {
+        return;
+    }
+    WorkflowSerializer serializer;
+    const Status saved = serializer.saveFile(loaded.value(), target);
+    if (saved.isFail()) {
+        appendProblem(QString("保存点导出失败：%1").arg(saved.error()));
+        QMessageBox::warning(this, "保存点导出失败", saved.error());
+        return;
+    }
+    appendLog(QString("已导出保存点：%1 → %2").arg(title, target));
 }
 
 void MainWindow::restoreGraphFromUndo(const WorkflowGraph& graph, const QString& selectedNodeId)
@@ -3601,6 +4074,7 @@ void MainWindow::switchWorkbookPage(int index)
     graphStack_.clear();
     forwardMacroHistory_.clear();
     lastResult_ = {};
+    nodeThumbnails_.clear();
     engine_.clearCache();
     nodeRunStates_.clear();
     nodeElapsedMs_.clear();
@@ -3648,6 +4122,7 @@ void MainWindow::closeWorkbookPage(int index)
         currentFile_.clear();
         selectedNodeId_.clear();
         lastResult_ = {};
+        nodeThumbnails_.clear();
         setPreviewImage({});
         engine_.clearCache();
         nodeRunStates_.clear();
@@ -3678,6 +4153,7 @@ void MainWindow::closeWorkbookPage(int index)
         graphStack_.clear();
         forwardMacroHistory_.clear();
         lastResult_ = {};
+        nodeThumbnails_.clear();
         engine_.clearCache();
         nodeRunStates_.clear();
         nodeElapsedMs_.clear();
@@ -4183,6 +4659,10 @@ void MainWindow::showSettingsDialog()
     snapToGuides->setText("吸附到对齐参考线");
     snapToGuides->setChecked(QSettings().value("mainWindow/snapToGuides", true).toBool());
     snapToGuides->setToolTip("拖动节点松开时吸附到与其他节点左/中/右、上/中/下对齐的位置（与拖动时的虚线参考线呼应）");
+    auto* nodeThumbnails = new QCheckBox;
+    nodeThumbnails->setText("节点卡片显示输出缩略图");
+    nodeThumbnails->setChecked(QSettings().value("mainWindow/nodeThumbnails", true).toBool());
+    nodeThumbnails->setToolTip("执行后在每个节点卡片内直接显示该节点的输出图像，参数修改后随实时预览刷新");
 
     auto* generalPage = makePage();
     auto* generalAppearance = makeSection(generalPage, "外观", "选择深色或浅色主题，并调整工作台整体缩放。");
@@ -4222,6 +4702,7 @@ void MainWindow::showSettingsDialog()
     auto* arrangeSection = makeSection(canvasPage, "节点排列");
     arrangeSection->addWidget(snapToGuides);
     arrangeSection->addWidget(snapToGrid);
+    arrangeSection->addWidget(nodeThumbnails);
     canvasPage->layout()->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
     auto* workbenchPage = makePage();
@@ -4355,6 +4836,12 @@ void MainWindow::showSettingsDialog()
         settings.setValue("mainWindow/showMiniMap", miniMapVisible->isChecked());
         settings.setValue("mainWindow/snapToGrid", snapToGrid->isChecked());
         settings.setValue("mainWindow/snapToGuides", snapToGuides->isChecked());
+        const bool thumbnailsBefore = settings.value("mainWindow/nodeThumbnails", true).toBool();
+        settings.setValue("mainWindow/nodeThumbnails", nodeThumbnails->isChecked());
+        if (thumbnailsBefore != nodeThumbnails->isChecked()) {
+            // 开关变化需要重建画布：delegate 在构造时读取该设置。
+            rebuildScene();
+        }
     };
 
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {

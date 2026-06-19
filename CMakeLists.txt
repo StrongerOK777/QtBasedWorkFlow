@@ -18,6 +18,13 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL Qml Quick QuickCont
 
 qt_standard_project_setup()
 
+# MSVC 多核并行编译：默认 cl 串行逐个编译翻译单元，大型 TU（如 MainWindow.cpp，Release /O2）
+# 会让全量构建非常慢（单核数十分钟）。/MP 让同一项目内多个源文件并行编译，吃满 CPU 核心。
+# 放在 add_subdirectory 与目标定义之前，对 QtNodes 与本项目都生效。
+if(MSVC)
+    add_compile_options(/MP)
+endif()
+
 set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -61,6 +68,7 @@ qt_add_executable(ImageNodeEditor
     ImageNodeEditor/gui/WorkflowCanvas.cpp
     ImageNodeEditor/gui/WorkflowCommands.h
     ImageNodeEditor/gui/WorkflowCommands.cpp
+    ImageNodeEditor/gui/WorkflowDiffDialog.h
     ImageNodeEditor/gui/WorkflowNodeDelegate.h
     ImageNodeEditor/gui/WorkflowNodeDelegate.cpp
     ImageNodeEditor/gui/WorkflowNodePainter.h
@@ -163,6 +171,32 @@ else()
         COMMAND ${CMAKE_COMMAND} -E create_symlink "$<TARGET_FILE:ImageNodeEditor>" "${CMAKE_BINARY_DIR}/picdeal"
         VERBATIM
         COMMENT "生成 picdeal 便捷命令（符号链接）")
+endif()
+
+# Windows：构建后用 windeployqt 把 Qt6 运行库、平台插件以及 Qt Quick/QML 模块部署到
+# exe 旁，使 VS 里 F5 与双击 exe 都能直接运行、无需手动配置 PATH。--qmldir 指向 qml
+# 源码目录是必须的：否则 QtQuick/Controls/Layouts/QtQml 模块不被部署，工作台 QML 侧边栏
+# 会整块黑屏。windeployqt 从当前使用的 Qt 安装（Qt6_DIR 推导）定位。
+# macOS 的 macdeployqt 留待迁移时按需添加，本段仅 Windows 生效。
+if(WIN32)
+    get_filename_component(_qt_root "${Qt6_DIR}/../../.." ABSOLUTE)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_root}/bin")
+    if(WINDEPLOYQT_EXECUTABLE)
+        # windeployqt 只部署 GUI 用的 qwindows 平台插件；CLI/picdeal 模式（main.cpp 设
+        # QT_QPA_PLATFORM=offscreen）还需要 qoffscreen.dll，否则 CLI 启动即崩（0xC0000409）。
+        # 第二条命令在 windeployqt 建好 platforms/ 后补上它。
+        add_custom_command(TARGET ImageNodeEditor POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}" --no-translations --no-compiler-runtime
+                    --qmldir "${CMAKE_SOURCE_DIR}/ImageNodeEditor/qml"
+                    "$<TARGET_FILE:ImageNodeEditor>"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${_qt_root}/plugins/platforms/qoffscreen.dll"
+                    "$<TARGET_FILE_DIR:ImageNodeEditor>/platforms/qoffscreen.dll"
+            VERBATIM
+            COMMENT "windeployqt：部署 Qt 运行库、QML 模块与 qoffscreen 插件")
+    else()
+        message(WARNING "未找到 windeployqt，F5 运行前需自行确保 Qt6 的 bin 在 PATH 上")
+    endif()
 endif()
 
 # ===== 单元测试（QtTest，可选）=====

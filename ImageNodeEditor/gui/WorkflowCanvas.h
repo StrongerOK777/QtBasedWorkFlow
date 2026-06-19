@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Edge.h"
+#include "core/PortType.h"
 #include "workflow/ExecutionEngine.h"
 
 #include <QMap>
@@ -12,6 +13,7 @@
 class QGraphicsItem;
 class QGraphicsScene;
 class QGraphicsView;
+class QImage;
 class QMenu;
 class QWidget;
 class WorkflowGraph;
@@ -43,6 +45,9 @@ public:
         std::function<void(const QString&, const QString&, const QVariant&)> parameterChanged;
         // 外部文件拖入画布：图片创建「读入图片」节点、.json 打开 workflow。
         std::function<void(const QStringList&, const QPointF&)> filesDropped;
+        // 从端口拖线松开在画布空白处：携带起点节点 id、端口名、端口方向与松开的 scene 坐标，
+        // 供上层弹出「按类型过滤的节点推荐」并自动连线。
+        std::function<void(const QString&, const QString&, PortDirection, const QPointF&)> connectionDroppedAtEmpty;
     };
 
     WorkflowCanvas(QWidget* owner, double uiScale, Callbacks callbacks);
@@ -52,7 +57,8 @@ public:
     QGraphicsScene* scene() const;
     void rebuild(WorkflowGraph& graph,
                  const QMap<QString, NodeExecutionState>& runStates,
-                 const QMap<QString, qint64>& elapsedMs);
+                 const QMap<QString, qint64>& elapsedMs,
+                 const QMap<QString, QImage>& thumbnails = {});
     void setUiScale(double uiScale) { uiScale_ = uiScale; }
 
     QMap<QString, QGraphicsItem*> nodeItems() const;
@@ -63,6 +69,7 @@ public:
     void setExecutionState(const QString& workflowNodeId, NodeExecutionState state);
     void setElapsedMs(const QString& workflowNodeId, qint64 elapsedMs);
     void setAnimationPhase(const QString& workflowNodeId, int phase);
+    void setOutputThumbnail(const QString& workflowNodeId, const QImage& image);
 
 private:
     std::unique_ptr<class WorkflowNodeDelegate> createDelegate(const QString& typeName);

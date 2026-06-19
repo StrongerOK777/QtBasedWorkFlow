@@ -180,6 +180,9 @@
     <ClInclude Include="gui\WorkflowCommands.h">
       <Filter>gui</Filter>
     </ClInclude>
+    <ClInclude Include="gui\WorkflowDiffDialog.h">
+      <Filter>gui</Filter>
+    </ClInclude>
     <ClInclude Include="gui\WorkflowNodeDelegate.h">
       <Filter>gui</Filter>
     </ClInclude>

@@ -123,6 +123,7 @@
     <ClInclude Include="gui\WorkbenchModels.h" />
     <ClInclude Include="gui\WorkflowCanvas.h" />
     <ClInclude Include="gui\WorkflowCommands.h" />
+    <ClInclude Include="gui\WorkflowDiffDialog.h" />
     <ClInclude Include="gui\WorkflowNodeDelegate.h" />
     <ClInclude Include="gui\WorkflowNodePainter.h" />
     <ClInclude Include="nodes\BasicNodes.h" />
