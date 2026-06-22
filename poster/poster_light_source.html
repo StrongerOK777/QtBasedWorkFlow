@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face { font-family:'Tektur'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/Tektur-Medium.ttf'); font-weight:500; }
+  @font-face { font-family:'BigShoulders'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/BigShoulders-Bold.ttf'); font-weight:700; }
+  @font-face { font-family:'Outfit'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/Outfit-Bold.ttf'); font-weight:700; }
+  @font-face { font-family:'Outfit'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/Outfit-Regular.ttf'); font-weight:400; }
+  @font-face { font-family:'JBMono'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/JetBrainsMono-Bold.ttf'); font-weight:700; }
+  @font-face { font-family:'JBMono'; src:url('file:///sessions/affectionate-confident-rubin/mnt/.claude/skills/canvas-design/canvas-fonts/JetBrainsMono-Regular.ttf'); font-weight:400; }
+
+  :root{
+    --bg:#EEF3F9; --paper:#FFFFFF; --paper2:#F4F8FC; --core:#FAFCFE;
+    --line:#DCE5F0; --line2:#C6D3E4;
+    --ink:#0F1E33; --text:#33425C; --muted:#6B7C96; --dim:#94A3B8;
+    --blue:#007ACC; --blueDk:#0367A8; --teal:#4EC9B0; --tealDk:#0E8C7E; --tealText:#0D9488;
+    --warn:#C2410C;
+  }
+  @page { size: A0 portrait; margin:0; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ width:841mm; height:1189mm; }
+  body{ background:var(--bg); color:var(--text); font-family:'Outfit','Noto Sans CJK SC',sans-serif; }
+  .zh{ font-family:'Noto Sans CJK SC','Outfit',sans-serif; }
+  .mono{ font-family:'JBMono','Noto Sans CJK SC',monospace; }
+  .page{ position:relative; width:841mm; height:1189mm; overflow:hidden; display:flex; flex-direction:column;
+    background:
+      radial-gradient(circle at 14% 7%, rgba(0,122,204,0.10), rgba(0,122,204,0) 25%),
+      radial-gradient(circle at 93% 24%, rgba(78,201,176,0.11), rgba(78,201,176,0) 25%),
+      var(--bg);
+    padding:44px 50px 36px 50px; }
+  .grid{ position:absolute; inset:0; background-image:
+      linear-gradient(rgba(15,30,51,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,30,51,0.035) 1px, transparent 1px);
+    background-size:56px 56px; pointer-events:none; }
+
+  /* ============ HEADER ============ */
+  .topbar{ display:flex; align-items:center; gap:16px; font-family:'JBMono',monospace; font-size:23px; color:var(--muted);
+    border:1px solid var(--line2); border-radius:9px; padding:11px 22px; background:var(--paper); }
+  .topbar .a{ color:var(--blue); font-weight:700; } .topbar .r{ margin-left:auto; }
+  .dot{ width:17px;height:17px;border-radius:50%;display:inline-block;}
+  .header{ display:flex; align-items:flex-end; justify-content:space-between; margin-top:22px; gap:30px; }
+  .htitle{ flex:1; }
+  .kicker{ font-family:'JBMono',monospace; font-size:27px; letter-spacing:7px; color:var(--tealText); font-weight:700; }
+  .kicker .b{ color:var(--blue); }
+  .wordmark{ font-family:'Tektur',sans-serif; font-weight:500; font-size:200px; line-height:0.84; color:var(--ink); letter-spacing:-2px; margin-top:8px; }
+  .wordmark .a{ color:var(--blue); } .wordmark .b{ color:var(--tealText); }
+  .subtitle{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:52px; color:var(--ink); margin-top:14px; letter-spacing:3px; }
+  .hright{ text-align:right; padding-bottom:10px; }
+  .badges{ display:flex; flex-wrap:wrap; gap:12px; justify-content:flex-end; max-width:780px; }
+  .badge{ font-family:'JBMono',monospace; font-size:25px; color:var(--text); border:1px solid var(--line2); border-radius:7px; padding:9px 16px; background:var(--paper); }
+  .badge b{ color:var(--tealText); } .badge .k{ color:var(--blue); }
+  .author{ font-family:'JBMono',monospace; margin-top:16px; font-size:26px; color:var(--muted); }
+  .author b{ color:var(--ink); }
+
+  /* ============ ABSTRACT BAND ============ */
+  .abstract{ display:flex; align-items:stretch; margin-top:26px; border:1px solid var(--line2); border-radius:12px; overflow:hidden; background:var(--paper); }
+  .abstract .lab{ flex-shrink:0; width:320px; background:var(--blue); color:#fff; display:flex; flex-direction:column; justify-content:center; padding:22px 30px; }
+  .abstract .lab .en{ font-family:'BigShoulders'; font-weight:700; font-size:58px; line-height:0.9; letter-spacing:1px; }
+  .abstract .lab .cn{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:30px; margin-top:5px; }
+  .abstract .txt{ font-family:'Noto Sans CJK SC'; font-size:33px; line-height:1.55; color:var(--text); padding:22px 34px; }
+  .abstract .txt b{ color:var(--ink); } .abstract .txt .hl{ color:var(--tealText); font-weight:700; } .abstract .kw{ font-family:'JBMono'; color:var(--blue); font-size:0.94em; }
+
+  /* ============ BODY GRID (fills remaining height) ============ */
+  .body{ display:flex; gap:24px; width:100%; margin-top:26px; flex:1 1 auto; align-items:stretch; min-height:0; }
+  .cell{ display:flex; flex-direction:column; min-width:0; }
+  .L{ flex:44 1 0; } .R{ flex:56 1 0; justify-content:space-between; }
+
+  /* ---- LEFT CORE ---- */
+  .core{ background:var(--core); border:1px solid var(--line2); border-radius:16px; padding:26px; flex:1 1 auto; display:flex; flex-direction:column; justify-content:space-between; }
+  .core-h{ display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+  .core-h .en{ font-family:'BigShoulders'; font-weight:700; font-size:48px; color:var(--ink); letter-spacing:1px; }
+  .core-h .cn{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:27px; color:var(--tealText); }
+  .core-h .ln{ flex:1; height:2px; background:linear-gradient(90deg,var(--teal),transparent); }
+  .hero{ border:1px solid var(--line2); border-radius:12px; overflow:hidden; background:#fff; height:792px; position:relative; }
+  .hero img{ width:100%; height:auto; display:block; }
+  .hero .tagchip{ position:absolute; left:16px; top:16px; font-family:'JBMono'; font-size:23px; color:#fff; background:var(--tealDk); border-radius:6px; padding:7px 15px; font-weight:700; }
+  .filmstrip{ display:flex; gap:14px; margin-top:14px; }
+  .filmstrip .fcell{ flex:1; min-width:0; }
+  .film{ border:1px solid var(--line2); border-radius:9px; overflow:hidden; background:#fff; height:300px; }
+  .film img{ width:100%; height:auto; display:block; }
+  .fcap{ font-family:'JBMono'; font-size:21px; color:var(--muted); text-align:center; margin-top:8px; }
+
+  .arch-h{ display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+  .arch-h .en{ font-family:'BigShoulders'; font-weight:700; font-size:48px; color:var(--ink); letter-spacing:1px; }
+  .arch-h .cn{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:27px; color:var(--blue); }
+  .arch-h .ln{ flex:1; height:2px; background:linear-gradient(90deg,var(--blue),transparent); }
+  .layer{ border-radius:11px; padding:16px 22px; border:1px solid var(--line2); margin-bottom:11px; }
+  .layer.ui{ background:#E8F3FC; border-color:#A9D4F0; }
+  .layer.core2{ background:#E5F6F1; border-color:#A6E1D4; }
+  .layer.base{ background:#EEF2F8; }
+  .layer-h{ display:flex; align-items:baseline; gap:12px; margin-bottom:10px; }
+  .layer-h .n{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:33px; color:var(--ink); }
+  .layer-h .e{ font-family:'JBMono'; font-size:23px; color:var(--muted); }
+  .layer-h .d{ font-family:'JBMono'; font-size:22px; color:var(--tealText); margin-left:auto; font-weight:700; }
+  .layer.ui .d{ color:var(--blue); }
+  .chips{ display:flex; flex-wrap:wrap; gap:10px; }
+  .chip{ font-family:'JBMono'; font-size:24px; color:var(--text); background:#fff; border:1px solid var(--line2); border-radius:6px; padding:8px 15px; }
+  .arrow{ text-align:center; color:var(--dim); font-size:28px; line-height:0.3; margin:3px 0; }
+  .archnote{ display:flex; gap:14px; margin-top:14px; }
+  .anote{ flex:1; background:var(--paper); border:1px solid var(--line2); border-radius:10px; padding:18px 22px; }
+  .anote .t{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:28px; color:var(--ink); margin-bottom:6px; }
+  .anote .t .i{ color:var(--tealText); font-family:'JBMono'; }
+  .anote .x{ font-family:'Noto Sans CJK SC'; font-size:24px; line-height:1.42; color:var(--muted); }
+  .anote .x .kw{ font-family:'JBMono'; color:var(--warn); }
+
+  /* ---- RIGHT TIERS ---- */
+  .tier{ display:flex; flex-direction:column; }
+  .tbar{ display:flex; align-items:center; gap:16px; padding:18px 28px; border-radius:11px 11px 0 0; }
+  .tbar.blue{ background:var(--blue); } .tbar.teal{ background:var(--tealDk); }
+  .tbar .num{ font-family:'BigShoulders'; font-weight:700; font-size:64px; color:rgba(255,255,255,0.50); line-height:0.8; }
+  .tbar .en{ font-family:'BigShoulders'; font-weight:700; font-size:60px; color:#fff; letter-spacing:1px; line-height:0.9; }
+  .tbar .cn{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:30px; color:rgba(255,255,255,0.95); margin-left:auto; }
+  .tbody{ background:var(--paper); border:1px solid var(--line2); border-top:none; border-radius:0 0 13px 13px; padding:30px; flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
+
+  /* badges 2x2 */
+  .bgrid{ display:flex; flex-direction:column; gap:20px; }
+  .brow{ display:flex; gap:20px; }
+  .bcell{ flex:1; min-width:0; }
+  .feat{ display:flex; gap:20px; align-items:flex-start; background:var(--paper2); border:1px solid var(--line2); border-radius:12px; padding:24px 26px; height:100%; }
+  .feat .circ{ flex-shrink:0; width:102px; height:102px; border-radius:50%; border:3px solid var(--teal); display:flex; align-items:center; justify-content:center;
+    font-family:'BigShoulders'; font-weight:700; font-size:66px; color:var(--tealText); background:#E5F6F1; }
+  .feat.bl .circ{ border-color:var(--blue); color:var(--blue); background:#E8F3FC; }
+  .feat .ft{ font-family:'Outfit'; font-weight:700; font-size:35px; color:var(--ink); line-height:1.02; }
+  .feat .fc{ font-family:'Noto Sans CJK SC'; font-size:26px; color:var(--muted); line-height:1.4; margin-top:8px; }
+  .feat .fc .hl{ color:var(--tealText); font-weight:700; }
+
+  /* donut */
+  .donutwrap{ display:flex; align-items:center; gap:30px; }
+  .donutwrap svg{ width:420px; height:420px; flex-shrink:0; }
+  .legend{ flex:1; display:flex; flex-direction:column; gap:15px; }
+  .lrow{ display:flex; align-items:center; gap:16px; font-family:'Noto Sans CJK SC'; font-size:31px; color:var(--text); }
+  .lrow .sw{ width:30px; height:30px; border-radius:7px; flex-shrink:0; }
+  .lrow .nm{ flex:1; } .lrow .vv{ font-family:'JBMono'; font-weight:700; color:var(--ink); }
+  .lrow .vv .p{ color:var(--muted); font-weight:400; font-size:0.82em; }
+  .dstats{ display:flex; gap:16px; margin-top:24px; }
+  .dstat{ flex:1; background:var(--paper2); border:1px solid var(--line2); border-radius:10px; padding:18px 16px; text-align:center; }
+  .dstat .v{ font-family:'BigShoulders'; font-weight:700; font-size:74px; color:var(--tealText); line-height:0.82; }
+  .dstat .v.b{ color:var(--blue); }
+  .dstat .l{ font-family:'JBMono'; font-size:22px; color:var(--muted); margin-top:7px; }
+
+  /* bars */
+  .barstats{ display:flex; gap:16px; margin-bottom:20px; }
+  .bstat{ flex:1; background:var(--paper2); border:1px solid var(--line2); border-radius:10px; padding:16px 20px; }
+  .bstat .v{ font-family:'BigShoulders'; font-weight:700; font-size:62px; line-height:0.82; color:var(--tealText); }
+  .bstat .v.b{ color:var(--blue); }
+  .bstat .l{ font-family:'Noto Sans CJK SC'; font-size:24px; color:var(--muted); margin-top:5px; }
+  .barchart{ width:100%; }
+  .barchart svg{ width:100%; height:auto; display:block; }
+  .barcap{ font-family:'Noto Sans CJK SC'; font-size:25px; color:var(--muted); margin-top:12px; }
+  .barcap .hl{ color:var(--tealText); } .barcap .ill{ font-family:'JBMono'; color:var(--dim); }
+
+  /* ============ BOTTOM BAND ============ */
+  .bottom{ display:flex; gap:24px; width:100%; margin-top:26px; }
+  .bcellw{ display:flex; min-width:0; }
+  .bw48{ flex:48 1 0; } .bw52{ flex:52 1 0; }
+  .panel{ background:var(--paper); border:1px solid var(--line2); border-radius:14px; overflow:hidden; width:100%; display:flex; flex-direction:column; }
+  .pbar{ display:flex; align-items:center; gap:14px; padding:16px 26px; }
+  .pbar.blue{ background:var(--blue); } .pbar.teal{ background:var(--tealDk); } .pbar.slate{ background:#1E2D45; }
+  .pbar .en{ font-family:'BigShoulders'; font-weight:700; font-size:46px; color:#fff; letter-spacing:1px; }
+  .pbar .cn{ font-family:'Noto Sans CJK SC'; font-weight:700; font-size:27px; color:rgba(255,255,255,0.95); margin-left:auto; }
+  .pbody{ padding:18px 26px; flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
+
+  .cs-row{ display:flex; align-items:stretch; border-bottom:1px solid var(--line); padding:13px 0; }
+  .cs-row:last-child{ border-bottom:none; }
+  .cs-c{ flex:1; font-family:'Noto Sans CJK SC'; font-size:25px; line-height:1.34; color:var(--text); padding-right:16px; }
+  .cs-c .tt{ color:var(--warn); font-weight:700; }
+  .cs-ar{ width:44px; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--tealText); font-family:'JBMono'; font-size:30px; font-weight:700; }
+  .cs-s{ flex:1; font-family:'Noto Sans CJK SC'; font-size:25px; line-height:1.34; color:var(--text); padding-left:16px; border-left:1px solid var(--line); }
+  .cs-s .tt{ color:var(--tealText); font-weight:700; }
+  .cs-n{ font-family:'JBMono'; color:var(--dim); font-size:22px; margin-right:7px; }
+
+  .twocard{ display:flex; flex-direction:column; gap:24px; width:100%; }
+  .mind{ font-family:'Noto Sans CJK SC'; font-size:29px; line-height:1.5; color:var(--text); }
+  .mind b{ color:var(--ink); } .mind .hl{ color:var(--tealText); font-weight:700; } .mind .hlb{ color:var(--blue); font-weight:700; }
+
+  .footer{ margin-top:24px; display:flex; align-items:center; gap:16px; border-top:1px solid var(--line2); padding-top:20px; font-family:'JBMono'; font-size:24px; color:var(--muted); }
+  .footer .a{ color:var(--tealText); } .footer .b{ color:var(--blue); } .footer .r{ margin-left:auto; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="grid"></div>
+
+  <!-- HEADER -->
+  <div class="topbar mono">
+    <span class="dot" style="background:#FF5F56"></span><span class="dot" style="background:#FFBD2E"></span><span class="dot" style="background:#27C93F"></span>
+    <span>~/projects/<span class="a">ImageNodeEditor</span> › build --release · target=A0 · theme=light</span>
+    <span class="r">technical-infographic.poster ● UTF-8</span>
+  </div>
+
+  <div class="header">
+    <div class="htitle">
+      <div class="kicker">C<span class="b">+</span>+ &amp; Qt DEVELOPER-TOOL · TECHNICAL INFOGRAPHIC</div>
+      <div class="wordmark"><span class="a">Image</span>Node<span class="b">Editor</span></div>
+      <div class="subtitle zh">节点式图像处理工作流工具 · 期末报告</div>
+    </div>
+    <div class="hright">
+      <div class="badges">
+        <div class="badge mono"><span class="k">lang</span>=<b>C++17</b></div>
+        <div class="badge mono"><span class="k">ui</span>=<b>Qt 6.8</b></div>
+        <div class="badge mono"><span class="k">build</span>=<b>CMake</b></div>
+        <div class="badge mono"><span class="k">canvas</span>=<b>QtNodes</b></div>
+        <div class="badge mono"><span class="k">nodes</span>=<b>27+1</b></div>
+        <div class="badge mono"><span class="k">modes</span>=<b>GUI+CLI</b></div>
+      </div>
+      <div class="author mono">AUTHOR <b>Peiyan</b> · ALPD Final Report · 2026 · Win / macOS / Linux</div>
+    </div>
+  </div>
+
+  <!-- ABSTRACT -->
+  <div class="abstract">
+    <div class="lab"><div class="en">ABSTRACT</div><div class="cn zh">项目简介</div></div>
+    <div class="txt zh"><b>ImageNodeEditor</b> 是一款桌面端<b>节点式图像处理工作流工具</b>：把读图、裁切、缩放、调色、滤波、文字叠加、预览、导出抽象为可视化「<span class="hl">节点</span>」，拖拽连线改参数即可拼出处理流程，<b>一键执行 · 实时预览</b>，流程存为 <span class="kw">JSON</span> 复用。内置 <span class="hl">27 种节点 + 1 宏节点</span>（6 大类），图形界面与命令行 <span class="kw">picdeal</span> <b>共用同一核心引擎</b>，行为一致——既能交互探索，也支持无界面批处理。</div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+    <!-- LEFT 44% -->
+    <div class="cell L">
+      <div class="core">
+        <div class="cgroup">
+          <div class="core-h"><span class="en">LIVE WORKBENCH</span><span class="cn zh">软件主视觉</span><span class="ln"></span></div>
+          <div class="hero">
+            <span class="tagchip">▶ EXECUTED WORKFLOW · 所见即所得</span>
+            <img src="file:///sessions/affectionate-confident-rubin/mnt/outputs/poster_assets/03-executed.png" alt="executed workflow">
+          </div>
+          <div class="filmstrip">
+            <div class="fcell"><div class="film"><img src="file:///sessions/affectionate-confident-rubin/mnt/outputs/poster_assets/01-workbench.png"></div><div class="fcap mono">主界面 · 节点库 / 活动栏</div></div>
+            <div class="fcell"><div class="film"><img src="file:///sessions/affectionate-confident-rubin/mnt/outputs/poster_assets/02-workflow.png"></div><div class="fcap mono">搭建工作流 · 连线 + 参数</div></div>
+          </div>
+        </div>
+
+        <div class="cgroup">
+          <div class="arch-h"><span class="en">SYSTEM ARCHITECTURE</span><span class="cn zh">设计思路 · 分层解耦</span><span class="ln"></span></div>
+          <div class="layer ui">
+            <div class="layer-h"><span class="n">界面层</span><span class="e">gui/ + qml/</span><span class="d">UI LAYER</span></div>
+            <div class="chips"><span class="chip">QML 工作台</span><span class="chip">MainWindow</span><span class="chip">WorkflowCanvas·QtNodes</span><span class="chip">参数面板</span><span class="chip">预览 / 对比</span></div>
+          </div>
+          <div class="arrow">▼</div>
+          <div class="layer core2">
+            <div class="layer-h"><span class="n">核心层</span><span class="e">workflow/ + nodes/</span><span class="d">CORE LAYER</span></div>
+            <div class="chips"><span class="chip">图结构</span><span class="chip">校验</span><span class="chip">拓扑执行</span><span class="chip">JSON</span><span class="chip">ImageNode 多态</span><span class="chip">NodeFactory</span></div>
+          </div>
+          <div class="arrow">▼</div>
+          <div class="layer base">
+            <div class="layer-h"><span class="n">基础层</span><span class="e">processing/ + core/ + util/</span><span class="d" style="color:var(--muted)">BASE LAYER</span></div>
+            <div class="chips"><span class="chip">纯图像算法</span><span class="chip">端口/连线/参数</span><span class="chip">结果封装</span><span class="chip">路径工具</span></div>
+          </div>
+          <div class="archnote">
+            <div class="anote"><div class="t"><span class="i">▍</span>多态 + 工厂注册</div><div class="x zh">继承抽象基类 <span class="kw">ImageNode</span>，新增节点仅在 <span class="kw">NodeFactory</span> 注册一行，引擎零改动，消除 if-else。</div></div>
+            <div class="anote"><div class="t"><span class="i">▍</span>引擎独立 GUI/CLI 共用</div><div class="x zh">同一 <span class="kw">ExecutionEngine</span>：校验 → 拓扑排序 → 执行 → LRU 缓存，信号槽解耦。</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT 56% -->
+    <div class="cell R">
+      <!-- TIER 1 -->
+      <div class="tier">
+        <div class="tbar blue"><span class="num">01</span><span class="en">KEY ENGINEERING FEATURES</span><span class="cn zh">技术亮点</span></div>
+        <div class="tbody">
+          <div class="bgrid">
+            <div class="brow">
+              <div class="bcell"><div class="feat"><div class="circ">A</div><div><div class="ft">Modular Node Architecture</div><div class="fc zh"><span class="hl">多态 + 工厂注册</span>：新增节点零改引擎，已扩到 27+1 个</div></div></div></div>
+              <div class="bcell"><div class="feat bl"><div class="circ">B</div><div><div class="ft">Responsive Real-Time UI</div><div class="fc zh">改参数<span class="hl">防抖触发</span>，整条链路缩略图实时刷新</div></div></div></div>
+            </div>
+            <div class="brow">
+              <div class="bcell"><div class="feat bl"><div class="circ">C</div><div><div class="ft">High-Performance Engine</div><div class="fc zh"><span class="hl">滑动窗口模糊 O(1)</span> + LRU 缓存复用未改动节点</div></div></div></div>
+              <div class="bcell"><div class="feat"><div class="circ">D</div><div><div class="ft">Crash-Proof Execution</div><div class="fc zh">执行前 <span class="hl">DAG 校验 + 拓扑排序</span>，错误给明确中文提示</div></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIER 2 -->
+      <div class="tier">
+        <div class="tbar teal"><span class="num">02</span><span class="en">NODE STATISTICS</span><span class="cn zh">节点构成 · 6 大类</span></div>
+        <div class="tbody">
+          <div class="donutwrap">
+            <svg viewBox="0 0 440 440" xmlns="http://www.w3.org/2000/svg">
+              <g transform="rotate(-90 220 220)" fill="none" stroke-width="60">
+                <circle cx="220" cy="220" r="160" stroke="#4EC9B0" stroke-dasharray="111.7 893.6" stroke-dashoffset="0"/>
+                <circle cx="220" cy="220" r="160" stroke="#14B8A6" stroke-dasharray="148.9 856.4" stroke-dashoffset="-111.7"/>
+                <circle cx="220" cy="220" r="160" stroke="#007ACC" stroke-dasharray="260.6 744.7" stroke-dashoffset="-260.6"/>
+                <circle cx="220" cy="220" r="160" stroke="#38A9D6" stroke-dasharray="148.9 856.4" stroke-dashoffset="-521.3"/>
+                <circle cx="220" cy="220" r="160" stroke="#0D9488" stroke-dasharray="186.2 819.1" stroke-dashoffset="-670.2"/>
+                <circle cx="220" cy="220" r="160" stroke="#5EA9E0" stroke-dasharray="148.9 856.4" stroke-dashoffset="-856.4"/>
+              </g>
+              <text x="220" y="206" text-anchor="middle" font-family="BigShoulders" font-weight="700" font-size="108" fill="#0F1E33">27</text>
+              <text x="220" y="250" text-anchor="middle" font-family="JBMono" font-size="28" fill="#0D9488" letter-spacing="3">+1 MACRO</text>
+              <text x="220" y="290" text-anchor="middle" font-family="JBMono" font-size="22" fill="#6B7C96">NODES</text>
+            </svg>
+            <div class="legend">
+              <div class="lrow"><span class="sw" style="background:#4EC9B0"></span><span class="nm zh">输入输出 I/O</span><span class="vv">3<span class="p"> ·11%</span></span></div>
+              <div class="lrow"><span class="sw" style="background:#14B8A6"></span><span class="nm zh">几何变换 Geometry</span><span class="vv">4<span class="p"> ·15%</span></span></div>
+              <div class="lrow"><span class="sw" style="background:#007ACC"></span><span class="nm zh">色彩处理 Color</span><span class="vv">7<span class="p"> ·26%</span></span></div>
+              <div class="lrow"><span class="sw" style="background:#38A9D6"></span><span class="nm zh">滤波 Filter</span><span class="vv">4<span class="p"> ·15%</span></span></div>
+              <div class="lrow"><span class="sw" style="background:#0D9488"></span><span class="nm zh">合成 Composite</span><span class="vv">5<span class="p"> ·18%</span></span></div>
+              <div class="lrow"><span class="sw" style="background:#5EA9E0"></span><span class="nm zh">批量 Batch</span><span class="vv">4<span class="p"> ·15%</span></span></div>
+            </div>
+          </div>
+          <div class="dstats">
+            <div class="dstat"><div class="v">28</div><div class="l mono">NODE TYPES</div></div>
+            <div class="dstat"><div class="v b">6</div><div class="l mono">CATEGORIES</div></div>
+            <div class="dstat"><div class="v">2</div><div class="l mono">GUI + CLI</div></div>
+            <div class="dstat"><div class="v b">3</div><div class="l mono">PLATFORMS</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIER 3 -->
+      <div class="tier">
+        <div class="tbar blue"><span class="num">03</span><span class="en">PERFORMANCE</span><span class="cn zh">性能优势 · C++ 原生</span></div>
+        <div class="tbody">
+          <div class="barstats">
+            <div class="bstat"><div class="v">O(1)</div><div class="l zh">模糊耗时与半径无关<br>（滑动窗口算法）</div></div>
+            <div class="bstat"><div class="v b">≈4–6×</div><div class="l zh">更低内存占用<br>（原生，无 Electron）</div></div>
+            <div class="bstat"><div class="v">LRU</div><div class="l zh">缓存复用未改动节点<br>连续执行更快</div></div>
+          </div>
+          <div class="barchart">
+            <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4EC9B0"/><stop offset="1" stop-color="#007ACC"/></linearGradient>
+                <linearGradient id="wf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4EC9B0" stop-opacity="0.28"/><stop offset="1" stop-color="#4EC9B0" stop-opacity="0"/></linearGradient>
+              </defs>
+              <line x1="20" y1="276" x2="710" y2="276" stroke="#C6D3E4" stroke-width="2"/>
+              <g fill="url(#bg)">
+                <rect x="26" y="216" width="30" height="60" rx="3"/>
+                <rect x="68" y="186" width="30" height="90" rx="3"/>
+                <rect x="110" y="146" width="30" height="130" rx="3"/>
+                <rect x="152" y="84" width="30" height="192" rx="3"/>
+                <rect x="194" y="120" width="30" height="156" rx="3"/>
+                <rect x="236" y="194" width="30" height="82" rx="3"/>
+                <rect x="278" y="158" width="30" height="118" rx="3"/>
+                <rect x="320" y="52" width="30" height="224" rx="3"/>
+                <rect x="362" y="28" width="30" height="248" rx="3"/>
+                <rect x="404" y="110" width="30" height="166" rx="3"/>
+                <rect x="446" y="180" width="30" height="96" rx="3"/>
+                <rect x="488" y="134" width="30" height="142" rx="3"/>
+                <rect x="530" y="66" width="30" height="210" rx="3"/>
+                <rect x="572" y="154" width="30" height="122" rx="3"/>
+                <rect x="614" y="202" width="30" height="74" rx="3"/>
+                <rect x="656" y="120" width="30" height="156" rx="3"/>
+              </g>
+              <polyline points="41,216 83,186 125,146 167,84 209,120 251,194 293,158 335,52 377,28 419,110 461,180 503,134 545,66 587,154 629,202 671,120"
+                fill="none" stroke="#0D9488" stroke-width="3"/>
+              <polygon points="41,216 83,186 125,146 167,84 209,120 251,194 293,158 335,52 377,28 419,110 461,180 503,134 545,66 587,154 629,202 671,120 671,276 41,276"
+                fill="url(#wf)"/>
+            </svg>
+          </div>
+          <div class="barcap zh">相对吞吐 / 处理速度谱（<span class="hl">原生 C++ 算法</span>，多节点并行链路）<span class="ill"> · 示意 ILLUSTRATIVE</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAND -->
+  <div class="bottom">
+    <div class="bcellw bw48">
+      <div class="panel">
+        <div class="pbar slate"><span class="en">CHALLENGES → SOLUTIONS</span><span class="cn zh">实现难点 · 解决方法</span></div>
+        <div class="pbody">
+          <div class="cs-row"><div class="cs-c"><span class="cs-n">01</span><span class="tt">退出偶发崩溃</span>：析构中信号回调访问半析构对象</div><div class="cs-ar">→</div><div class="cs-s"><span class="tt">析构先断信号</span> + 「正在关闭」标志兜底</div></div>
+          <div class="cs-row"><div class="cs-c"><span class="cs-n">02</span><span class="tt">侧栏一片黑</span>：windeployqt 未部署 QML 模块</div><div class="cs-ar">→</div><div class="cs-s"><span class="tt">加 --qmldir</span> 指向 QML 源码目录</div></div>
+          <div class="cs-row"><div class="cs-c"><span class="cs-n">03</span><span class="tt">命令行一启动就崩</span>：缺 qoffscreen 插件</div><div class="cs-ar">→</div><div class="cs-s"><span class="tt">构建后自动复制</span> qoffscreen.dll</div></div>
+          <div class="cs-row"><div class="cs-c"><span class="cs-n">04</span><span class="tt">大图模糊很慢</span>：逐像素求邻域均值</div><div class="cs-ar">→</div><div class="cs-s"><span class="tt">改滑动窗口 O(1)</span> + LRU 缓存</div></div>
+          <div class="cs-row"><div class="cs-c"><span class="cs-n">05</span><span class="tt">VS 工程 + macOS</span>：两套构建体系冲突</div><div class="cs-ar">→</div><div class="cs-s"><span class="tt">双构建并存</span>：.vcxproj + CMake 同源</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="bcellw bw52">
+      <div class="twocard">
+        <div class="panel">
+          <div class="pbar teal"><span class="en">CONCLUSION</span><span class="cn zh">实现项目的心得</span></div>
+          <div class="pbody"><div class="mind zh">最深的两点体会。其一，<b>分层与多态真的很值</b>：开始就把界面、模型、算法、执行分开，加节点基本只写一个算法函数再注册一行，后期扩到 27 个节点也不乱。其二，<b>跨平台与部署的坑比算法本身更费时间</b>：真正反复折腾的是打包缺插件、QML 黑屏、构建配置——让我体会到「能跑」和「在别人机器上也能跑」<span class="hl">完全是两回事</span>。</div></div>
+        </div>
+        <div class="panel">
+          <div class="pbar blue"><span class="en">AI PAIR-ENGINEER</span><span class="cn zh">我与我的智慧助手</span></div>
+          <div class="pbody"><div class="mind zh">我把 AI 助手当作「<span class="hlb">结对工程师</span>」：帮我梳理需求与模块划分、生成骨架代码、快速定位编译错误与 Qt 接口兼容问题、并在崩溃时分析调用链。但<b>架构决策、算法实现与最终把关仍由我主导</b>——工具负责提速，判断与责任在我。</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer mono">
+    <span class="a">●</span><span>ImageNodeEditor · 2026 期末报告</span><span style="color:var(--line2)">|</span>
+    <span>27 built-in nodes + 1 macro · 6 categories</span><span style="color:var(--line2)">|</span>
+    <span class="b">GUI + picdeal CLI · one shared core</span>
+    <span class="r">C++17 / Qt 6.8 / CMake · Win · macOS · Linux</span>
+  </div>
+</div>
+</body>
+</html>
